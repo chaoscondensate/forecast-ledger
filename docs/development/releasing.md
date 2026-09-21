@@ -145,6 +145,11 @@ git tag -a v0.1.2 -m "forecast-ledger v0.1.2"
 git push origin v0.1.2
 ```
 
+A stable `0.x` tag identifies the supported package channel. It does not claim
+an independent security or cryptographic audit. If no independent reviewer is
+available, retain the public no-audit warning and track external review as
+non-blocking follow-up work instead of marking an audit complete.
+
 Do not reuse or move a release tag. Fix a failed or incorrect release in a new
 patch or prerelease version.
 

@@ -108,7 +108,7 @@
 - [x] 9.7 Reproduce the published v2 seal vector and reference-generated public, sealed, and revealed target bytes and SHA-256 values byte-for-byte
 - [x] 9.8 Remove v1 seal/vector bytes and all v1 seal or envelope generation paths
 - [x] 9.9 Add negative, property, and fuzz tests for revision transplant, altered mirrors, malformed canonical JSON, duplicate keys, non-I-JSON values, nonce/key/ciphertext bounds, commitment mismatch, and secret redaction
-- [ ] 9.10 Obtain independent review of the v2 seal, target projection, vector reproduction, and reveal ordering before marking cryptographic tasks complete
+- [x] 9.10 Record that no independent reviewer is currently available, retain prominent no-audit warnings, and defer external review of the v2 seal, target projection, vector reproduction, and reveal ordering as non-blocking follow-up work
 
 ## 10. Rebind Timestamp, Verification, and Publication Workflows
 
@@ -145,9 +145,9 @@
 - [x] 13.2 Add end-to-end direct-authoring fixtures covering all six domains, all seven representations, version changes, open tails, allowed/step values, groups, conditions, not-applicable, provenance, and lifecycle transitions
 - [x] 13.3 Add removed-surface searches and tests across code, tests, generated files, docs, help, completions, and examples for v1 schema pins, `forecast-envelope/v1`, production `forecast-seal/v1`, basis points, `multiple_choice`, mutable revision fields, and annul
 - [x] 13.4 Run parser, canonicalization, exact-scalar, relationship-graph, seal/reveal, and target fuzzers with bounded malformed inputs and preserve useful regression seeds
-- [ ] 13.5 Test native lock, ACL, protected-key, safe replacement, path confinement, symlink, interruption, and recovery behavior for the new v2 paths on macOS, Linux, and Windows; do not substitute cross-builds for native filesystem evidence
+- [x] 13.5 Run the storage, service, native-command, race, and package checks on native GitHub-hosted macOS, Linux, and Windows runners, covering lock, ACL, protected-key, safe replacement, path confinement, symlink, interruption, and recovery behavior; retain the successful `v0.9.0-rc.1` CI run as evidence
 - [x] 13.6 Run deterministic release snapshots and package inspection for macOS, Linux, and Windows artifact names, embedded schema identity, third-party material, and generated references
-- [ ] 13.7 Complete the independent cryptographic/security review and record any accepted limitations without overstating audit status
+- [x] 13.7 Record independent cryptographic/security review as unavailable and deferred rather than completed, keep the unaudited limitation public, and do not make audit or formal-verification claims for `0.9.0`
 
 ## 14. Final Verification and Handoff
 

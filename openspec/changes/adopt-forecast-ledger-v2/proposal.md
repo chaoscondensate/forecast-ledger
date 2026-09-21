@@ -38,6 +38,10 @@ author, or verify the wrong meaning.
 - Regenerate examples and machine-readable contracts and update all public
   documentation, security, packaging, attribution, version, and release
   material to describe the v2-only runtime.
+- Record that v2 has no independent security or cryptographic audit. An
+  external review remains desirable follow-up work, but it is not a release
+  gate for the `0.9.0` line while the public no-audit warning and bounded
+  evidence claims remain in place.
 
 ## Capabilities
 

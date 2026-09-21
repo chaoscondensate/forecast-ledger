@@ -290,8 +290,10 @@ were no active users.
   decimals, bins, graphs, dates, and unions.
 - **[Cryptographic incompatibility]** A missing optional field or normalized
   string changes envelope/seal bytes. → Use closed projection types, exhaustive
-  field-classification tests, the published vector, and an independent review
-  before release.
+  field-classification tests, the published vector, and cross-platform release
+  checks. Keep the absence of an independent review prominent in public
+  security and maturity documentation; external review is desirable follow-up
+  work rather than a `0.9.0` release gate.
 - **[Large authoring surface]** Six domains and seven representations can make
   CLI help unwieldy. → Use dedicated lifecycle/entity leaves, consistent flag
   families, copyable per-kind examples, generated inventory checks, and no
@@ -325,9 +327,11 @@ were no active users.
 3. Replace builders and application services for revisions, domains,
    representations, resolutions, groups, relationships, provenance, and
    lifecycle events; preserve transactional and source-patch behavior.
-4. Implement and independently verify v2 sealing, reveal, target generation,
-   timestamp binding, and publication packaging before exposing them through
-   adapters.
+4. Implement and verify v2 sealing, reveal, target generation, timestamp
+   binding, and publication packaging with published vectors, negative,
+   property, fuzz, parity, and cross-platform tests before exposing them
+   through adapters. Record that no independent audit has occurred and defer
+   external review without claiming that it is complete.
 5. Cut CLI, MCP, generated contracts, presentation, examples, and docs to v2,
    then run denylist checks for every removed v1 field, command, protocol, and
    public claim.

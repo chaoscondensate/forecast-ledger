@@ -21,9 +21,10 @@ User-visible changes are tracked in the [changelog](CHANGELOG.md).
 > **Status: Preview and unaudited.** Current main implements the Forecast
 > Ledger v2 CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental RFC 3161 timestamp evidence, layered verification, and
-> portable publication packages. RFC 3161 support remains experimental until
-> the tracked native-platform and independent-review gates are complete. The project has no recorded independent
-> security or cryptographic audit. Do not treat the current build as a finished
+> portable publication packages. Native CI exercises the implementation on
+> macOS, Linux, and Windows, but the project has no recorded independent
+> security or cryptographic audit. Stable `0.x` packaging does not imply an
+> audit or formal verification. Do not treat the current build as a finished
 > evidence system.
 
 Release archives target macOS, Linux, and Windows on amd64 and arm64. The CLI

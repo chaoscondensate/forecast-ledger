@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-30
+reviewed: 2026-09-21
 owner: security
 generated: false
 security-critical: true
@@ -13,6 +13,10 @@ next: ../explanation/verification-claims.md
 Forecast Ledger CLI is Preview software and has not received a recorded
 independent security or cryptographic audit. Before using it with private
 material, review:
+
+A stable `0.x` release identifies the supported package channel. It does not
+mean that the cryptographic implementation has been independently audited or
+formally verified.
 
 - the [evidence, maturity, and audit baseline](../development/documentation-baseline.md);
 - the [dependency security review](../development/dependencies.md); and

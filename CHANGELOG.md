@@ -18,6 +18,13 @@ tags and downloadable files are published on GitHub Releases.
 - Upgrade sealed forecasts, canonical targets, RFC 3161 fixtures, MCP tools,
   generated contracts, and publication metadata to their v2 bindings.
 
+### Security
+
+- Exercise the v2 implementation and release packages on native GitHub-hosted
+  macOS, Linux, and Windows runners. No independent security or cryptographic
+  audit has occurred; external review remains desirable follow-up work and the
+  release makes no audit or formal-verification claim.
+
 ## 0.8.0 - 2026-08-31
 
 ### Changed

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-31
+reviewed: 2026-09-21
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-08-31
+Reviewed: 2026-09-21
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -79,9 +79,11 @@ evidence failure uses `verification`/exit 6; and `no_evidence` uses
 Every visible leaf in the current source has a real action and an availability
 test; the old preview unavailable handler has been removed. This does not make
 every subsystem stable. RFC 3161 support is bounded and OpenSSL-interoperable,
-but no independent security or cryptographic review is recorded. Installed releases may expose less than
-unreleased `main`; candidate-binary help and `version --json` are authoritative
-for an installed artifact.
+but no independent security or cryptographic review is recorded. Native CI
+exercises the implementation on GitHub-hosted macOS, Linux, and Windows
+runners. Installed releases may expose less than unreleased `main`;
+candidate-binary help and `version --json` are authoritative for an installed
+artifact.
 
 Release `v0.6.0` has a release-blocking YAML regression: operations that replace
 an existing structure can fail with `internal`, although the transaction leaves
@@ -117,7 +119,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.8.0` contains those six archives and eight native Linux packages:
+Release `v0.9.0` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -244,13 +246,14 @@ time, or substantive outcome-source correctness.
 
 ### Maturity, audit, and limitations
 
-- The approved public status currently visible in README is **Preview**. The
-  `v0.8.0` is published through the explicit release workflow; version
-  stability does not imply feature completeness or audit.
+- The approved public status currently visible in README is **Preview**.
+  `v0.9.0` is published through the explicit release workflow; stable `0.x`
+  packaging does not imply feature completeness, independent audit, or formal
+  verification.
 - No independent security or cryptographic audit is recorded. A pinned
-  `go tool govulncheck ./...` completed on 2026-08-31 with no reachable
-  vulnerability and one required-module advisory in code this project does not
-  call. That bounded result is not an audit or a security guarantee.
+  `go tool govulncheck ./...` completed on 2026-09-21 with no reachable
+  vulnerability and three required-module advisories in code this project does
+  not call. That bounded result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check
   is implemented. Only RFC 3161 stamp uses the network; omission contacts the
   built-in FreeTSA HTTPS profile, while custom URLs remain public HTTPS-only.
