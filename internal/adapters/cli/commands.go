@@ -57,7 +57,7 @@ func newCommandWithEffects(stdin io.Reader, stdout, stderr io.Writer, effects se
 			ledgerCommand(),
 			ledgerReadCommand("validate", "Validate a ledger locally", true),
 			ledgerReadCommand("status", "Show ledger and evidence status", true),
-			platformCommand(), questionCommand(), forecastCommand(),
+			platformCommand(), groupCommand(), relationshipCommand(), questionCommand(), forecastCommand(),
 			targetCommand(), timestampCommand(), verifyCommand(),
 			publishCommand(), mcpCommand(), versionCommand(),
 		},
@@ -450,14 +450,225 @@ func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error
 	return presentOperationOutcome(command, service.OperationPlatformRemove, false, result, nil, "")
 }
 
+func groupCommand() *urfavecli.Command {
+	add := leaf("add", "Add a group", "forecast-ledger group add --file ledger.yaml --group macro --title 'Macro questions'", false, []urfavecli.Flag{fileFlag(false), groupFlag(), &urfavecli.StringFlag{Name: "title", Required: true}, &urfavecli.StringFlag{Name: "description"}})
+	add.Action = groupAddAction
+	update := leaf("update", "Update a group", "forecast-ledger group update --file ledger.yaml --group macro --title '2027 macro'", false, []urfavecli.Flag{fileFlag(false), groupFlag(), &urfavecli.StringFlag{Name: "title"}, &urfavecli.StringFlag{Name: "description"}, &urfavecli.BoolFlag{Name: "clear-description"}})
+	update.Action = groupUpdateAction
+	list := leaf("list", "List groups", "forecast-ledger group list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
+	list.Action = groupListAction
+	show := leaf("show", "Show a group", "forecast-ledger group show --file ledger.yaml --group macro", true, []urfavecli.Flag{fileFlag(true), groupFlag()})
+	show.Action = groupShowAction
+	remove := leaf("remove", "Remove an unreferenced group", "forecast-ledger group remove --file ledger.yaml --group macro --yes", false, []urfavecli.Flag{fileFlag(false), groupFlag()})
+	remove.Action = groupRemoveAction
+	return group("group", "Manage question groups", add, update, list, show, remove)
+}
+
+func groupAddAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id := ledger.Slug(command.String("group"))
+	input := service.GroupCreateInput{Title: command.String("title"), Description: optionalStringValue(command, "description")}
+	var result service.CollectionFileResult
+	var err error
+	if runtime.DryRun {
+		result, err = service.PlanGroupAddFile(op, command.String("file"), id, input)
+	} else {
+		result, err = service.CommitGroupAddFile(op, command.String("file"), id, input)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationGroupAdd, runtime.DryRun, result, nil, "")
+}
+func groupUpdateAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	input := service.GroupPatchInput{}
+	if command.IsSet("title") {
+		input.Title = service.Optional[string]{Set: true, Value: command.String("title")}
+	}
+	description, err := patchString(command, "description", "clear-description")
+	if err != nil {
+		return err
+	}
+	input.Description = description
+	id := ledger.Slug(command.String("group"))
+	var result service.CollectionFileResult
+	if runtime.DryRun {
+		result, err = service.PlanGroupUpdateFile(op, command.String("file"), id, input)
+	} else {
+		result, err = service.CommitGroupUpdateFile(op, command.String("file"), id, input)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationGroupUpdate, runtime.DryRun, result, nil, "")
+}
+func groupListAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id, values, err := service.LoadGroupList(op, command.String("file"), command.Root().Reader)
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationGroupList, false, map[string]any{"ledger_id": id, "groups": values}, nil, "")
+}
+func groupShowAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	ledgerID, value, err := service.LoadGroupShow(op, command.String("file"), command.Root().Reader, ledger.Slug(command.String("group")))
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationGroupShow, false, map[string]any{"ledger_id": ledgerID, "group": value}, nil, "")
+}
+func groupRemoveAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id := ledger.Slug(command.String("group"))
+	if !runtime.DryRun {
+		approved, err := runtime.Confirm(op, "Remove group "+string(id)+"?")
+		if err != nil {
+			return err
+		}
+		if !approved {
+			return app.NewError(app.CodeConflict, "group removal was not approved", nil)
+		}
+	}
+	var result service.CollectionFileResult
+	var err error
+	if runtime.DryRun {
+		result, err = service.PlanGroupRemoveFile(op, command.String("file"), id)
+	} else {
+		result, err = service.CommitGroupRemoveFile(op, command.String("file"), id)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationGroupRemove, runtime.DryRun, result, nil, "")
+}
+
+func relationshipCommand() *urfavecli.Command {
+	addFlags := []urfavecli.Flag{fileFlag(false), relationshipFlag(), &urfavecli.StringFlag{Name: "kind", Required: true}, &urfavecli.StringFlag{Name: "group"}, &urfavecli.StringFlag{Name: "question"}, &urfavecli.StringFlag{Name: "parent-question"}, &urfavecli.StringFlag{Name: "parent-revision"}, &urfavecli.StringFlag{Name: "parent-outcome"}, &urfavecli.BoolFlag{Name: "parent-outcome-boolean"}, &urfavecli.StringFlag{Name: "child-question"}}
+	add := leaf("add", "Add a typed relationship", "forecast-ledger relationship add --file ledger.yaml --relationship rel-1 --kind group_membership --group macro --question q-rate", false, addFlags)
+	add.Action = relationshipAddAction
+	list := leaf("list", "List relationships", "forecast-ledger relationship list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
+	list.Action = relationshipListAction
+	show := leaf("show", "Show a relationship", "forecast-ledger relationship show --file ledger.yaml --relationship rel-1", true, []urfavecli.Flag{fileFlag(true), relationshipFlag()})
+	show.Action = relationshipShowAction
+	remove := leaf("remove", "Remove an unreferenced relationship", "forecast-ledger relationship remove --file ledger.yaml --relationship rel-1 --yes", false, []urfavecli.Flag{fileFlag(false), relationshipFlag()})
+	remove.Action = relationshipRemoveAction
+	return group("relationship", "Manage question relationships", add, list, show, remove)
+}
+
+func relationshipAddAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id := ledger.Slug(command.String("relationship"))
+	kind := ledger.RelationshipKind(command.String("kind"))
+	var relationship ledger.Relationship
+	switch kind {
+	case ledger.RelationshipGroupMembership:
+		if err := requireDirectFlags(command, "group", "question"); err != nil {
+			return err
+		}
+		relationship.GroupMembership = &ledger.GroupMembership{ID: id, Kind: kind, GroupID: ledger.Slug(command.String("group")), QuestionID: ledger.Slug(command.String("question"))}
+	case ledger.RelationshipConditional:
+		if err := requireDirectFlags(command, "parent-question", "parent-revision", "child-question"); err != nil {
+			return err
+		}
+		outcome := ledger.ScalarValue{}
+		if command.IsSet("parent-outcome") == command.IsSet("parent-outcome-boolean") {
+			return app.NewError(app.CodeUsage, "use exactly one parent outcome flag", nil)
+		}
+		if command.IsSet("parent-outcome-boolean") {
+			outcome.Boolean = pointer(command.Bool("parent-outcome-boolean"))
+		} else {
+			outcome.String = pointer(command.String("parent-outcome"))
+		}
+		relationship.Conditional = &ledger.ConditionalRelationship{ID: id, Kind: kind, ParentQuestionID: ledger.Slug(command.String("parent-question")), ParentQuestionRevisionID: ledger.Slug(command.String("parent-revision")), ParentOutcome: outcome, ChildQuestionID: ledger.Slug(command.String("child-question"))}
+	default:
+		return app.NewError(app.CodeUsage, "--kind must be group_membership or conditional", nil)
+	}
+	input := service.RelationshipInput{Relationship: relationship}
+	var result service.CollectionFileResult
+	var err error
+	if runtime.DryRun {
+		result, err = service.PlanRelationshipAddFile(op, command.String("file"), input)
+	} else {
+		result, err = service.CommitRelationshipAddFile(op, command.String("file"), input)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationRelationshipAdd, runtime.DryRun, result, nil, "")
+}
+func relationshipListAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id, values, err := service.LoadRelationshipList(op, command.String("file"), command.Root().Reader)
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationRelationshipList, false, map[string]any{"ledger_id": id, "relationships": values}, nil, "")
+}
+func relationshipShowAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id, value, err := service.LoadRelationshipShow(op, command.String("file"), command.Root().Reader, ledger.Slug(command.String("relationship")))
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationRelationshipShow, false, map[string]any{"ledger_id": id, "relationship": value}, nil, "")
+}
+func relationshipRemoveAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	id := ledger.Slug(command.String("relationship"))
+	if !runtime.DryRun {
+		approved, err := runtime.Confirm(op, "Remove relationship "+string(id)+"?")
+		if err != nil {
+			return err
+		}
+		if !approved {
+			return app.NewError(app.CodeConflict, "relationship removal was not approved", nil)
+		}
+	}
+	var result service.CollectionFileResult
+	var err error
+	if runtime.DryRun {
+		result, err = service.PlanRelationshipRemoveFile(op, command.String("file"), id)
+	} else {
+		result, err = service.CommitRelationshipRemoveFile(op, command.String("file"), id)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationRelationshipRemove, runtime.DryRun, result, nil, "")
+}
+
 func questionCommand() *urfavecli.Command {
-	addFlags := []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "type", Required: true, Usage: "Question type: binary, multiple_choice, numeric, or date"}, &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}}
+	addFlags := []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}}
 	addFlags = append(addFlags, questionCreateFlags(true)...)
-	add := leaf("add", "Add a question, optionally with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --type binary --title 'Will it launch?' --resolution-criteria 'Resolves yes on launch' --expected-resolution-at '2 Feb 2027'", false, addFlags)
+	add := leaf("add", "Add a question, optionally with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --revision-id qr-launch-1 --title 'Will it launch?' --resolution-criteria 'Resolves yes on launch' --expected-resolution-at 2027-02-02T23:59:59Z --outcome-kind binary", false, addFlags)
 	add.Description += "\n\nUse direct flags for authoring. Repeated structured values use the documented CSV field order; sealed private data remains protected."
 	add.Action = questionAddAction
+	reviseFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, domainFlags("")...)
+	reviseFlags = append(reviseFlags, provenanceFlags("revision")...)
+	revise := leaf("revise", "Append a complete immutable question revision", "forecast-ledger question revise --file ledger.yaml --question q-launch --revision-id qr-launch-2 --effective-at 2026-12-02T00:00:00Z --title 'Updated wording' --resolution-criteria '...' --expected-resolution-at 2027-02-02T23:59:59Z --outcome-kind binary", false, reviseFlags)
+	revise.Action = questionReviseAction
 	updateFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, questionPatchFlags()...)
-	update := leaf("update", "Update allowed question fields", "forecast-ledger question update --file ledger.yaml --question q-launch --title 'Updated title' --tag launch --tag space", false, updateFlags)
+	update := leaf("update", "Update question metadata", "forecast-ledger question update --file ledger.yaml --question q-launch --tag launch --tag space", false, updateFlags)
 	update.Description += "\n\nOmitted fields are unchanged; --clear-* removes optional values."
 	update.Action = questionUpdateAction
 	list := leaf("list", "List questions", "forecast-ledger question list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
@@ -468,16 +679,23 @@ func questionCommand() *urfavecli.Command {
 	resolveFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(true)...)
 	resolve := leaf("resolve", "Resolve a question", "forecast-ledger question resolve --file ledger.yaml --question q-launch --outcome-boolean=true --outcome-known-at 2027-01-02T00:00:00Z --source 'Official result,https://example.com/result,2027-01-02T00:10:00Z' --yes", false, resolveFlags)
 	resolve.Action = questionResolveAction
-	annulFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(false)...)
-	annul := leaf("annul", "Annul a question", "forecast-ledger question annul --file ledger.yaml --question q-launch --reason 'Question became unresolvable' --yes", false, annulFlags)
-	annul.Action = questionAnnulAction
+	unresolvedFlags := func() []urfavecli.Flag {
+		return append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(false)...)
+	}
+	ambiguous := leaf("ambiguous", "Mark a question ambiguous", "forecast-ledger question ambiguous --file ledger.yaml --question q-launch --reason 'Sources do not identify one outcome' --yes", false, unresolvedFlags())
+	ambiguous.Action = questionAmbiguousAction
+	void := leaf("void", "Mark a question void", "forecast-ledger question void --file ledger.yaml --question q-launch --reason 'The event definition became invalid' --yes", false, unresolvedFlags())
+	void.Action = questionVoidAction
 	disputeFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(false)...)
 	dispute := leaf("dispute", "Dispute a resolution", "forecast-ledger question dispute --file ledger.yaml --question q-launch --reason 'Source conflicts with the recorded outcome' --yes", false, disputeFlags)
 	dispute.Action = questionDisputeAction
-	for _, command := range []*urfavecli.Command{resolve, annul, dispute} {
+	notApplicableFlags := []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "relationship", Required: true, OnlyOnce: true}, &urfavecli.StringFlag{Name: "reason", Required: true, OnlyOnce: true}, &urfavecli.StringFlag{Name: "recorded-at", OnlyOnce: true}}
+	notApplicable := leaf("not-applicable", "Mark a conditional child not applicable", "forecast-ledger question not-applicable --file ledger.yaml --question q-child --relationship rel-condition --reason 'Parent condition was not met' --yes", false, notApplicableFlags)
+	notApplicable.Action = questionNotApplicableAction
+	for _, command := range []*urfavecli.Command{resolve, ambiguous, void, dispute} {
 		command.Description += "\n\nUse repeated --source values as title,url,retrieved-at[,publisher[,published-at[,sha256]]]."
 	}
-	return group("question", "Manage forecast questions", add, update, list, show, resolve, annul, dispute)
+	return group("question", "Manage forecast questions", add, revise, update, list, show, resolve, ambiguous, void, dispute, notApplicable)
 }
 
 func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
@@ -512,7 +730,7 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
-	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(command.String("question")), Type: ledger.QuestionType(command.String("type")), Input: input}
+	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(command.String("question")), Input: input}
 	keyPath := command.String("key-file")
 	shape, err := service.ClassifyQuestionAddInput(input)
 	if err != nil {
@@ -602,6 +820,43 @@ func questionUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	return presentOperationOutcome(command, service.OperationQuestionUpdate, runtime.DryRun, result, nil, "")
 }
 
+func questionReviseAction(ctx context.Context, command *urfavecli.Command) error {
+	runtime := RuntimeFromCommand(command)
+	operationContext, cancel := runtime.Context(ctx)
+	defer cancel()
+	timezone, err := mutationTimezone(operationContext, command)
+	if err != nil {
+		return err
+	}
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
+	for _, item := range []struct {
+		name   string
+		policy dateOnlyPolicy
+	}{{"effective-at", dateOnlyRejected}, {"revision-recorded-at", dateOnlyRejected}, {"opens-at", dateOnlyStart}, {"expected-resolution-at", dateOnlyEnd}} {
+		if _, err := normalizeSetTimeWithMetadata(command, item.name, timezone, item.policy); err != nil {
+			return err
+		}
+	}
+	input, err := buildRevisionInput(command, "", "revision")
+	if err != nil {
+		return err
+	}
+	id := ledger.Slug(command.String("question"))
+	var result service.QuestionFileResult
+	if runtime.DryRun {
+		result, err = service.PlanQuestionReviseFile(operationContext, command.String("file"), id, input, observedAt)
+	} else {
+		result, err = service.CommitQuestionReviseFile(operationContext, command.String("file"), id, input, observedAt)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, service.OperationQuestionRevise, runtime.DryRun, result, nil, "")
+}
+
 func questionListAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
@@ -615,7 +870,7 @@ func questionListAction(ctx context.Context, command *urfavecli.Command) error {
 		if index > 0 {
 			lines.WriteByte('\n')
 		}
-		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%d\t%s", item.ID, item.Title, item.Type, item.Status, item.ForecastCount, item.ExpectedResolutionAt)
+		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%d\t%s", item.ID, item.CurrentRevisionID, item.Title, item.OutcomeKind, item.Status, item.ForecastCount, item.ExpectedResolutionAt)
 	}
 	message := lines.String()
 	if message == "" {
@@ -655,31 +910,58 @@ func questionResolveAction(ctx context.Context, command *urfavecli.Command) erro
 	})
 }
 
-func questionAnnulAction(ctx context.Context, command *urfavecli.Command) error {
-	var input service.AnnulInput
+func questionAmbiguousAction(ctx context.Context, command *urfavecli.Command) error {
+	var input service.UnresolvedResolutionInput
 	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
 		reason, recordedAt, sources, err := buildReasonInput(command)
-		input = service.AnnulInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
+		input = service.UnresolvedResolutionInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
 		return err
-	}, "annul", func(operationContext context.Context, id ledger.Slug, observedAt ledger.Timestamp, dryRun bool) (service.QuestionFileResult, error) {
+	}, "ambiguous", func(operationContext context.Context, id ledger.Slug, observedAt ledger.Timestamp, dryRun bool) (service.QuestionFileResult, error) {
 		if dryRun {
-			return service.PlanQuestionAnnulFile(operationContext, command.String("file"), id, input, observedAt)
+			return service.PlanQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionAmbiguous, input, observedAt)
 		}
-		return service.CommitQuestionAnnulFile(operationContext, command.String("file"), id, input, observedAt)
+		return service.CommitQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionAmbiguous, input, observedAt)
+	})
+}
+
+func questionVoidAction(ctx context.Context, command *urfavecli.Command) error {
+	var input service.UnresolvedResolutionInput
+	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
+		reason, recordedAt, sources, err := buildReasonInput(command)
+		input = service.UnresolvedResolutionInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
+		return err
+	}, "void", func(operationContext context.Context, id ledger.Slug, observedAt ledger.Timestamp, dryRun bool) (service.QuestionFileResult, error) {
+		if dryRun {
+			return service.PlanQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionVoid, input, observedAt)
+		}
+		return service.CommitQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionVoid, input, observedAt)
 	})
 }
 
 func questionDisputeAction(ctx context.Context, command *urfavecli.Command) error {
-	var input service.DisputeInput
+	var input service.UnresolvedResolutionInput
 	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
 		reason, recordedAt, sources, err := buildReasonInput(command)
-		input = service.DisputeInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
+		input = service.UnresolvedResolutionInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
 		return err
 	}, "dispute", func(operationContext context.Context, id ledger.Slug, observedAt ledger.Timestamp, dryRun bool) (service.QuestionFileResult, error) {
 		if dryRun {
-			return service.PlanQuestionDisputeFile(operationContext, command.String("file"), id, input, observedAt)
+			return service.PlanQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionDisputed, input, observedAt)
 		}
-		return service.CommitQuestionDisputeFile(operationContext, command.String("file"), id, input, observedAt)
+		return service.CommitQuestionUnresolvedFile(operationContext, command.String("file"), id, ledger.ResolutionDisputed, input, observedAt)
+	})
+}
+
+func questionNotApplicableAction(ctx context.Context, command *urfavecli.Command) error {
+	var input service.NotApplicableInput
+	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
+		input = service.NotApplicableInput{RelationshipID: ledger.Slug(command.String("relationship")), Reason: command.String("reason"), RecordedAt: optionalTimestampValue(command, "recorded-at")}
+		return nil
+	}, "not-applicable", func(operationContext context.Context, id ledger.Slug, observedAt ledger.Timestamp, dryRun bool) (service.QuestionFileResult, error) {
+		if dryRun {
+			return service.PlanQuestionNotApplicableFile(operationContext, command.String("file"), id, input, observedAt)
+		}
+		return service.CommitQuestionNotApplicableFile(operationContext, command.String("file"), id, input, observedAt)
 	})
 }
 
@@ -722,19 +1004,20 @@ func questionTerminalAction(ctx context.Context, command *urfavecli.Command, bui
 	humanMessage := ""
 	if verb == "resolve" {
 		operation = service.OperationQuestionResolve
-	} else if verb == "annul" {
-		operation = service.OperationQuestionAnnul
-		if !runtime.DryRun {
-			humanMessage = "Question was annulled; the question and forecasts were retained"
-		}
+	} else if verb == "ambiguous" {
+		operation = service.OperationQuestionAmbiguous
+	} else if verb == "void" {
+		operation = service.OperationQuestionVoid
+	} else if verb == "not-applicable" {
+		operation = service.OperationQuestionNotApplicable
 	}
 	return presentOperationOutcome(command, operation, runtime.DryRun, result, nil, humanMessage)
 }
 
 func forecastCommand() *urfavecli.Command {
 	addFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag()}, forecastCreateFlags()...)
-	add := leaf("add", "Add a public forecast", "forecast-ledger forecast add --file ledger.yaml --question q-launch --forecast f-002 --forecasted-at 2026-12-01T12:00:00Z --value-kind binary --probability-bp 6500", false, addFlags)
-	add.Description += "\n\nUse --value-kind with --probability-bp, repeated --choice-probability, --point, --interval, or repeated --quantile as applicable."
+	add := leaf("add", "Add a public forecast", "forecast-ledger forecast add --file ledger.yaml --question q-launch --forecast f-002 --question-revision qr-launch-1 --forecasted-at 2026-12-01T12:00:00Z --probability 0.65 --probability-outcome", false, addFlags)
+	add.Description += "\n\nUse one or more direct v2 representation families: probability, PMF, binned PMF, quantiles, CDF, point, or credible intervals."
 	add.Action = forecastAddAction
 	list := leaf("list", "List forecasts", "forecast-ledger forecast list --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
 	list.Action = forecastListAction
@@ -742,14 +1025,61 @@ func forecastCommand() *urfavecli.Command {
 	show.Description += "\n\nNormal human and plain output includes type-aware public values and safe stored integrity evidence; sealed private fields stay redacted. No network check is performed."
 	show.Action = forecastShowAction
 	sealFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), secretOutputFlag()}, forecastSealPublicFlags()...)
-	seal := leaf("seal", "Create and append a sealed forecast", "forecast-ledger forecast seal --file ledger.yaml --question q-launch --forecast f-002 --forecasted-at 2026-12-01T12:00:00Z --secret-input private.yaml --key-file secret.key", false, sealFlags)
+	seal := leaf("seal", "Create and append a sealed forecast", "forecast-ledger forecast seal --file ledger.yaml --question q-launch --forecast f-002 --question-revision qr-launch-1 --forecasted-at 2026-12-01T12:00:00Z --secret-input private.yaml --key-file secret.key", false, sealFlags)
 	seal.Description += "\n\nValue, rationale, key factors, and comment stay in protected --secret-input while public times, note, and supersedes ID use flags."
 	seal.Action = forecastSealAction
 	reveal := leaf("reveal", "Verify and reveal a sealed forecast", "forecast-ledger forecast reveal --file ledger.yaml --question q-launch --forecast f-002 --key-file secret.key --yes", false, []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), &urfavecli.StringFlag{Name: "key-file", Required: true, TakesFile: true, Usage: "Protected key file"}, &urfavecli.StringFlag{Name: "revealed-at", OnlyOnce: true, Usage: "Explicit RFC 3339 reveal time; defaults to the current clock"}})
 	reveal.Action = forecastRevealAction
 	hintUpdate := leaf("update", "Change a non-location key hint", "forecast-ledger forecast key-hint update --file ledger.yaml --question q-launch --forecast f-002 --key-hint forecast-key:f-002", false, []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), &urfavecli.StringFlag{Name: "key-hint", Required: true, OnlyOnce: true, Usage: "Safe scheme:opaque logical hint"}})
 	hintUpdate.Action = forecastKeyHintUpdateAction
-	return group("forecast", "Manage append-only forecast records", add, list, show, seal, reveal, group("key-hint", "Manage non-authoritative key hints", hintUpdate))
+	lifecycle := func(name string, eventType ledger.LifecycleEventType, operation service.OperationName) *urfavecli.Command {
+		flags := []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), &urfavecli.StringFlag{Name: "event", Required: true}, &urfavecli.StringFlag{Name: "effective-at", Required: true}, &urfavecli.StringFlag{Name: "recorded-at"}, &urfavecli.StringFlag{Name: "reason"}}
+		flags = append(flags, provenanceFlags("")...)
+		command := leaf(name, "Append a "+name+" lifecycle event", "forecast-ledger forecast "+name+" --file ledger.yaml --question q-launch --forecast f-002 --event event-1 --effective-at 2026-12-02T00:00:00Z", false, flags)
+		command.Action = func(ctx context.Context, command *urfavecli.Command) error {
+			return forecastLifecycleAction(ctx, command, eventType, operation)
+		}
+		return command
+	}
+	withdraw := lifecycle("withdraw", ledger.LifecycleWithdrawn, service.OperationForecastWithdraw)
+	expire := lifecycle("expire", ledger.LifecycleExpired, service.OperationForecastExpire)
+	reaffirm := lifecycle("reaffirm", ledger.LifecycleReaffirmed, service.OperationForecastReaffirm)
+	return group("forecast", "Manage append-only forecast records", add, list, show, seal, reveal, withdraw, expire, reaffirm, group("key-hint", "Manage non-authoritative key hints", hintUpdate))
+}
+
+func forecastLifecycleAction(ctx context.Context, command *urfavecli.Command, eventType ledger.LifecycleEventType, operation service.OperationName) error {
+	runtime := RuntimeFromCommand(command)
+	op, cancel := runtime.Context(ctx)
+	defer cancel()
+	timezone, err := mutationTimezone(op, command)
+	if err != nil {
+		return err
+	}
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"effective-at", "recorded-at"} {
+		if _, err := normalizeSetTimeWithMetadata(command, name, timezone, dateOnlyRejected); err != nil {
+			return err
+		}
+	}
+	provenance, err := buildProvenance(command, "")
+	if err != nil {
+		return err
+	}
+	input := service.LifecycleInput{ID: ledger.Slug(command.String("event")), EffectiveAt: ledger.Timestamp(command.String("effective-at")), RecordedAt: optionalTimestampValue(command, "recorded-at"), Reason: optionalStringValue(command, "reason"), Provenance: provenance}
+	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
+	var result service.ForecastFileResult
+	if runtime.DryRun {
+		result, err = service.PlanForecastLifecycleFile(op, command.String("file"), questionID, forecastID, eventType, input, observedAt)
+	} else {
+		result, err = service.CommitForecastLifecycleFile(op, command.String("file"), questionID, forecastID, eventType, input, observedAt)
+	}
+	if err != nil {
+		return err
+	}
+	return presentOperationOutcome(command, operation, runtime.DryRun, result, nil, "")
 }
 
 func forecastAddAction(ctx context.Context, command *urfavecli.Command) error {
@@ -809,7 +1139,7 @@ func forecastListAction(ctx context.Context, command *urfavecli.Command) error {
 		if index > 0 {
 			lines.WriteByte('\n')
 		}
-		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%s", item.ID, item.ForecastedAt, item.RecordedAt, item.Visibility, item.IntegrityStatus, item.ValueSummary)
+		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%s", item.ID, item.QuestionRevisionID, item.ForecastedAt, item.Visibility, item.IntegrityStatus, compactPublicJSON(item.RepresentationKinds))
 	}
 	message := lines.String()
 	if message == "" {
@@ -1284,18 +1614,8 @@ func writeVersionInfo(writer io.Writer, info buildinfo.Info, mode presentation.M
 
 func formatQuestionView(mode presentation.Mode, view service.QuestionView) string {
 	fields := [][2]string{
-		{"id", string(view.ID)}, {"title", view.Title}, {"type", string(view.Type)}, {"status", string(view.Status)},
-		{"resolution_criteria", view.ResolutionCriteria}, {"created_at", string(view.CreatedAt)},
-		{"forecast_window", compactPublicJSON(view.ForecastWindow)}, {"expected_resolution_at", string(view.ExpectedResolutionAt)},
-	}
-	if view.Options != nil {
-		fields = append(fields, [2]string{"options", compactPublicJSON(*view.Options)})
-	}
-	if view.Unit != nil {
-		fields = append(fields, [2]string{"unit", compactPublicJSON(view.Unit)})
-	}
-	if view.PlatformRefs != nil {
-		fields = append(fields, [2]string{"platform_refs", compactPublicJSON(*view.PlatformRefs)})
+		{"id", string(view.ID)}, {"status", string(view.Status)}, {"created_at", string(view.CreatedAt)},
+		{"current_revision_id", string(view.CurrentRevisionID)}, {"revisions", compactPublicJSON(view.Revisions)},
 	}
 	if view.Tags != nil {
 		fields = append(fields, [2]string{"tags", compactPublicJSON(*view.Tags)})
@@ -1313,12 +1633,9 @@ func formatQuestionView(mode presentation.Mode, view service.QuestionView) strin
 			output.WriteByte('\n')
 		}
 		if mode == presentation.ModePlain {
-			fmt.Fprintf(&output, "forecast\t%s\t%s\t%s\t%s", forecast.Summary.ID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus, forecast.Summary.ValueSummary)
+			fmt.Fprintf(&output, "forecast\t%s\t%s\t%s\t%s", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, compactPublicJSON(forecast.Summary.RepresentationKinds))
 		} else {
-			fmt.Fprintf(&output, "Forecast: %s (%s, %s)", forecast.Summary.ID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus)
-			if forecast.Summary.ValueSummary != "" {
-				fmt.Fprintf(&output, "\n  Value: %s", forecast.Summary.ValueSummary)
-			}
+			fmt.Fprintf(&output, "Forecast: %s (revision %s, %s, %s)", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus)
 		}
 	}
 	return output.String()
@@ -1326,12 +1643,12 @@ func formatQuestionView(mode presentation.Mode, view service.QuestionView) strin
 
 func formatForecastView(mode presentation.Mode, view service.ForecastView) string {
 	fields := [][2]string{
-		{"id", string(view.Summary.ID)}, {"forecasted_at", string(view.Summary.ForecastedAt)}, {"recorded_at", string(view.Summary.RecordedAt)},
+		{"id", string(view.Summary.ID)}, {"question_revision_id", string(view.Summary.QuestionRevisionID)}, {"forecasted_at", string(view.Summary.ForecastedAt)}, {"recorded_at", string(view.Summary.RecordedAt)},
 		{"visibility", string(view.Summary.Visibility)}, {"integrity_status", string(view.Summary.IntegrityStatus)},
 		{"integrity", compactPublicJSON(view.Integrity)},
 	}
-	if view.Value != nil {
-		fields = append(fields, [2]string{"value", compactPublicJSON(view.Value)})
+	if view.Representations != nil {
+		fields = append(fields, [2]string{"representations", compactPublicJSON(view.Representations)})
 	}
 	if view.Rationale != nil {
 		fields = append(fields, [2]string{"rationale", *view.Rationale})
@@ -1530,6 +1847,14 @@ func forecastFlag() *urfavecli.StringFlag {
 }
 func platformFlag() *urfavecli.StringFlag {
 	return &urfavecli.StringFlag{Name: "platform", Required: true, OnlyOnce: true, Usage: "Stable platform ID"}
+}
+
+func groupFlag() *urfavecli.StringFlag {
+	return &urfavecli.StringFlag{Name: "group", Required: true, OnlyOnce: true, Usage: "Stable group ID"}
+}
+
+func relationshipFlag() *urfavecli.StringFlag {
+	return &urfavecli.StringFlag{Name: "relationship", Required: true, OnlyOnce: true, Usage: "Stable relationship ID"}
 }
 func secretOutputFlag() *urfavecli.StringFlag {
 	return &urfavecli.StringFlag{Name: "key-file", Required: true, OnlyOnce: true, TakesFile: true, Usage: "New protected key file"}

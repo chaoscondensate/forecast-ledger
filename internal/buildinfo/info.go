@@ -1,4 +1,4 @@
-// Package buildinfo exposes reproducible build and compatibility metadata.
+// Package buildinfo exposes reproducible build and contract metadata.
 package buildinfo
 
 import (

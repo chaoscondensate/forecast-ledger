@@ -4,8 +4,8 @@ import "testing"
 
 func TestOperationRegistryIsCompleteAndUnique(t *testing.T) {
 	definitions := OperationDefinitions()
-	if len(definitions) != 30 {
-		t.Fatalf("operation definitions = %d, want 30", len(definitions))
+	if len(definitions) != 45 {
+		t.Fatalf("operation definitions = %d, want 45", len(definitions))
 	}
 	names := make(map[OperationName]struct{}, len(definitions))
 	tools := make(map[string]struct{}, len(definitions))

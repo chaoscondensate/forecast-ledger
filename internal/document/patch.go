@@ -5,6 +5,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,6 +199,19 @@ func scalarReplacementValue(value any) (any, bool) {
 		switch typed.value.Kind {
 		case ValueNull, ValueBool, ValueInt, ValueString:
 			return typed.value.Any(), true
+		}
+	}
+	reflected := reflect.ValueOf(value)
+	if reflected.IsValid() {
+		switch reflected.Kind() {
+		case reflect.Bool:
+			return reflected.Bool(), true
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return reflected.Int(), true
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return reflected.Uint(), true
+		case reflect.String:
+			return reflected.String(), true
 		}
 	}
 	return nil, false

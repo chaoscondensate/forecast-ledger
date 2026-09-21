@@ -41,7 +41,7 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	if forecast.Visibility != ledger.VisibilitySealed || forecast.Commitment == nil || forecast.Commitment.Sealed == nil {
 		t.Fatalf("sealed forecast = %#v", forecast)
 	}
-	if forecast.Value != nil || forecast.Rationale != nil || forecast.KeyFactors != nil || forecast.Comment != nil {
+	if forecast.Representations != nil || forecast.Rationale != nil || forecast.KeyFactors != nil || forecast.Comment != nil {
 		t.Fatalf("sealed forecast leaked private mirror: %#v", forecast)
 	}
 	if forecast.ForecastedAt != root.CreatedAt || forecast.RecordedAt != root.CreatedAt {
@@ -50,7 +50,7 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	if forecast.Commitment.Sealed.KeyHint != "forecast-key:f-one" {
 		t.Fatalf("key hint = %q", forecast.Commitment.Sealed.KeyHint)
 	}
-	if _, err := forecastcrypto.DecodeKeyFile(built.KeyFile, "q-one", "f-one"); err != nil {
+	if _, err := forecastcrypto.DecodeKeyFile(built.KeyFile, "q-one", "qr-one", "f-one"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -78,7 +78,8 @@ func TestOmittedSealedForecastTimeBeforeOpeningFailsBeforeEntropy(t *testing.T) 
 		t.Fatal(err)
 	}
 	input := binaryInitialQuestion()
-	input.ForecastWindow = ledger.ForecastWindow{OpensAt: "2026-02-01T00:00:00Z"}
+	opensAt := ledger.Timestamp("2026-02-01T00:00:00Z")
+	input.Revision.ForecastingOpensAt = &opensAt
 	input.InitialForecast.Visibility = ledger.VisibilitySealed
 	input.InitialForecast.ForecastedAt = ""
 	rationale, comment := "private rationale", "private comment"

@@ -83,9 +83,19 @@ goreleaser check
 goreleaser release --snapshot --clean --skip=publish,chocolatey
 ```
 
+For the Forecast Ledger v2 cutover, also run the generated-contract parity
+tests, documentation examples, and removed-surface denylist. Confirm together the schema commit,
+annotated tag object, release archive digest, checksum-asset digest, embedded
+schema digest, attribution, fixtures, reference semantics,
+and seal/target vectors. Do not publish while any of those identities disagree.
+
 Then inspect `dist/artifacts.json`, run each native binary available on the
 current host, and confirm that `forecast-ledger version --json` contains the
 expected version, commit, schema pin, Go version, and MCP protocol version.
+Confirm that every archive contains `THIRD_PARTY_NOTICES.md` and that every
+Linux package installs it under `/usr/share/doc/forecast-ledger/` alongside the
+license material. Review the generated SBOMs rather than treating the notice as
+a substitute for dependency inventory.
 For a release that changes RFC 3161 support, also:
 
 - run the checked-in fixtures through the Go verifier and the pinned OpenSSL

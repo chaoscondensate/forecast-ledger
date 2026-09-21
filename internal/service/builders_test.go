@@ -17,9 +17,9 @@ func TestBuildLedgerRootCapturesOneClockAndBuildsValidIdentity(t *testing.T) {
 		Input: InitInput{Platforms: map[ledger.Slug]ledger.Platform{"local": {Name: "Local", Kind: ledger.PlatformInformal}}},
 	}, clock)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%#v", err)
 	}
-	if root.SchemaVersion != "1.3.0" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
+	if root.SchemaVersion != "2.0.0" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
 		t.Fatalf("root = %#v", root)
 	}
 	if root.Questions == nil || len(root.Questions) != 0 || root.Publication != nil {
@@ -71,12 +71,12 @@ func TestInitDefaultsRecordedAtFromOperationClockNotExplicitCreatedAt(t *testing
 	input := binaryInitialQuestion()
 	questionCreated := ledger.Timestamp("2020-01-01T00:00:00Z")
 	input.CreatedAt = &questionCreated
-	input.ExpectedResolutionAt = "2027-01-02T00:00:00Z"
-	input.InitialForecast.ForecastedAt = "2026-08-26T12:00:00Z"
+	input.Revision.ExpectedResolutionAt = "2027-01-02T00:00:00Z"
+	input.InitialForecast.ForecastedAt = operationAt
 	input.InitialForecast.RecordedAt = nil
 	model, err := BuildInitialPublicLedgerAt(root, input, operationAt)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%#v", err)
 	}
 	if model.CreatedAt != createdAt || model.Questions[0].Forecasts[0].RecordedAt != operationAt {
 		t.Fatalf("created_at=%s recorded_at=%s", model.CreatedAt, model.Questions[0].Forecasts[0].RecordedAt)

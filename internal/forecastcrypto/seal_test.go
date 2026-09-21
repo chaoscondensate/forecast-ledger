@@ -22,36 +22,32 @@ func (source vectorEntropy) ReadFull(_ context.Context, destination []byte) erro
 	return err
 }
 
-func TestSealMatchesPinnedUpstreamVector(t *testing.T) {
-	data, err := fs.ReadFile(contractschema.Conformance(), "forecast-seal-v1.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var vector struct {
-		QuestionID string        `json:"question_id"`
-		ForecastID string        `json:"forecast_id"`
-		Bundle     PrivateBundle `json:"bundle"`
-		Material   struct {
-			SaltHex  string `json:"salt_hex"`
-			KeyHex   string `json:"key_hex"`
-			NonceHex string `json:"nonce_hex"`
-		} `json:"material"`
-		Expected struct {
-			CanonicalPlaintext string `json:"canonical_plaintext"`
-			Commitment         struct {
-				Scheme         string            `json:"scheme"`
-				CommitmentHash ledger.Digest     `json:"commitment_hash"`
-				Encryption     ledger.Encryption `json:"encryption"`
-				KeyHint        string            `json:"key_hint"`
-			} `json:"commitment"`
-		} `json:"expected"`
-	}
-	if err := json.Unmarshal(data, &vector); err != nil {
-		t.Fatal(err)
-	}
+type sealV2Vector struct {
+	QuestionID         string        `json:"question_id"`
+	QuestionRevisionID string        `json:"question_revision_id"`
+	ForecastID         string        `json:"forecast_id"`
+	Bundle             PrivateBundle `json:"bundle"`
+	Material           struct {
+		SaltHex  string `json:"salt_hex"`
+		KeyHex   string `json:"key_hex"`
+		NonceHex string `json:"nonce_hex"`
+	} `json:"material"`
+	Expected struct {
+		CanonicalPlaintext string `json:"canonical_plaintext"`
+		Commitment         struct {
+			Scheme         string            `json:"scheme"`
+			CommitmentHash ledger.Digest     `json:"commitment_hash"`
+			Encryption     ledger.Encryption `json:"encryption"`
+			KeyHint        string            `json:"key_hint"`
+		} `json:"commitment"`
+	} `json:"expected"`
+}
+
+func TestSealMatchesPinnedV2VectorByteForByte(t *testing.T) {
+	vector := loadSealV2Vector(t)
 	material := append(decodeHex(t, vector.Material.SaltHex), decodeHex(t, vector.Material.KeyHex)...)
 	material = append(material, decodeHex(t, vector.Material.NonceHex)...)
-	sealed, err := Seal(context.Background(), ledger.Slug(vector.QuestionID), ledger.Slug(vector.ForecastID), vector.Bundle, vector.Expected.Commitment.KeyHint, vectorEntropy{reader: bytes.NewReader(material)})
+	sealed, err := Seal(context.Background(), ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), vector.Bundle, vector.Expected.Commitment.KeyHint, vectorEntropy{reader: bytes.NewReader(material)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +58,7 @@ func TestSealMatchesPinnedUpstreamVector(t *testing.T) {
 	if !reflect.DeepEqual(sealed.Commitment, wantCommitment) {
 		t.Fatalf("commitment = %#v, want %#v", sealed.Commitment, wantCommitment)
 	}
-	wantKeyFile := "{\"forecast_id\":\"" + vector.ForecastID + "\",\"key_hex\":\"" + vector.Material.KeyHex + "\",\"question_id\":\"" + vector.QuestionID + "\",\"schema\":\"forecast-key/v1\"}\n"
+	wantKeyFile := "{\"forecast_id\":\"" + vector.ForecastID + "\",\"key_hex\":\"" + vector.Material.KeyHex + "\",\"question_id\":\"" + vector.QuestionID + "\",\"question_revision_id\":\"" + vector.QuestionRevisionID + "\",\"schema\":\"forecast-key/v2\"}\n"
 	if string(sealed.KeyFile) != wantKeyFile {
 		t.Fatalf("key file = %q, want %q", sealed.KeyFile, wantKeyFile)
 	}
@@ -71,49 +67,54 @@ func TestSealMatchesPinnedUpstreamVector(t *testing.T) {
 		Encryption: sealed.Commitment.Encryption, KeyHint: sealed.Commitment.KeyHint,
 		RevealedKey: ledger.Hex32(vector.Material.KeyHex),
 	}
-	payload, err := Reveal(ledger.Slug(vector.QuestionID), ledger.Slug(vector.ForecastID), revealed)
+	payload, err := Reveal(ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), revealed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(payload.Plaintext) != vector.Expected.CanonicalPlaintext {
-		t.Fatalf("plaintext = %s", payload.Plaintext)
+	if string(payload.Plaintext) != vector.Expected.CanonicalPlaintext || !reflect.DeepEqual(payload.Bundle, vector.Bundle) {
+		t.Fatalf("revealed payload differs: %#v", payload)
 	}
-	if _, err := DecodeKeyFile(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.ForecastID)); err != nil {
+	if _, err := DecodeKeyFile(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID)); err != nil {
 		t.Fatal(err)
 	}
-	opened, err := Open(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.ForecastID), sealed.Commitment)
-	if err != nil || !reflect.DeepEqual(opened.Bundle, vector.Bundle) || string(opened.KeyHex) != vector.Material.KeyHex {
+	opened, err := Open(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), sealed.Commitment)
+	if err != nil || !reflect.DeepEqual(opened.Bundle, vector.Bundle) || string(opened.KeyHex) != vector.Material.KeyHex || string(opened.Plaintext) != vector.Expected.CanonicalPlaintext {
 		t.Fatalf("opened = %#v, error = %v", opened, err)
 	}
 }
 
-func TestDecodeKeyFileRejectsNonCanonicalAndWrongBinding(t *testing.T) {
+func TestKeyFileRejectsNonCanonicalAndWrongThreeIDBinding(t *testing.T) {
 	key := bytes.Repeat([]byte{0xab}, 32)
-	data, err := EncodeKeyFile("q-one", "f-one", key)
+	data, err := EncodeKeyFile("q-one", "r-one", "f-one", key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := DecodeKeyFile(data, "q-two", "f-one"); err == nil {
-		t.Fatal("wrong question binding accepted")
+	for _, ids := range [][3]ledger.Slug{{"q-two", "r-one", "f-one"}, {"q-one", "r-two", "f-one"}, {"q-one", "r-one", "f-two"}} {
+		if _, err := DecodeKeyFile(data, ids[0], ids[1], ids[2]); err == nil {
+			t.Fatalf("wrong binding accepted: %v", ids)
+		}
 	}
-	nonCanonical := []byte("{\"schema\":\"forecast-key/v1\",\"question_id\":\"q-one\",\"forecast_id\":\"f-one\",\"key_hex\":\"" + hex.EncodeToString(key) + "\"}\n")
-	if _, err := DecodeKeyFile(nonCanonical, "q-one", "f-one"); err == nil {
+	nonCanonical := []byte("{\"schema\":\"forecast-key/v2\",\"question_id\":\"q-one\",\"question_revision_id\":\"r-one\",\"forecast_id\":\"f-one\",\"key_hex\":\"" + hex.EncodeToString(key) + "\"}\n")
+	if _, err := DecodeKeyFile(nonCanonical, "q-one", "r-one", "f-one"); err == nil {
 		t.Fatal("non-canonical key file accepted")
 	}
 }
 
-func TestOpenRejectsWrongKeyAndTamperedCiphertext(t *testing.T) {
-	bundle := PrivateBundle{ForecastedAt: "2026-01-01T00:00:00Z", RecordedAt: "2026-01-01T00:01:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}, Rationale: "private", KeyFactors: []string{}, Comment: "private"}
-	sealed, err := Seal(context.Background(), "q-one", "f-one", bundle, "forecast-key:f-one", vectorEntropy{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))})
+func TestOpenRejectsRevisionTransplantWrongKeyAndTamperedCiphertext(t *testing.T) {
+	bundle := testPrivateBundle()
+	sealed, err := Seal(context.Background(), "q-one", "r-one", "f-one", bundle, "forecast-key:f-one", vectorEntropy{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrong, err := EncodeKeyFile("q-one", "f-one", bytes.Repeat([]byte{0x24}, 32))
+	wrong, err := EncodeKeyFile("q-one", "r-one", "f-one", bytes.Repeat([]byte{0x24}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(wrong, "q-one", "f-one", sealed.Commitment); err == nil {
+	if _, err := Open(wrong, "q-one", "r-one", "f-one", sealed.Commitment); err == nil {
 		t.Fatal("wrong key authenticated")
+	}
+	if _, err := Open(sealed.KeyFile, "q-one", "r-two", "f-one", sealed.Commitment); err == nil {
+		t.Fatal("revision transplant authenticated")
 	}
 	tampered := sealed.Commitment
 	ciphertext, err := base64.StdEncoding.DecodeString(string(tampered.Encryption.Ciphertext))
@@ -122,8 +123,29 @@ func TestOpenRejectsWrongKeyAndTamperedCiphertext(t *testing.T) {
 	}
 	ciphertext[len(ciphertext)-1] ^= 1
 	tampered.Encryption.Ciphertext = ledger.Base64Ciphertext(base64.StdEncoding.EncodeToString(ciphertext))
-	if _, err := Open(sealed.KeyFile, "q-one", "f-one", tampered); err == nil {
+	if _, err := Open(sealed.KeyFile, "q-one", "r-one", "f-one", tampered); err == nil {
 		t.Fatal("tampered ciphertext authenticated")
+	}
+}
+
+func loadSealV2Vector(t *testing.T) sealV2Vector {
+	t.Helper()
+	data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-seal-v2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vector sealV2Vector
+	if err := json.Unmarshal(data, &vector); err != nil {
+		t.Fatal(err)
+	}
+	return vector
+}
+
+func testPrivateBundle() PrivateBundle {
+	return PrivateBundle{
+		QuestionRevisionID: "r-one", ForecastedAt: "2026-01-01T00:00:00Z", RecordedAt: "2026-01-01T00:01:00Z",
+		Representations: []ledger.ForecastRepresentation{{Probability: &ledger.ProbabilityRepresentation{Kind: ledger.RepresentationProbability, Outcome: true, Probability: "0.5"}}},
+		Rationale:       "private", KeyFactors: []string{}, Comment: "private",
 	}
 }
 
@@ -137,20 +159,19 @@ func decodeHex(t *testing.T, value string) []byte {
 }
 
 func FuzzDecodeKeyFile(f *testing.F) {
-	valid, err := EncodeKeyFile("q-one", "f-one", bytes.Repeat([]byte{0x42}, 32))
+	valid, err := EncodeKeyFile("q-one", "r-one", "f-one", bytes.Repeat([]byte{0x42}, 32))
 	if err != nil {
 		f.Fatal(err)
 	}
 	f.Add(valid)
-	f.Add([]byte(`{"schema":"forecast-key/v1"}`))
+	f.Add([]byte(`{"schema":"forecast-key/v2"}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = DecodeKeyFile(data, "q-one", "f-one")
+		_, _ = DecodeKeyFile(data, "q-one", "r-one", "f-one")
 	})
 }
 
 func FuzzOpenSealedForecast(f *testing.F) {
-	bundle := PrivateBundle{ForecastedAt: "2026-01-01T00:00:00Z", RecordedAt: "2026-01-01T00:01:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}, Rationale: "private", KeyFactors: []string{}, Comment: "private"}
-	sealed, err := Seal(context.Background(), "q-one", "f-one", bundle, "forecast-key:f-one", vectorEntropy{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))})
+	sealed, err := Seal(context.Background(), "q-one", "r-one", "f-one", testPrivateBundle(), "forecast-key:f-one", vectorEntropy{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))})
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -159,6 +180,6 @@ func FuzzOpenSealedForecast(f *testing.F) {
 	f.Fuzz(func(t *testing.T, keyFile []byte, ciphertext string) {
 		commitment := sealed.Commitment
 		commitment.Encryption.Ciphertext = ledger.Base64Ciphertext(ciphertext)
-		_, _ = Open(keyFile, "q-one", "f-one", commitment)
+		_, _ = Open(keyFile, "q-one", "r-one", "f-one", commitment)
 	})
 }

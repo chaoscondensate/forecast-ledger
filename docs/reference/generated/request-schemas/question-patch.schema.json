@@ -1,47 +1,9 @@
 {
   "$defs": {
-    "forecastWindowPatchInput": {
-      "additionalProperties": false,
-      "properties": {
-        "opens_at": {
-          "$ref": "#/$defs/timestamp"
-        }
-      },
-      "required": [
-        "opens_at"
-      ],
-      "type": "object"
-    },
-    "platformRef": {
-      "additionalProperties": false,
-      "properties": {
-        "platform": {
-          "$ref": "#/$defs/slug"
-        },
-        "question_id": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "url": {
-          "format": "uri",
-          "type": "string"
-        }
-      },
-      "required": [
-        "platform"
-      ],
-      "type": "object"
-    },
     "question-patch": {
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "expected_resolution_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "forecast_window": {
-          "$ref": "#/$defs/forecastWindowPatchInput"
-        },
         "notes": {
           "anyOf": [
             {
@@ -52,23 +14,6 @@
               "type": "null"
             }
           ]
-        },
-        "platform_refs": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/platformRef"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "resolution_criteria": {
-          "minLength": 1,
-          "type": "string"
         },
         "status": {
           "enum": [
@@ -89,10 +34,6 @@
               "type": "null"
             }
           ]
-        },
-        "title": {
-          "minLength": 1,
-          "type": "string"
         }
       },
       "type": "object"
@@ -102,15 +43,9 @@
       "minLength": 1,
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
       "type": "string"
-    },
-    "timestamp": {
-      "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
-      "format": "date-time",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
-      "type": "string"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-patch/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-patch/v2",
   "$ref": "#/$defs/question-patch",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

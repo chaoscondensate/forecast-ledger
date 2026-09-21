@@ -75,6 +75,49 @@ func CommitPublicForecastAddFile(ctx context.Context, path string, questionID, f
 	return result, nil
 }
 
+func PlanForecastLifecycleFile(ctx context.Context, path string, questionID, forecastID ledger.Slug, eventType ledger.LifecycleEventType, input LifecycleInput, observedAt ledger.Timestamp) (ForecastFileResult, error) {
+	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	if err != nil {
+		return ForecastFileResult{}, err
+	}
+	mutation, err := BuildForecastLifecycle(loaded.Model, questionID, forecastID, eventType, input, observedAt)
+	if err != nil {
+		return ForecastFileResult{}, err
+	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return ForecastFileResult{}, err
+	}
+	return buildForecastMutationFileResult(loaded.Document, loaded.Model, questionID, forecastID, mutation)
+}
+
+func CommitForecastLifecycleFile(ctx context.Context, path string, questionID, forecastID ledger.Slug, eventType ledger.LifecycleEventType, input LifecycleInput, observedAt ledger.Timestamp) (ForecastFileResult, error) {
+	resolved, err := storage.ResolveLedgerPath(path, true)
+	if err != nil {
+		return ForecastFileResult{}, err
+	}
+	artifacts := os.DirFS(filepath.Dir(resolved))
+	var result ForecastFileResult
+	err = storage.UpdateLedger(ctx, resolved, storage.TransactionOptions{
+		Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, artifacts) },
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			model, decodeErr := validation.DecodeLedger(parsed)
+			if decodeErr != nil {
+				return nil, app.NewError(app.CodeInternal, "validated ledger cannot be decoded for lifecycle mutation", decodeErr)
+			}
+			mutation, buildErr := BuildForecastLifecycle(model, questionID, forecastID, eventType, input, observedAt)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			result, buildErr = buildForecastMutationFileResult(parsed, model, questionID, forecastID, mutation)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			return document.ApplyPatch(parsed, mutation.Patches)
+		},
+	})
+	return result, err
+}
+
 func buildForecastMutationFileResult(parsed *document.Document, model *ledger.Ledger, questionID, forecastID ledger.Slug, mutation ForecastMutation) (ForecastFileResult, error) {
 	patched, err := document.ApplyPatch(parsed, mutation.Patches)
 	if err != nil {

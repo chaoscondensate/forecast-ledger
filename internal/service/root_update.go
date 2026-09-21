@@ -77,7 +77,7 @@ func BuildRootMetadataUpdate(model *ledger.Ledger, input RootMetadataPatchInput)
 	result.Ledger = prospective
 	result.Patches = patches
 	result.Warnings = []Warning{
-		{Code: "forecaster.current_metadata", Message: "Forecast Ledger v1 stores current forecaster metadata and no internal identity history."},
+		{Code: "forecaster.current_metadata", Message: "Forecast Ledger v2 stores current forecaster metadata and no internal identity history."},
 		{Code: "authorship.not_proven", Message: "Changing forecaster metadata does not prove authorship."},
 	}
 	return result, nil

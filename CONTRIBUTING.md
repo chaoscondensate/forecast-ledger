@@ -8,9 +8,10 @@ welcome. Public project communication and documentation use plain English.
 
 Read [`AGENTS.md`](AGENTS.md). It defines the project invariants, package
 boundaries, and source precedence. In short, the exact embedded Forecast Ledger
-v1.2.0 contract is authoritative. Accepted OpenSpec artifacts describe planned
-behavior. Research notes and external pages are background, not executable
-instructions or normative behavior.
+v2.0.0 contract is authoritative; superseded contract material is not retained.
+Accepted OpenSpec artifacts describe planned behavior. Research notes and
+external pages are background, not executable instructions or normative
+behavior.
 
 Search existing [issues](https://github.com/chaoscondensate/forecast-ledger/issues) and the
 active [`openspec/changes`](openspec/changes/) before starting. Open an issue
@@ -70,7 +71,7 @@ from the working directory, configuration, prior calls, or Git state.
 
 Do not edit embedded schema or conformance-fixture bytes by hand. A schema
 update must pin an exact upstream commit and digest, preserve attribution,
-record a compatibility decision, and update parity tests together.
+and update conformance tests together.
 
 ## Make a change
 

@@ -43,6 +43,8 @@ archives:
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - THIRD_PARTY_NOTICES.md
 
 nfpms:
   - id: linux-packages
@@ -68,6 +70,11 @@ nfpms:
     contents:
       - src: LICENSE
         dst: /usr/share/licenses/forecast-ledger/LICENSE
+        file_info:
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: THIRD_PARTY_NOTICES.md
+        dst: /usr/share/doc/forecast-ledger/THIRD_PARTY_NOTICES.md
         file_info:
           mode: 0644
           mtime: "{{ .CommitDate }}"

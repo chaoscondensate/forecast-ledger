@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
@@ -28,10 +31,78 @@ type fixedMCPClock struct{ value time.Time }
 
 func (clock fixedMCPClock) Now() time.Time { return clock.value }
 
+func TestGeneratedMCPToolCatalogMatchesRuntimeFieldSurface(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "reference", "generated", "mcp-tool-schemas.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog struct {
+		Tools map[string]struct {
+			ToolSchema map[string]any `json:"tool_schema"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	runtimeContracts := contracts()
+	for _, definition := range service.SortedOperationDefinitions() {
+		contract, ok := runtimeContracts[definition.Name]
+		if !ok {
+			t.Fatalf("runtime contract missing for %s", definition.Name)
+		}
+		contract, err = expandDirectContract(definition, contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtimeSchema, err := toolSchema(definition, contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		generated, ok := catalog.Tools[definition.MCPTool]
+		if !ok {
+			t.Errorf("generated catalog missing %s", definition.MCPTool)
+			continue
+		}
+		if !reflect.DeepEqual(sortedAnyStrings(runtimeSchema["required"]), sortedAnyStrings(generated.ToolSchema["required"])) {
+			t.Errorf("%s required fields drift: runtime=%v generated=%v", definition.MCPTool, runtimeSchema["required"], generated.ToolSchema["required"])
+		}
+		if !reflect.DeepEqual(sortedMapKeys(runtimeSchema["properties"]), sortedMapKeys(generated.ToolSchema["properties"])) {
+			t.Errorf("%s property surface drift: runtime=%v generated=%v", definition.MCPTool, sortedMapKeys(runtimeSchema["properties"]), sortedMapKeys(generated.ToolSchema["properties"]))
+		}
+	}
+}
+
+func sortedAnyStrings(value any) []string {
+	values, _ := value.([]any)
+	if typed, ok := value.([]string); ok {
+		result := append([]string(nil), typed...)
+		sort.Strings(result)
+		return result
+	}
+	result := make([]string, 0, len(values))
+	for _, item := range values {
+		if text, ok := item.(string); ok {
+			result = append(result, text)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+func sortedMapKeys(value any) []string {
+	values, _ := value.(map[string]any)
+	result := make([]string, 0, len(values))
+	for key := range values {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
 func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	path := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), path)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", "examples", "valid", "individual-ledger.json"), path)
 	err := storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
 		Validate: func(parsed *document.Document) error {
 			return service.ValidateLedgerDocument(parsed, os.DirFS(ledgerRoot))
@@ -56,9 +127,11 @@ func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 	client := connectClient(t, t.Context(), server)
 	defer client.Close()
 	result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_add", Arguments: map[string]any{
-		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-002",
-		"forecasted_at": "2026-09-01T09:00:00+01:00", "recorded_at": "2026-09-01T09:01:00+01:00", "value": map[string]any{"kind": "multiple_choice", "probabilities": []any{
-			map[string]any{"option_id": "centre-left", "probability_bp": 5000}, map[string]any{"option_id": "centre-right", "probability_bp": 3500}, map[string]any{"option_id": "other", "probability_bp": 1500},
+		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-003", "question_revision_id": "qr-election-coalition-2",
+		"forecasted_at": "2026-09-01T09:00:00+01:00", "recorded_at": "2026-09-01T09:01:00+01:00", "supersedes_forecast_id": "f-election-coalition-002", "representations": []any{map[string]any{
+			"kind": "pmf", "option_set_ref": map[string]any{"id": "coalitions", "version": 2}, "entries": []any{
+				map[string]any{"option_id": "centre-left", "probability": "0.42"}, map[string]any{"option_id": "centre-right", "probability": "0.35"}, map[string]any{"option_id": "unity", "probability": "0.15"}, map[string]any{"option_id": "other", "probability": "0.08"},
+			},
 		}},
 	}})
 	if err != nil || result.IsError || !strings.Contains(toolText(result), `"code":"forecast.added"`) {
@@ -85,8 +158,8 @@ func TestMCPForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
 		args map[string]any
 	}{
 		{"ledger_init", map[string]any{"file": "main:ledger.yaml", "ledger_id": "clock", "timezone": "Europe/London", "forecaster_id": "owner", "forecaster_name": "Owner"}},
-		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "type": "binary", "title": "Question", "resolution_criteria": "Public result", "expected_resolution_at": "2030-08-10T23:59:59+01:00"}},
-		{"forecast_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "forecast": "f-clock", "value": map[string]any{"kind": "binary", "probability_bp": 5000}}},
+		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "revision": binaryRevision("qr-clock", "Question", "Public result", "2030-08-10T23:59:59+01:00")}},
+		{"forecast_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "forecast": "f-clock", "question_revision_id": "qr-clock", "representations": probabilityRepresentations("0.5")}},
 	}
 	for _, call := range calls {
 		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: call.name, Arguments: call.args})
@@ -119,10 +192,11 @@ func TestMCPYAMLStructuralReplacementMutationsRemainRecoverable(t *testing.T) {
 	}{
 		{"ledger_init", map[string]any{"file": "main:ledger.yaml", "ledger_id": "yaml-replacements", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner"}},
 		{"platform_add", map[string]any{"file": "main:ledger.yaml", "platform": "local", "name": "Local", "kind": "self_hosted"}},
-		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "type": "binary", "title": "Will it happen?", "resolution_criteria": "Use the official result.", "expected_resolution_at": "2031-01-01T00:00:00Z", "platform_refs": []any{map[string]any{"platform": "local"}}}},
+		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "revision": binaryRevision("qr-one", "Will it happen?", "Use the official result.", "2031-01-01T00:00:00Z")}},
 		{"platform_update", map[string]any{"file": "main:ledger.yaml", "platform": "local", "name": "Updated local", "kind": "internal"}},
-		{"question_update", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "title": "Updated question title", "status": "closed", "tags": []any{"reviewed", "mcp"}}},
-		{"question_annul", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "reason": "Question became unresolvable", "recorded_at": "2026-09-01T12:00:00Z", "confirm": true}},
+		{"question_revise", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "id": "qr-two", "effective_at": "2026-09-23T12:00:00Z", "recorded_at": "2026-09-23T12:01:00Z", "title": "Updated question title", "resolution_criteria": "Use the official result.", "expected_resolution_at": "2031-01-01T00:00:00Z", "outcome_space": map[string]any{"kind": "binary"}, "domain": map[string]any{"kind": "binary"}}},
+		{"question_update", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "status": "closed", "tags": []any{"reviewed", "mcp"}}},
+		{"question_void", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "reason": "Question became unresolvable", "recorded_at": "2026-09-24T12:00:00Z", "confirm": true}},
 		{"ledger_validate", map[string]any{"file": "main:ledger.yaml"}},
 	}
 	for _, call := range calls {
@@ -136,8 +210,108 @@ func TestMCPYAMLStructuralReplacementMutationsRemainRecoverable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), "status: annulled") || !strings.Contains(string(raw), "name: Updated local") || strings.Contains(string(raw), "{status:") {
+	if !strings.Contains(string(raw), "status: void") || !strings.Contains(string(raw), "name: Updated local") || strings.Contains(string(raw), "{status:") {
 		t.Fatalf("MCP replacements did not retain expanded valid YAML:\n%s", raw)
+	}
+}
+
+func TestMCPDirectV2DomainRepresentationResolutionAndLifecycleMatrix(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	call := func(name string, arguments map[string]any) *sdk.CallToolResult {
+		t.Helper()
+		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: name, Arguments: arguments})
+		if err != nil || result.IsError {
+			t.Fatalf("%s failed: result=%s err=%v", name, toolText(result), err)
+		}
+		return result
+	}
+	file := "main:matrix.json"
+	call("ledger_init", map[string]any{"file": file, "ledger_id": "matrix", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner"})
+	call("platform_add", map[string]any{"file": file, "platform": "source", "name": "Source", "kind": "internal"})
+	call("group_add", map[string]any{"file": file, "group": "matrix-group", "title": "Matrix questions"})
+
+	revision := func(id, kind string, domain map[string]any) map[string]any {
+		return map[string]any{
+			"id": id, "effective_at": "2026-09-21T10:00:00Z", "recorded_at": "2026-09-21T10:01:00Z",
+			"title": id, "resolution_criteria": "Use the named public result.", "expected_resolution_at": "2028-01-01T00:00:00Z",
+			"outcome_space": map[string]any{"kind": kind}, "domain": domain,
+			"provenance": map[string]any{"platform": "source", "remote_object_id": id, "retrieved_at": "2026-09-21T09:59:00Z"},
+		}
+	}
+	options := func(kind, id string, version int) map[string]any {
+		return map[string]any{"kind": kind, "option_set": map[string]any{"id": id, "version": version, "options": []any{map[string]any{"id": "low", "label": "Low"}, map[string]any{"id": "high", "label": "High"}}}}
+	}
+	questions := []struct {
+		id       string
+		revision map[string]any
+	}{
+		{"q-binary", revision("qr-binary-1", "binary", map[string]any{"kind": "binary"})},
+		{"q-category", revision("qr-category-1", "categorical", options("categorical", "choices", 1))},
+		{"q-ordinal", revision("qr-ordinal-1", "ordinal", options("ordinal", "levels", 2))},
+		{"q-numeric", revision("qr-numeric-1", "numeric", map[string]any{"kind": "numeric", "bounds": map[string]any{"lower": map[string]any{"value": "0", "inclusive": true}}, "values": map[string]any{"kind": "continuous"}, "bin_sets": []any{map[string]any{"id": "bands", "version": 3, "bins": []any{map[string]any{"id": "low", "lower": "0", "upper": "50", "lower_inclusive": true, "upper_inclusive": false}, map[string]any{"id": "high", "lower": "50", "upper": "100", "lower_inclusive": true, "upper_inclusive": true}}}}})},
+		{"q-date", revision("qr-date-1", "date", map[string]any{"kind": "date", "values": map[string]any{"kind": "allowed_values", "values": []any{"2027-01-01", "2027-02-01"}}})},
+		{"q-datetime", revision("qr-datetime-1", "datetime", map[string]any{"kind": "datetime", "values": map[string]any{"kind": "step", "step": "PT3600S", "origin": "2026-01-01T00:00:00Z"}})},
+	}
+	for _, question := range questions {
+		call("question_add", map[string]any{"file": file, "question": question.id, "revision": question.revision})
+	}
+	call("relationship_add", map[string]any{"file": file, "relationship": map[string]any{"id": "member-binary", "kind": "group_membership", "group_id": "matrix-group", "question_id": "q-binary"}})
+	call("relationship_add", map[string]any{"file": file, "relationship": map[string]any{"id": "if-low", "kind": "conditional", "parent_question_id": "q-category", "parent_question_revision_id": "qr-category-1", "parent_outcome": "low", "child_question_id": "q-numeric"}})
+
+	forecastBase := func(question, forecast, revision string, representations []any) map[string]any {
+		return map[string]any{"file": file, "question": question, "forecast": forecast, "question_revision_id": revision,
+			"forecasted_at": "2026-10-01T00:00:00Z", "recorded_at": "2026-10-01T00:01:00Z", "representations": representations}
+	}
+	call("forecast_add", forecastBase("q-binary", "f-binary", "qr-binary-1", probabilityRepresentations("0.6")))
+	call("forecast_add", forecastBase("q-category", "f-category", "qr-category-1", []any{map[string]any{"kind": "pmf", "option_set_ref": map[string]any{"id": "choices", "version": 1}, "entries": []any{map[string]any{"option_id": "low", "probability": "0.4"}, map[string]any{"option_id": "high", "probability": "0.6"}}}}))
+	numeric := forecastBase("q-numeric", "f-numeric", "qr-numeric-1", []any{
+		map[string]any{"kind": "binned_pmf", "bin_set_ref": map[string]any{"id": "bands", "version": 3}, "entries": []any{map[string]any{"bin_id": "low", "probability": "0.3"}, map[string]any{"bin_id": "high", "probability": "0.5"}}, "left_tail_probability": "0", "right_tail_probability": "0.2"},
+		map[string]any{"kind": "quantiles", "interpolation": "linear", "points": []any{map[string]any{"level": "0.1", "value": "10"}, map[string]any{"level": "0.9", "value": "90"}}},
+		map[string]any{"kind": "cdf", "interpolation": "linear", "points": []any{map[string]any{"value": "10", "probability": "0.2"}, map[string]any{"value": "90", "probability": "0.8"}}, "left_tail_probability": "0.2", "right_tail_probability": "0.2"},
+		map[string]any{"kind": "point", "statistic": "median", "value": "50"},
+		map[string]any{"kind": "credible_intervals", "intervals": []any{map[string]any{"coverage": "0.8", "interval_kind": "equal_tailed", "lower": "10", "upper": "90"}}},
+	})
+	numeric["provenance"] = map[string]any{"platform": "source", "remote_object_id": "forecast-numeric", "retrieved_at": "2026-10-01T00:02:00Z"}
+	call("forecast_add", numeric)
+
+	for _, event := range []struct{ tool, id, at string }{{"forecast_withdraw", "event-withdraw", "2026-11-01T00:00:00Z"}, {"forecast_reaffirm", "event-reaffirm", "2026-11-02T00:00:00Z"}, {"forecast_expire", "event-expire", "2026-11-03T00:00:00Z"}} {
+		call(event.tool, map[string]any{"file": file, "question": "q-numeric", "forecast": "f-numeric", "id": event.id, "effective_at": event.at, "recorded_at": strings.Replace(event.at, "00:00Z", "01:00Z", 1), "provenance": map[string]any{"platform": "source", "remote_object_id": event.id, "retrieved_at": event.at}})
+	}
+
+	closeQuestion := func(id string) {
+		call("question_update", map[string]any{"file": file, "question": id, "status": "closed"})
+	}
+	closeQuestion("q-category")
+	call("question_resolve", map[string]any{"file": file, "question": "q-category", "question_revision_id": "qr-category-1", "outcome": "high", "outcome_known_at": "2027-01-01T00:00:00Z", "recorded_at": "2027-01-01T00:01:00Z", "sources": []any{map[string]any{"title": "Official result", "url": "https://example.test/result", "retrieved_at": "2027-01-01T00:00:30Z"}}, "confirm": true})
+	call("question_not_applicable", map[string]any{"file": file, "question": "q-numeric", "relationship_id": "if-low", "reason": "The parent resolved high.", "recorded_at": "2027-01-01T00:02:00Z", "confirm": true})
+	closeQuestion("q-binary")
+	call("question_ambiguous", map[string]any{"file": file, "question": "q-binary", "reason": "Sources conflict.", "recorded_at": "2027-01-02T00:00:00Z", "confirm": true})
+	closeQuestion("q-ordinal")
+	call("question_void", map[string]any{"file": file, "question": "q-ordinal", "reason": "The event was cancelled.", "recorded_at": "2027-01-02T00:00:00Z", "confirm": true})
+	call("question_dispute", map[string]any{"file": file, "question": "q-ordinal", "reason": "The cancellation is disputed.", "recorded_at": "2027-01-02T00:01:00Z", "confirm": true})
+
+	dryRun := call("group_add", map[string]any{"file": file, "group": "dry-group", "title": "Dry", "dry_run": true})
+	if !strings.Contains(toolText(dryRun), `"code":"group.add.planned"`) {
+		t.Fatalf("unexpected dry-run result: %s", toolText(dryRun))
+	}
+	invalid, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_add", Arguments: forecastBase("q-binary", "f-invalid", "qr-binary-1", probabilityRepresentations("2"))})
+	if err != nil || !invalid.IsError {
+		t.Fatalf("invalid forecast was not a recoverable tool error: %s, %v", toolText(invalid), err)
+	}
+
+	loaded, err := service.LoadAndValidateLedger(t.Context(), filepath.Join(ledgerRoot, "matrix.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := ledger.SummaryCounts(loaded.Model)
+	if counts.Questions != 6 || counts.Forecasts != 3 || counts.Representations != 7 || counts.Groups != 1 || counts.Relationships != 2 || counts.LifecycleEvents != 3 {
+		t.Fatalf("MCP authoring counts = %#v", counts)
 	}
 }
 
@@ -145,7 +319,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -308,7 +482,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "name": "Independent", "kind": "internal",
 	}})
@@ -351,13 +525,13 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	}
 }
 
-func TestEveryMCPExistingLedgerToolRejectsV120AtAdmission(t *testing.T) {
+func TestEveryMCPExistingLedgerToolRejectsUnsupportedVersionAtAdmission(t *testing.T) {
 	ledgerRoot, outputRoot, secretRoot := t.TempDir(), t.TempDir(), t.TempDir()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", "examples", "valid", "individual-ledger.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "1.3.0"`), []byte(`"schema_version": "1.2.0"`), 1)
+	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "2.0.0"`), []byte(`"schema_version": "0.0.0"`), 1)
 	if err := os.WriteFile(filepath.Join(ledgerRoot, "ledger.json"), oldLedger, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +553,7 @@ func TestEveryMCPExistingLedgerToolRejectsV120AtAdmission(t *testing.T) {
 		arguments["file"] = "main:ledger.json"
 		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: tool.Name, Arguments: arguments})
 		if callErr != nil || !result.IsError || !strings.Contains(toolText(result), `"code":"unsupported_schema_version"`) {
-			t.Errorf("tool %s bypassed v1.1.0 admission: result=%s err=%v", tool.Name, toolText(result), callErr)
+			t.Errorf("tool %s bypassed schema-version admission: result=%s err=%v", tool.Name, toolText(result), callErr)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(ledgerRoot, "proofs")); !os.IsNotExist(err) {
@@ -396,7 +570,7 @@ func TestEveryMCPExistingLedgerToolRejectsV120AtAdmission(t *testing.T) {
 func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
 	ledgerRoot, outputRoot := t.TempDir(), t.TempDir()
 	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), ledgerPath)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", "examples", "valid", "individual-ledger.json"), ledgerPath)
 	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
 	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
 	if err != nil {
@@ -465,17 +639,8 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 		t.Fatalf("empty init result=%s err=%v", toolText(initialized), err)
 	}
 
-	questionInput := map[string]any{
-		"title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
-		"expected_resolution_at": "2027-01-01T00:00:00Z",
-	}
-	questionArguments := map[string]any{"file": "main:empty.json", "question": "q-one", "type": "binary"}
-	for name, value := range questionInput {
-		questionArguments[name] = value
-	}
 	added, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
-		"file": questionArguments["file"], "question": questionArguments["question"], "type": questionArguments["type"],
-		"title": questionArguments["title"], "resolution_criteria": questionArguments["resolution_criteria"], "expected_resolution_at": questionArguments["expected_resolution_at"],
+		"file": "main:empty.json", "question": "q-one", "revision": binaryRevision("qr-one", "Will it happen?", "Resolve from the named source.", "2027-01-01T00:00:00Z"),
 	}})
 	if err != nil || added.IsError || !strings.Contains(toolText(added), `"message":"Question was added"`) {
 		t.Fatalf("question add result=%s err=%v", toolText(added), err)
@@ -485,20 +650,39 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 		t.Fatalf("forecast list result=%s err=%v", toolText(listed), err)
 	}
 
-	sealedInput := map[string]any{
-		"title": "Secret", "resolution_criteria": "Resolve from the named source.",
-		"expected_resolution_at": "2027-01-01T00:00:00Z",
-		"initial_forecast":       map[string]any{"id": "f-secret", "visibility": "sealed", "forecasted_at": "2026-08-30T00:00:00Z", "value": map[string]any{"kind": "binary", "probability_bp": 5000}, "rationale": "private", "key_factors": []any{}, "comment": "private"},
-	}
 	sealed, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
-		"file": "main:empty.json", "question": "q-secret", "type": "binary", "title": sealedInput["title"],
-		"resolution_criteria": sealedInput["resolution_criteria"], "expected_resolution_at": sealedInput["expected_resolution_at"], "initial_forecast": sealedInput["initial_forecast"],
+		"file": "main:empty.json", "question": "q-secret", "revision": binaryRevision("qr-secret", "Secret", "Resolve from the named source.", "2027-01-01T00:00:00Z"),
+		"initial_forecast": map[string]any{"id": "f-secret", "question_revision_id": "qr-secret", "visibility": "sealed", "forecasted_at": "2026-09-22T00:00:00Z", "representations": probabilityRepresentations("0.5"), "rationale": "private", "key_factors": []any{}, "comment": "private"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !sealed.IsError || !strings.Contains(toolText(sealed), "initial_secret_input_file") {
 		t.Fatalf("inline sealed input was not rejected safely: %s", toolText(sealed))
+	}
+}
+
+func TestMCPValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	for index, relative := range []string{
+		"examples/valid/empty-ledger.json",
+		"examples/valid/individual-ledger.json",
+		"examples/valid/question-without-forecasts.yaml",
+		"examples/valid/team-ledger.yaml",
+		"tests/conformance/valid/relationships-and-datetime.json",
+	} {
+		name := fmt.Sprintf("fixture-%d%s", index, filepath.Ext(relative))
+		copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0", filepath.FromSlash(relative)), filepath.Join(ledgerRoot, name))
+		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:" + name}})
+		if err != nil || result.IsError || !strings.Contains(toolText(result), `"code":"ledger.valid"`) {
+			t.Fatalf("fixture %s: result=%s err=%v", relative, toolText(result), err)
+		}
 	}
 }
 
@@ -701,6 +885,17 @@ func toolText(result *sdk.CallToolResult) string {
 	return ""
 }
 
+func binaryRevision(id, title, criteria, expected string) map[string]any {
+	return map[string]any{
+		"id": id, "title": title, "resolution_criteria": criteria, "expected_resolution_at": expected,
+		"outcome_space": map[string]any{"kind": "binary"}, "domain": map[string]any{"kind": "binary"},
+	}
+}
+
+func probabilityRepresentations(probability string) []any {
+	return []any{map[string]any{"kind": "probability", "outcome": true, "probability": probability}}
+}
+
 func minimumToolArguments(name string) map[string]any {
 	arguments := map[string]any{"file": "main:missing.json"}
 	if strings.HasPrefix(name, "platform_") {
@@ -708,6 +903,12 @@ func minimumToolArguments(name string) map[string]any {
 	}
 	if strings.HasPrefix(name, "question_") {
 		arguments["question"] = "q-one"
+	}
+	if strings.HasPrefix(name, "group_") {
+		arguments["group"] = "group-one"
+	}
+	if name == "relationship_show" || name == "relationship_remove" {
+		arguments["relationship_id"] = "rel-one"
 	}
 	if strings.HasPrefix(name, "forecast_") || strings.HasPrefix(name, "timestamp_") {
 		arguments["question"], arguments["forecast"] = "q-one", "f-one"
@@ -719,15 +920,22 @@ func minimumToolArguments(name string) map[string]any {
 	case "platform_add":
 		arguments["name"], arguments["kind"] = "Platform", "internal"
 	case "question_add":
-		arguments["title"], arguments["resolution_criteria"], arguments["expected_resolution_at"] = "Question", "Criteria", "2030-01-01T00:00:00Z"
+		arguments["revision"] = binaryRevision("qr-one", "Question", "Criteria", "2030-01-01T00:00:00Z")
+	case "question_revise":
+		arguments["id"], arguments["title"], arguments["resolution_criteria"], arguments["expected_resolution_at"] = "qr-two", "Question", "Criteria", "2030-01-01T00:00:00Z"
+		arguments["outcome_space"], arguments["domain"] = map[string]any{"kind": "binary"}, map[string]any{"kind": "binary"}
 	case "question_resolve":
-		arguments["outcome"], arguments["outcome_known_at"], arguments["sources"] = true, "2030-01-01T00:00:00Z", []any{}
-	case "question_annul", "question_dispute":
-		arguments["reason"] = "Reason"
+		arguments["question_revision_id"], arguments["outcome"], arguments["outcome_known_at"], arguments["sources"], arguments["confirm"] = "qr-one", true, "2030-01-01T00:00:00Z", []any{}, true
+	case "question_ambiguous", "question_void", "question_dispute":
+		arguments["reason"], arguments["confirm"] = "Reason", true
+	case "question_not_applicable":
+		arguments["relationship_id"], arguments["reason"], arguments["confirm"] = "rel-one", "Reason", true
 	case "forecast_add":
-		arguments["value"] = map[string]any{"kind": "binary", "probability_bp": 5000}
+		arguments["question_revision_id"], arguments["representations"] = "qr-one", probabilityRepresentations("0.5")
 	case "forecast_seal":
-		arguments["secret_input_file"], arguments["key_file"] = "keys:missing.json", "keys:new.key"
+		arguments["question_revision_id"], arguments["secret_input_file"], arguments["key_file"] = "qr-one", "keys:missing.json", "keys:new.key"
+	case "forecast_withdraw", "forecast_expire", "forecast_reaffirm":
+		arguments["id"], arguments["effective_at"] = "event-one", "2030-01-01T00:00:00Z"
 	case "forecast_reveal":
 		arguments["key_file"], arguments["confirm"] = "keys:missing.key", true
 	case "forecast_key_hint_update":
@@ -738,6 +946,10 @@ func minimumToolArguments(name string) map[string]any {
 		arguments["manifest"] = "packages:missing-manifest.json"
 	case "timestamp_stamp":
 		arguments["tsa_url"], arguments["ca_bundle"] = "https://tsa.example.test", "tsa.pem"
+	case "group_add":
+		arguments["title"] = "Group"
+	case "relationship_add":
+		arguments["relationship"] = map[string]any{"id": "rel-one", "kind": "group_membership", "group_id": "group-one", "question_id": "q-one"}
 	}
 	if name == "platform_list" {
 		delete(arguments, "platform")
@@ -748,10 +960,10 @@ func minimumToolArguments(name string) map[string]any {
 	if name == "forecast_list" {
 		delete(arguments, "forecast")
 	}
-	if name == "question_add" {
-		arguments["type"] = "binary"
+	if name == "group_list" {
+		delete(arguments, "group")
 	}
-	if name == "platform_remove" || name == "question_resolve" || name == "question_annul" || name == "question_dispute" {
+	if name == "platform_remove" || name == "group_remove" || name == "relationship_remove" || name == "question_resolve" || name == "question_dispute" {
 		arguments["confirm"] = true
 	}
 	return arguments

@@ -14,7 +14,7 @@ import (
 )
 
 func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
-	data, err := fs.ReadFile(contractschema.Conformance(), "invalid-cases.json")
+	data, err := fs.ReadFile(contractschema.Conformance(), "tests/invalid-cases.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,23 +26,42 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 			Path  string `json:"path"`
 			Value any    `json:"value"`
 		} `json:"operations"`
+		ExpectContains string `json:"expect_contains"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err := decoder.Decode(&cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 13 {
-		t.Fatalf("got %d invalid cases, want 13", len(cases))
+	if len(cases) != 26 {
+		t.Fatalf("got %d invalid cases, want 26", len(cases))
+	}
+	expectedSemanticCode := map[string]string{
+		"outcome-space-domain-mismatch":          "semantic.domain_kind",
+		"pmf-probabilities-do-not-sum":           "semantic.probability_sum",
+		"pmf-missing-option":                     "semantic.pmf_coverage",
+		"option-set-version-mismatch":            "semantic.option_set_ref",
+		"bin-gap":                                "semantic.bin_continuity",
+		"bin-overlap":                            "semantic.bin_continuity",
+		"binned-pmf-tails-do-not-sum":            "semantic.binned_probability_sum",
+		"noncanonical-numeric-value":             "semantic.point_domain",
+		"quantiles-not-monotonic":                "semantic.quantile_value_order",
+		"cdf-not-monotonic":                      "semantic.cdf_probability_order",
+		"unknown-platform-provenance":            "semantic.unknown_platform",
+		"unknown-group-reference":                "semantic.relationship_group",
+		"duplicate-question-id":                  "semantic.duplicate_question_id",
+		"forecast-before-bound-revision":         "semantic.forecast_revision_chronology",
+		"tampered-revealed-probability":          "semantic.revealed_mirror",
+		"resolved-outcome-outside-domain":        "semantic.resolution_outcome",
+		"invalid-lifecycle-transition":           "semantic.lifecycle_transition",
+		"conditional-reference-cycle":            "semantic.relationship_cycle",
+		"not-applicable-condition-was-satisfied": "semantic.not_applicable_satisfied",
+		"rfc3161-timestamp-after-known-outcome":  "semantic.timestamp_chronology",
 	}
 
 	for _, testCase := range cases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			baseName := "individual-ledger.json"
-			if strings.HasSuffix(testCase.Base, "team-ledger.yaml") {
-				baseName = "team-ledger.yaml"
-			}
-			base := loadValidLedgerDocument(t, baseName).Root.Any()
+			base := loadValidLedgerDocument(t, testCase.Base).Root.Any()
 			for _, operation := range testCase.Operations {
 				if err := applyFixtureOperation(base, operation.Op, operation.Path, normalizeFixtureNumber(operation.Value)); err != nil {
 					t.Fatal(err)
@@ -52,11 +71,12 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 			if len(schemaIssues) == 0 && len(semanticIssues) == 0 {
 				t.Fatal("invalid upstream fixture was accepted")
 			}
-			if testCase.Name == "unsupported-opentimestamps-timestamp" && len(schemaIssues) == 0 {
-				t.Fatalf("unsupported timestamp protocol fixture must be rejected by the pinned schema, got semantic=%#v", semanticIssues)
-			}
-			if testCase.Name == "rfc3161-timestamp-after-known-outcome" && !hasSemanticCode(semanticIssues, "semantic.timestamp_chronology") {
-				t.Fatalf("late timestamp fixture must be rejected by chronology semantics, got schema=%#v semantic=%#v", schemaIssues, semanticIssues)
+			if code, semantic := expectedSemanticCode[testCase.Name]; semantic {
+				if len(schemaIssues) != 0 || !hasSemanticCode(semanticIssues, code) {
+					t.Fatalf("wanted semantic code %s, got schema=%#v semantic=%#v", code, schemaIssues, semanticIssues)
+				}
+			} else if len(schemaIssues) == 0 {
+				t.Fatalf("wanted schema rejection for %s (%s), got semantic=%#v", testCase.Name, testCase.ExpectContains, semanticIssues)
 			}
 		})
 	}
@@ -115,7 +135,7 @@ func validateGenericDocument(t *testing.T, value any) ([]SchemaIssue, []Semantic
 }
 
 func applyFixtureOperation(root any, operation, pointer string, value any) error {
-	if operation != "replace" && operation != "add" {
+	if operation != "replace" && operation != "add" && operation != "remove" {
 		return fmt.Errorf("unsupported pinned fixture operation %q", operation)
 	}
 	tokens := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
@@ -140,15 +160,67 @@ func applyFixtureOperation(root any, operation, pointer string, value any) error
 	last := tokens[len(tokens)-1]
 	switch container := current.(type) {
 	case map[string]any:
-		container[last] = value
+		if operation == "remove" {
+			delete(container, last)
+		} else {
+			container[last] = value
+		}
 	case []any:
 		index, err := strconv.Atoi(last)
-		if err != nil || index < 0 || index >= len(container) {
+		if err != nil || index < 0 || index > len(container) || (index == len(container) && operation != "add") {
 			return fmt.Errorf("invalid fixture pointer %q", pointer)
+		}
+		if operation == "add" && index == len(container) {
+			container = append(container, value)
+			return replaceContainerAtPointer(root, tokens[:len(tokens)-1], container)
+		}
+		if operation == "remove" {
+			copy(container[index:], container[index+1:])
+			container[len(container)-1] = nil
+			container = container[:len(container)-1]
+			// The fixture corpus only removes array members through a map-owned
+			// array, so update it while traversing instead of silently retaining
+			// the old slice length.
+			return replaceContainerAtPointer(root, tokens[:len(tokens)-1], container)
 		}
 		container[index] = value
 	default:
 		return fmt.Errorf("invalid fixture pointer %q", pointer)
+	}
+	return nil
+}
+
+func replaceContainerAtPointer(root any, tokens []string, replacement []any) error {
+	if len(tokens) == 0 {
+		return fmt.Errorf("cannot replace fixture root array")
+	}
+	current := root
+	for _, token := range tokens[:len(tokens)-1] {
+		switch container := current.(type) {
+		case map[string]any:
+			current = container[token]
+		case []any:
+			index, err := strconv.Atoi(token)
+			if err != nil || index < 0 || index >= len(container) {
+				return fmt.Errorf("invalid fixture pointer")
+			}
+			current = container[index]
+		default:
+			return fmt.Errorf("invalid fixture pointer")
+		}
+	}
+	last := tokens[len(tokens)-1]
+	switch container := current.(type) {
+	case map[string]any:
+		container[last] = replacement
+	case []any:
+		index, err := strconv.Atoi(last)
+		if err != nil || index < 0 || index >= len(container) {
+			return fmt.Errorf("invalid fixture pointer")
+		}
+		container[index] = replacement
+	default:
+		return fmt.Errorf("invalid fixture pointer")
 	}
 	return nil
 }

@@ -51,17 +51,17 @@ func TestPlatformAddUpdateListShowAndRemoveBusinessRules(t *testing.T) {
 	if !bytes.Equal(beforeQuestions, afterQuestions) {
 		t.Fatal("platform add rewrote questions")
 	}
-	if _, err := BuildPlatformAdd(model, "local", PlatformCreateInput{Name: "Duplicate", Kind: ledger.PlatformInformal}); app.ErrorCodeOf(err) != app.CodeConflict {
+	if _, err := BuildPlatformAdd(model, "metaculus", PlatformCreateInput{Name: "Duplicate", Kind: ledger.PlatformInformal}); app.ErrorCodeOf(err) != app.CodeConflict {
 		t.Fatalf("duplicate platform error = %v", err)
 	}
 
-	newName := Optional[string]{Set: true, Value: "Updated local"}
-	updated, err := BuildPlatformUpdate(model, "local", PlatformPatchInput{Name: newName, URL: Optional[string]{Set: true, Null: true}})
+	newName := Optional[string]{Set: true, Value: "Updated Metaculus"}
+	updated, err := BuildPlatformUpdate(model, "metaculus", PlatformPatchInput{Name: newName, URL: Optional[string]{Set: true, Null: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Ledger.Platforms["local"].Name != "Updated local" || updated.Ledger.Platforms["local"].URL != nil {
-		t.Fatalf("updated platform = %#v", updated.Ledger.Platforms["local"])
+	if updated.Ledger.Platforms["metaculus"].Name != "Updated Metaculus" || updated.Ledger.Platforms["metaculus"].URL != nil {
+		t.Fatalf("updated platform = %#v", updated.Ledger.Platforms["metaculus"])
 	}
 	if _, err := BuildPlatformUpdate(model, "missing", PlatformPatchInput{Name: newName}); app.ErrorCodeOf(err) != app.CodeNotFound {
 		t.Fatalf("missing platform update error = %v", err)
@@ -71,7 +71,7 @@ func TestPlatformAddUpdateListShowAndRemoveBusinessRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 || items[0].ID != "local" || items[1].ID != "metaculus" || items[1].ReferenceCount == 0 {
+	if len(items) != 1 || items[0].ID != "metaculus" || items[0].ReferenceCount == 0 {
 		t.Fatalf("platform list = %#v", items)
 	}
 	shown, err := ShowPlatform(model, "metaculus")
@@ -94,7 +94,7 @@ func TestPlatformAddUpdateListShowAndRemoveBusinessRules(t *testing.T) {
 }
 
 func TestPlatformFileMutationsAndStdinReads(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestPlatformFileMutationsAndStdinReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ledgerID == "" || len(list) != 3 || list[0].ID != "local" || list[2].ID != "new-platform" {
+	if ledgerID == "" || len(list) != 2 || list[0].ID != "metaculus" || list[1].ID != "new-platform" {
 		t.Fatalf("stdin list = %q %#v", ledgerID, list)
 	}
 	_, shown, err := LoadPlatformShow(context.Background(), "-", bytes.NewReader(updatedBytes), "new-platform")

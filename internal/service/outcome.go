@@ -110,6 +110,8 @@ func resultUnchanged(data any) bool {
 		return !value.Changed
 	case ForecastFileResult:
 		return !value.Changed
+	case CollectionFileResult:
+		return !value.Changed
 	default:
 		return false
 	}
@@ -233,16 +235,31 @@ var ordinaryOutcomes = map[OperationName]ordinaryOutcome{
 	OperationPlatformRemove:        {"platform.removed", "Platform was removed", "platform.remove.planned", "Platform removal is valid; no file was changed", "", ""},
 	OperationQuestionAdd:           {"question.added", "Question was added", "question.add.planned", "Question addition is valid; no file was changed", "", ""},
 	OperationQuestionUpdate:        {"question.updated", "Question was updated", "question.update.planned", "Question update is valid; no file was changed", "question.unchanged", "Question is already up to date"},
+	OperationQuestionRevise:        {"question.revised", "Question revision was appended", "question.revise.planned", "Question revision is valid; no file was changed", "", ""},
 	OperationQuestionList:          {code: "question.list", message: "Questions were read"},
 	OperationQuestionShow:          {code: "question.show", message: "Question was read"},
 	OperationQuestionResolve:       {"question.resolved", "Question was resolved", "question.resolve.planned", "Question lifecycle change is valid; no file was changed", "", ""},
-	OperationQuestionAnnul:         {"question.annulled", "Question was annulled", "question.annul.planned", "Question lifecycle change is valid; no file was changed", "", ""},
+	OperationQuestionAmbiguous:     {"question.ambiguous", "Question was marked ambiguous", "question.ambiguous.planned", "Question resolution is valid; no file was changed", "", ""},
+	OperationQuestionVoid:          {"question.void", "Question was marked void", "question.void.planned", "Question resolution is valid; no file was changed", "", ""},
 	OperationQuestionDispute:       {"question.disputed", "Question was disputed", "question.dispute.planned", "Question lifecycle change is valid; no file was changed", "", ""},
+	OperationQuestionNotApplicable: {"question.not_applicable", "Question was marked not applicable", "question.not_applicable.planned", "Question resolution is valid; no file was changed", "", ""},
+	OperationGroupAdd:              {"group.added", "Group was added", "group.add.planned", "Group addition is valid; no file was changed", "", ""},
+	OperationGroupUpdate:           {"group.updated", "Group was updated", "group.update.planned", "Group update is valid; no file was changed", "group.unchanged", "Group is already up to date"},
+	OperationGroupList:             {code: "group.list", message: "Groups were read"},
+	OperationGroupShow:             {code: "group.show", message: "Group was read"},
+	OperationGroupRemove:           {"group.removed", "Group was removed", "group.remove.planned", "Group removal is valid; no file was changed", "", ""},
+	OperationRelationshipAdd:       {"relationship.added", "Relationship was added", "relationship.add.planned", "Relationship addition is valid; no file was changed", "", ""},
+	OperationRelationshipList:      {code: "relationship.list", message: "Relationships were read"},
+	OperationRelationshipShow:      {code: "relationship.show", message: "Relationship was read"},
+	OperationRelationshipRemove:    {"relationship.removed", "Relationship was removed", "relationship.remove.planned", "Relationship removal is valid; no file was changed", "", ""},
 	OperationForecastAdd:           {"forecast.added", "Forecast was added", "forecast.add.planned", "Forecast addition is valid; no file was changed", "", ""},
 	OperationForecastList:          {code: "forecast.list", message: "Forecasts were read"},
 	OperationForecastShow:          {code: "forecast.show", message: "Forecast was read"},
 	OperationForecastSeal:          {"forecast.sealed", "Sealed forecast and protected key were created", "forecast.seal.planned", "Sealed forecast creation is valid; no key or ledger file was changed", "", ""},
 	OperationForecastReveal:        {"forecast.revealed", "Forecast was authenticated and revealed", "forecast.reveal.planned", "Forecast reveal is valid; no file was changed", "forecast.reveal.unchanged", "Forecast was already revealed with this authenticated key"},
+	OperationForecastWithdraw:      {"forecast.withdrawn", "Forecast was withdrawn", "forecast.withdraw.planned", "Forecast withdrawal is valid; no file was changed", "", ""},
+	OperationForecastExpire:        {"forecast.expired", "Forecast was expired", "forecast.expire.planned", "Forecast expiration is valid; no file was changed", "", ""},
+	OperationForecastReaffirm:      {"forecast.reaffirmed", "Forecast was reaffirmed", "forecast.reaffirm.planned", "Forecast reaffirmation is valid; no file was changed", "", ""},
 	OperationForecastKeyHintUpdate: {"forecast.key_hint.updated", "Forecast key hint was updated", "forecast.key_hint.update.planned", "Key hint update is valid; no file was changed", "forecast.key_hint.unchanged", "Forecast key hint is already up to date"},
 	OperationTargetBuild:           {"target.built", "Forecast target artifacts were built", "target.build.planned", "Target build is valid; no files were written", "", ""},
 	OperationTimestampStatus:       {code: "timestamp.status", message: "RFC 3161 local status was read"},

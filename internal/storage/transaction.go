@@ -68,6 +68,27 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	if err != nil {
 		return err
 	}
+	// Reject an unsupported or malformed ledger before creating a persistent
+	// lock file. When a recovery journal exists, recovery must run under the
+	// lock first because the visible ledger may be the interrupted old state.
+	if options.Validate != nil {
+		if _, journalErr := os.Stat(JournalPath(resolved)); errors.Is(journalErr, fs.ErrNotExist) {
+			original, readErr := os.ReadFile(resolved)
+			if readErr != nil {
+				if errors.Is(readErr, fs.ErrNotExist) {
+					return app.NewError(app.CodeNotFound, "ledger file does not exist", readErr)
+				}
+				return app.NewError(app.CodeIO, "ledger file cannot be read", readErr)
+			}
+			parsed, parseErr := parseDocument(original, detectFormat(resolved, original))
+			if parseErr != nil {
+				return app.NewError(app.CodeInvalidData, "ledger cannot be parsed", parseErr)
+			}
+			if validateErr := options.Validate(parsed); validateErr != nil {
+				return validationFailure("ledger failed pre-mutation validation", validateErr)
+			}
+		}
+	}
 	lock, err := AcquireLedgerLock(ctx, resolved, options.LockWait)
 	if err != nil {
 		return err

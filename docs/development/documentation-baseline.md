@@ -36,7 +36,8 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against release `v0.8.0` source.
+This inventory was checked against current main on 2026-09-21 and describes the
+v2-only surface.
 
 ### Working CLI surface
 
@@ -47,9 +48,10 @@ The following commands have connected application services:
 | `forecast-ledger init --file <new-path> ... [authoring flags]` | Exclusively creates a schema-valid JSON/YAML ledger. Direct flags can add root metadata, platforms, one question, and an optional first public forecast. Sealed private values use protected `--initial-secret-input`. | None |
 | `forecast-ledger ledger update --file <path> <set-or-clear flags>` | Minimally patches allowed root and current forecaster metadata through flags only. | None |
 | `forecast-ledger platform add|update|list|show|remove ...` | Creates, patches, lists, inspects, or removes unreferenced platform records. List/show accept `--file -`; removal requires approval. | None |
-| `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
-| `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
-| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
+| `forecast-ledger group ...`, `relationship ...` | Manages groups, memberships, and acyclic conditional relationships with guarded removal. | None |
+| `forecast-ledger question add|revise|update|list|show|resolve|ambiguous|void|dispute|not-applicable ...` | Creates immutable typed revisions, applies question-level patches, reads redacted summaries, and records approved v2 terminal states. List/show accept `--file -`. | None |
+| `forecast-ledger forecast add|list|show|seal|reveal|withdraw|expire|reaffirm ...`, `forecast key-hint update ...` | Appends revision-bound public or sealed forecasts and activity events, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
+| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v2` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
 | `forecast-ledger timestamp stamp|status|verify ...` | Acquires RFC 3161 evidence through `auto` (currently FreeTSA), one named built-in provider, or a custom public HTTPS TSA and CA pair; status and verify inspect retained bytes locally. | Selected TSA only for stamp; none for status or verify |
 | `forecast-ledger verify --file <path> ...` | Reports document, content-binding, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
 | `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package containing the exact RFC 3161 artifacts and verifies it locally. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None |
@@ -92,18 +94,20 @@ or upgrade to `v0.6.1`.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `1.3.0` |
-| Schema commit | `32218f682b3a650f41153e98817473bf429973a7` |
-| Embedded schema SHA-256 | `f673e4f3fc867a83d8c42a6992c6020ea28359a293580c8c742fe9dcdcd8d2c1` |
+| Forecast Ledger schema | `2.0.0` |
+| Schema commit | `1d3b186a15136bc5aff38647cb59fbef475dbe55` |
+| Annotated tag object | `7b4a9e85e0df9350750828a57b03ff729f704ee4` |
+| Release archive SHA-256 | `1d56cbe4f6cbd1fccb046a99add2ff4f88c709904d027669039ba4139664f47e` |
+| `SHA256SUMS` SHA-256 | `77d093fbdb393dc9c1e3bdae053724e5ecdccd2e211f6f6c08c7678e78b178dc` |
+| Embedded schema SHA-256 | `efd87b7432f7cb017fbedaba217e4cd1d3bff06133457927fb786a249a040b21` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
-never a floating tag. This preview cutover is intentionally breaking: older
-ledgers receive an `unsupported_schema_version` warning and are rejected before
-side effects. There is no migration or dual-read path.
+never a floating tag. Documents with any other schema version receive an
+`unsupported_schema_version` warning and are rejected before side effects.
 
 ### Platforms and release artifacts
 
@@ -205,14 +209,14 @@ The maintained maturity labels have these meanings:
 
 | Label | Meaning |
 | --- | --- |
-| Development | Unreleased work may be incomplete and may change without migration support. |
+| Development | Unreleased work may be incomplete and may change without upgrade support. |
 | Preview | A release is available for evaluation, but feature, compatibility, native-platform, or review gates are still open. |
 | Stable | The documented interface and required production gates are complete for the stated support window. |
 | Experimental | A named component has additional unresolved conformance, security, or interoperability risk. |
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.8.0` is **Preview**. A stable SemVer tag identifies a
+Current main is the breaking v2 cutover for a future preview release. A stable SemVer tag identifies a
 reproducible release; it does not promote unfinished commands or unaudited
 components to the Stable product maturity label.
 

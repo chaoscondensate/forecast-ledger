@@ -60,7 +60,7 @@ func TestExecutionTimeoutAndPolicyCoverage(t *testing.T) {
 	for _, operation := range []OperationName{
 		OperationLedgerInit, OperationLedgerUpdate, OperationLedgerValidate, OperationLedgerStatus,
 		OperationPlatformAdd, OperationPlatformUpdate, OperationPlatformList, OperationPlatformShow, OperationPlatformRemove,
-		OperationQuestionAdd, OperationQuestionUpdate, OperationQuestionList, OperationQuestionShow, OperationQuestionResolve, OperationQuestionAnnul, OperationQuestionDispute,
+		OperationQuestionAdd, OperationQuestionUpdate, OperationQuestionRevise, OperationQuestionList, OperationQuestionShow, OperationQuestionResolve, OperationQuestionAmbiguous, OperationQuestionVoid, OperationQuestionDispute, OperationQuestionNotApplicable,
 		OperationForecastAdd, OperationForecastList, OperationForecastShow, OperationForecastSeal, OperationForecastReveal, OperationForecastKeyHintUpdate,
 		OperationTargetBuild, OperationTargetCheck, OperationTimestampStamp, OperationTimestampStatus, OperationTimestampVerify,
 		OperationVerificationRun, OperationPublicationBuild, OperationPublicationVerify,

@@ -99,7 +99,7 @@ func TestRootMetadataInputSchemaRejectsImmutableFields(t *testing.T) {
 
 func rootUpdateFixture(t *testing.T, name string) (*document.Document, *ledger.Ledger) {
 	t.Helper()
-	raw, err := fs.ReadFile(contractschema.Conformance(), name)
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), name)
 	if err != nil {
 		t.Fatal(err)
 	}

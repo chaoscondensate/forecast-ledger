@@ -1,9 +1,6 @@
 package service
 
 import (
-	"encoding/json"
-	"net/url"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,14 +26,15 @@ type IntegrityCounts struct {
 }
 
 type QuestionSummary struct {
-	ID                   ledger.Slug            `json:"id"`
-	Title                string                 `json:"title"`
-	Type                 ledger.QuestionType    `json:"type"`
-	Status               ledger.QuestionStatus  `json:"status"`
-	ForecastWindow       *ledger.ForecastWindow `json:"forecast_window,omitempty"`
-	ExpectedResolutionAt ledger.Timestamp       `json:"expected_resolution_at"`
-	ForecastCount        int                    `json:"forecast_count"`
-	Integrity            IntegrityCounts        `json:"integrity"`
+	ID                   ledger.Slug           `json:"id"`
+	Title                string                `json:"title"`
+	OutcomeKind          ledger.OutcomeKind    `json:"outcome_kind"`
+	Status               ledger.QuestionStatus `json:"status"`
+	CurrentRevisionID    ledger.Slug           `json:"current_revision_id"`
+	RevisionCount        int                   `json:"revision_count"`
+	ExpectedResolutionAt ledger.Timestamp      `json:"expected_resolution_at"`
+	ForecastCount        int                   `json:"forecast_count"`
+	Integrity            IntegrityCounts       `json:"integrity"`
 }
 
 type QuestionForecastSummary struct {
@@ -46,21 +44,15 @@ type QuestionForecastSummary struct {
 }
 
 type QuestionView struct {
-	ID                   ledger.Slug               `json:"id"`
-	Title                string                    `json:"title"`
-	Type                 ledger.QuestionType       `json:"type"`
-	Status               ledger.QuestionStatus     `json:"status"`
-	ResolutionCriteria   string                    `json:"resolution_criteria"`
-	CreatedAt            ledger.Timestamp          `json:"created_at"`
-	ForecastWindow       *ledger.ForecastWindow    `json:"forecast_window,omitempty"`
-	ExpectedResolutionAt ledger.Timestamp          `json:"expected_resolution_at"`
-	Options              *[]ledger.Option          `json:"options,omitempty"`
-	Unit                 *ledger.Unit              `json:"unit,omitempty"`
-	PlatformRefs         *[]ledger.PlatformRef     `json:"platform_refs,omitempty"`
-	Tags                 *[]ledger.Slug            `json:"tags,omitempty"`
-	Notes                *string                   `json:"notes,omitempty"`
-	Resolution           *ledger.Resolution        `json:"resolution,omitempty"`
-	Forecasts            []QuestionForecastSummary `json:"forecasts"`
+	ID                ledger.Slug               `json:"id"`
+	Status            ledger.QuestionStatus     `json:"status"`
+	CreatedAt         ledger.Timestamp          `json:"created_at"`
+	CurrentRevisionID ledger.Slug               `json:"current_revision_id"`
+	Revisions         []ledger.QuestionRevision `json:"revisions"`
+	Tags              *[]ledger.Slug            `json:"tags,omitempty"`
+	Notes             *string                   `json:"notes,omitempty"`
+	Resolution        *ledger.Resolution        `json:"resolution,omitempty"`
+	Forecasts         []QuestionForecastSummary `json:"forecasts"`
 }
 
 func BuildQuestionAddPublic(model *ledger.Ledger, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionMutation, error) {
@@ -80,6 +72,8 @@ func BuildQuestionAddEmpty(model *ledger.Ledger, input NormalizedQuestionCreate,
 	return BuildQuestionWithoutForecast(model, input, observedAt)
 }
 
+// BuildQuestionUpdate changes only question-level metadata and a nonterminal
+// workflow status. Revision content is immutable.
 func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPatchInput) (QuestionMutation, error) {
 	position, question, err := selectQuestion(model, id)
 	if err != nil {
@@ -90,81 +84,14 @@ func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPat
 		return QuestionMutation{}, err
 	}
 	updated := &prospective.Questions[position]
-	var patches []document.PatchOperation
-	covered := false
 	base := "/questions/" + strconv.Itoa(position)
-	if input.Title.Set {
-		if input.Title.Null || strings.TrimSpace(input.Title.Value) == "" {
-			return QuestionMutation{}, invalidField("title", "title cannot be null or empty")
-		}
-		if input.Title.Value != question.Title {
-			updated.Title = input.Title.Value
-			patches = append(patches, replacePatch(base+"/title", input.Title.Value))
-			covered = true
-		}
-	}
-	if input.ResolutionCriteria.Set {
-		if input.ResolutionCriteria.Null || strings.TrimSpace(input.ResolutionCriteria.Value) == "" {
-			return QuestionMutation{}, invalidField("resolution_criteria", "resolution criteria cannot be null or empty")
-		}
-		if input.ResolutionCriteria.Value != question.ResolutionCriteria {
-			updated.ResolutionCriteria = input.ResolutionCriteria.Value
-			patches = append(patches, replacePatch(base+"/resolution_criteria", input.ResolutionCriteria.Value))
-			covered = true
-		}
-	}
-	if input.ForecastWindow.Set {
-		if input.ForecastWindow.Null {
-			if question.ForecastWindow != nil {
-				updated.ForecastWindow = nil
-				patches = append(patches, document.PatchOperation{Kind: document.PatchRemove, Pointer: base + "/forecast_window"})
-				covered = true
-			}
-		} else if input.ForecastWindow.Value.OpensAt.Set {
-			if input.ForecastWindow.Value.OpensAt.Null {
-				return QuestionMutation{}, invalidField("forecast_window.opens_at", "use clear forecast window to remove the optional window")
-			}
-			opening := input.ForecastWindow.Value.OpensAt.Value
-			if question.ForecastWindow == nil || opening != question.ForecastWindow.OpensAt {
-				updated.ForecastWindow = &ledger.ForecastWindow{OpensAt: opening}
-				kind := document.PatchReplace
-				pointer := base + "/forecast_window/opens_at"
-				if question.ForecastWindow == nil {
-					kind = document.PatchAdd
-					pointer = base + "/forecast_window"
-				}
-				value := any(opening)
-				if question.ForecastWindow == nil {
-					value = updated.ForecastWindow
-				}
-				patches = append(patches, document.PatchOperation{Kind: kind, Pointer: pointer, Value: value})
-				covered = true
-			}
-		}
-	}
-	if input.ExpectedResolutionAt.Set {
-		if input.ExpectedResolutionAt.Null {
-			return QuestionMutation{}, invalidField("expected_resolution_at", "expected resolution time cannot be null")
-		}
-		if input.ExpectedResolutionAt.Value != question.ExpectedResolutionAt {
-			updated.ExpectedResolutionAt = input.ExpectedResolutionAt.Value
-			patches = append(patches, replacePatch(base+"/expected_resolution_at", input.ExpectedResolutionAt.Value))
-			covered = true
-		}
-	}
-	if input.PlatformRefs.Set {
-		if input.PlatformRefs.Null {
-			updated.PlatformRefs = nil
-		} else {
-			updated.PlatformRefs = clonePlatformRefsSlice(input.PlatformRefs.Value)
-		}
-		patches = append(patches, optionalFieldPatch(base+"/platform_refs", question.PlatformRefs != nil, updated.PlatformRefs))
-	}
+	patches := []document.PatchOperation{}
 	if input.Tags.Set {
 		if input.Tags.Null {
 			updated.Tags = nil
 		} else {
-			updated.Tags = cloneSlugsSlice(input.Tags.Value)
+			values := append([]ledger.Slug(nil), input.Tags.Value...)
+			updated.Tags = &values
 		}
 		patches = append(patches, optionalFieldPatch(base+"/tags", question.Tags != nil, updated.Tags))
 	}
@@ -178,41 +105,64 @@ func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPat
 		patches = append(patches, optionalFieldPatch(base+"/notes", question.Notes != nil, updated.Notes))
 	}
 	if input.Status.Set {
-		if input.Status.Null || !isUnresolvedStatus(input.Status.Value) {
+		if input.Status.Null || !isNonterminalStatus(input.Status.Value) {
 			return QuestionMutation{}, invalidField("status", "question update accepts only open, closed, or awaiting_resolution")
 		}
-		if !isUnresolvedStatus(question.Status) || question.Resolution != nil {
-			return QuestionMutation{}, app.NewError(app.CodeConflict, "terminal question status must be changed through resolve, annul, or dispute", nil)
+		if !isNonterminalStatus(question.Status) || question.Resolution != nil {
+			return QuestionMutation{}, app.NewError(app.CodeConflict, "terminal status must be set through a resolution operation", nil)
 		}
 		if input.Status.Value != question.Status {
 			updated.Status = input.Status.Value
 			patches = append(patches, replacePatch(base+"/status", input.Status.Value))
 		}
 	}
-	opening := updated.CreatedAt
-	if updated.ForecastWindow != nil {
-		opening = updated.ForecastWindow.OpensAt
-	}
-	if _, err := ParseTimestamp(updated.ExpectedResolutionAt, "expected_resolution_at"); err != nil {
-		return QuestionMutation{}, err
-	}
-	for _, forecast := range updated.Forecasts {
-		if err := ValidateChronology(opening, "forecast_window.opens_at", forecast.ForecastedAt, "forecasted_at", true); err != nil {
-			return QuestionMutation{}, app.NewError(app.CodeConflict, "changed forecast window would exclude an existing forecast", err)
-		}
-	}
-	if covered && questionHasTargetMetadata(question) {
-		return QuestionMutation{}, frozenQuestionConflict(id)
-	}
-	patches = removeNoopQuestionPatches(question, *updated, patches, base)
 	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
 		return QuestionMutation{}, err
 	}
-	ids := make([]ledger.Slug, len(question.Forecasts))
-	for index := range question.Forecasts {
-		ids[index] = question.Forecasts[index].ID
+	return QuestionMutation{Ledger: prospective, Patches: patches, PriorStatus: question.Status}, nil
+}
+
+func BuildQuestionRevise(model *ledger.Ledger, id ledger.Slug, input RevisionInput, observedAt ledger.Timestamp) (QuestionMutation, error) {
+	position, question, err := selectQuestion(model, id)
+	if err != nil {
+		return QuestionMutation{}, err
 	}
-	return QuestionMutation{Ledger: prospective, Patches: patches, TargetCoveredChanged: covered, AffectedForecastIDs: ids, PriorStatus: question.Status}, nil
+	if !isNonterminalStatus(question.Status) {
+		return QuestionMutation{}, app.NewError(app.CodeConflict, "a terminal question cannot be revised", nil)
+	}
+	revision, err := buildRevision(input, observedAt)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	for _, existing := range question.Revisions {
+		if existing.ID == revision.ID {
+			return QuestionMutation{}, app.NewError(app.CodeConflict, "question revision ID already exists", nil)
+		}
+	}
+	last := question.Revisions[len(question.Revisions)-1]
+	if err := ValidateChronology(last.EffectiveAt, "previous.effective_at", revision.EffectiveAt, "effective_at", false); err != nil {
+		return QuestionMutation{}, err
+	}
+	if err := ValidateChronology(last.RecordedAt, "previous.recorded_at", revision.RecordedAt, "recorded_at", true); err != nil {
+		return QuestionMutation{}, err
+	}
+	prospective, err := cloneLedger(model)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	prospective.Questions[position].Revisions = append(prospective.Questions[position].Revisions, revision)
+	prospective.Questions[position].CurrentRevisionID = revision.ID
+	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
+		return QuestionMutation{}, err
+	}
+	value, err := jsonPatchValue(revision)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	base := "/questions/" + strconv.Itoa(position)
+	return QuestionMutation{Ledger: prospective, PriorStatus: question.Status, Patches: []document.PatchOperation{
+		{Kind: document.PatchAdd, Pointer: base + "/revisions/-", Value: value}, replacePatch(base+"/current_revision_id", revision.ID),
+	}}, nil
 }
 
 func ListQuestions(model *ledger.Ledger) ([]QuestionSummary, error) {
@@ -220,8 +170,8 @@ func ListQuestions(model *ledger.Ledger) ([]QuestionSummary, error) {
 		return nil, app.NewError(app.CodeInternal, "ledger is nil", nil)
 	}
 	items := make([]QuestionSummary, len(model.Questions))
-	for index, question := range model.Questions {
-		items[index] = summarizeQuestion(question)
+	for i, question := range model.Questions {
+		items[i] = summarizeQuestion(question)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	return items, nil
@@ -232,19 +182,11 @@ func ShowQuestion(model *ledger.Ledger, id ledger.Slug) (QuestionView, error) {
 	if err != nil {
 		return QuestionView{}, err
 	}
-	view := QuestionView{
-		ID: question.ID, Title: question.Title, Type: question.Type, Status: question.Status,
-		ResolutionCriteria: question.ResolutionCriteria, CreatedAt: question.CreatedAt,
-		ForecastWindow: question.ForecastWindow, ExpectedResolutionAt: question.ExpectedResolutionAt,
-		Options: cloneOptions(question.Options), Unit: cloneUnit(question.Unit), PlatformRefs: clonePlatformRefs(question.PlatformRefs),
-		Tags: cloneSlugs(question.Tags), Notes: cloneString(question.Notes), Resolution: cloneResolution(question.Resolution),
-		Forecasts: make([]QuestionForecastSummary, len(question.Forecasts)),
-	}
-	for index, forecast := range question.Forecasts {
-		view.Forecasts[index] = QuestionForecastSummary{Summary: summarizeForecast(forecast), PublicNote: cloneString(forecast.PublicNote), Commitment: commitmentView(forecast.Commitment)}
-		if view.Forecasts[index].Commitment != nil {
-			view.Forecasts[index].Commitment.Encryption.Nonce = ""
-			view.Forecasts[index].Commitment.Encryption.Ciphertext = ""
+	view := QuestionView{ID: question.ID, Status: question.Status, CreatedAt: question.CreatedAt, CurrentRevisionID: question.CurrentRevisionID, Revisions: append([]ledger.QuestionRevision(nil), question.Revisions...), Tags: cloneSlugs(question.Tags), Notes: cloneString(question.Notes), Resolution: cloneResolution(question.Resolution), Forecasts: make([]QuestionForecastSummary, len(question.Forecasts))}
+	for i, forecast := range question.Forecasts {
+		view.Forecasts[i] = QuestionForecastSummary{Summary: summarizeForecast(forecast), PublicNote: cloneString(forecast.PublicNote), Commitment: commitmentView(forecast.Commitment)}
+		if view.Forecasts[i].Commitment != nil {
+			view.Forecasts[i].Commitment.Encryption.Nonce, view.Forecasts[i].Commitment.Encryption.Ciphertext = "", ""
 		}
 	}
 	return view, nil
@@ -259,74 +201,65 @@ func BuildQuestionResolve(model *ledger.Ledger, id ledger.Slug, input Resolution
 		return QuestionMutation{}, app.NewError(app.CodeConflict, "question must be closed, awaiting resolution, or disputed before resolution", nil)
 	}
 	if len(input.Sources) == 0 {
-		return QuestionMutation{}, invalidField("sources", "at least one evidence source is required")
+		return QuestionMutation{}, invalidField("sources", "at least one resolution source is required")
 	}
-	outcome, err := validateResolutionOutcome(question, input.Outcome)
-	if err != nil {
-		return QuestionMutation{}, err
-	}
-	recordedAt := observedAt
+	recorded := observedAt
 	if input.RecordedAt != nil {
-		recordedAt = *input.RecordedAt
+		recorded = *input.RecordedAt
 	}
-	if err := ValidateChronology(input.OutcomeKnownAt, "outcome_known_at", recordedAt, "recorded_at", true); err != nil {
-		return QuestionMutation{}, err
-	}
-	sources, err := buildResolutionSources(input.Sources)
-	if err != nil {
-		return QuestionMutation{}, err
-	}
-	resolution := ledger.Resolution{Resolved: &ledger.ResolvedResolution{Status: ledger.ResolutionResolved, Outcome: outcome, OutcomeKnownAt: input.OutcomeKnownAt, RecordedAt: recordedAt, Sources: sources, Notes: cloneString(input.Notes)}}
+	resolution := ledger.Resolution{Resolved: &ledger.ResolvedResolution{Status: ledger.ResolutionResolved, QuestionRevisionID: input.QuestionRevisionID, Outcome: input.Outcome, OutcomeKnownAt: input.OutcomeKnownAt, RecordedAt: recorded, Sources: resolutionSources(input.Sources), Notes: cloneString(input.Notes)}}
 	return buildQuestionTerminalMutation(model, position, question, ledger.QuestionResolved, resolution)
 }
 
-func BuildQuestionAnnul(model *ledger.Ledger, id ledger.Slug, input AnnulInput, observedAt ledger.Timestamp) (QuestionMutation, error) {
+func BuildQuestionUnresolved(model *ledger.Ledger, id ledger.Slug, status ledger.ResolutionStatus, input UnresolvedResolutionInput, observedAt ledger.Timestamp) (QuestionMutation, error) {
 	position, question, err := selectQuestion(model, id)
 	if err != nil {
 		return QuestionMutation{}, err
 	}
 	if strings.TrimSpace(input.Reason) == "" {
-		return QuestionMutation{}, invalidField("reason", "annulment reason must not be empty")
+		return QuestionMutation{}, invalidField("reason", "resolution reason must not be empty")
 	}
-	recordedAt := observedAt
+	var questionStatus ledger.QuestionStatus
+	switch status {
+	case ledger.ResolutionAmbiguous:
+		questionStatus = ledger.QuestionAmbiguous
+	case ledger.ResolutionVoid:
+		questionStatus = ledger.QuestionVoid
+	case ledger.ResolutionDisputed:
+		questionStatus = ledger.QuestionDisputed
+	default:
+		return QuestionMutation{}, invalidField("status", "unsupported unresolved terminal status")
+	}
+	if status != ledger.ResolutionDisputed && question.Status != ledger.QuestionClosed && question.Status != ledger.QuestionAwaitingResolution {
+		return QuestionMutation{}, app.NewError(app.CodeConflict, "question must be closed or awaiting resolution", nil)
+	}
+	if status == ledger.ResolutionDisputed && isNonterminalStatus(question.Status) {
+		return QuestionMutation{}, app.NewError(app.CodeConflict, "only a terminal question can be disputed", nil)
+	}
+	recorded := observedAt
 	if input.RecordedAt != nil {
-		recordedAt = *input.RecordedAt
+		recorded = *input.RecordedAt
 	}
-	if _, err := ParseTimestamp(recordedAt, "recorded_at"); err != nil {
-		return QuestionMutation{}, err
+	sources := resolutionSources(input.Sources)
+	var optionalSources *[]ledger.ResolutionSource
+	if len(sources) > 0 {
+		optionalSources = &sources
 	}
-	sources, err := buildResolutionSources(input.Sources)
-	if err != nil {
-		return QuestionMutation{}, err
-	}
-	resolution := ledger.Resolution{NonResolved: &ledger.NonResolvedResolution{Status: ledger.ResolutionAnnulled, Reason: input.Reason, RecordedAt: recordedAt, Sources: optionalSources(sources, input.Sources != nil)}}
-	return buildQuestionTerminalMutation(model, position, question, ledger.QuestionAnnulled, resolution)
+	resolution := ledger.Resolution{Unresolved: &ledger.UnresolvedResolution{Status: status, Reason: input.Reason, RecordedAt: recorded, Sources: optionalSources}}
+	return buildQuestionTerminalMutation(model, position, question, questionStatus, resolution)
 }
 
-func BuildQuestionDispute(model *ledger.Ledger, id ledger.Slug, input DisputeInput, observedAt ledger.Timestamp) (QuestionMutation, error) {
+func BuildQuestionNotApplicable(model *ledger.Ledger, id ledger.Slug, input NotApplicableInput, observedAt ledger.Timestamp) (QuestionMutation, error) {
 	position, question, err := selectQuestion(model, id)
 	if err != nil {
 		return QuestionMutation{}, err
 	}
-	if question.Status != ledger.QuestionResolved && question.Status != ledger.QuestionAnnulled {
-		return QuestionMutation{}, app.NewError(app.CodeConflict, "only a resolved or annulled question can be disputed", nil)
-	}
-	if strings.TrimSpace(input.Reason) == "" {
-		return QuestionMutation{}, invalidField("reason", "dispute reason must not be empty")
-	}
-	recordedAt := observedAt
+	recorded := observedAt
 	if input.RecordedAt != nil {
-		recordedAt = *input.RecordedAt
+		recorded = *input.RecordedAt
 	}
-	if _, err := ParseTimestamp(recordedAt, "recorded_at"); err != nil {
-		return QuestionMutation{}, err
-	}
-	sources, err := buildResolutionSources(input.Sources)
-	if err != nil {
-		return QuestionMutation{}, err
-	}
-	resolution := ledger.Resolution{NonResolved: &ledger.NonResolvedResolution{Status: ledger.ResolutionDisputed, Reason: input.Reason, RecordedAt: recordedAt, Sources: optionalSources(sources, input.Sources != nil)}}
-	return buildQuestionTerminalMutation(model, position, question, ledger.QuestionDisputed, resolution)
+	resolution := ledger.Resolution{NotApplicable: &ledger.NotApplicableResolution{Status: ledger.ResolutionNotApplicable, RelationshipID: input.RelationshipID, Reason: input.Reason, RecordedAt: recorded}}
+	return buildQuestionTerminalMutation(model, position, question, ledger.QuestionNotApplicable, resolution)
 }
 
 func buildQuestionTerminalMutation(model *ledger.Ledger, position int, question ledger.Question, status ledger.QuestionStatus, resolution ledger.Resolution) (QuestionMutation, error) {
@@ -334,27 +267,27 @@ func buildQuestionTerminalMutation(model *ledger.Ledger, position int, question 
 	if err != nil {
 		return QuestionMutation{}, err
 	}
-	prospective.Questions[position].Status = status
-	prospective.Questions[position].Resolution = &resolution
+	prospective.Questions[position].Status, prospective.Questions[position].Resolution = status, &resolution
 	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
 		return QuestionMutation{}, err
 	}
-	base := "/questions/" + strconv.Itoa(position)
-	resolutionValue, err := jsonPatchValue(resolution)
+	value, err := jsonPatchValue(resolution)
 	if err != nil {
 		return QuestionMutation{}, err
 	}
-	resolutionKind := document.PatchAdd
-	if question.Resolution != nil {
-		resolutionKind = document.PatchReplace
+	base := "/questions/" + strconv.Itoa(position)
+	patches := []document.PatchOperation{replacePatch(base+"/status", status)}
+	if question.Resolution == nil {
+		patches = append(patches, document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/resolution", Value: value})
+	} else {
+		patches = append(patches, document.PatchOperation{Kind: document.PatchReplace, Pointer: base + "/resolution", Value: value})
 	}
-	return QuestionMutation{Ledger: prospective, PriorStatus: question.Status, Patches: []document.PatchOperation{
-		replacePatch(base+"/status", status), {Kind: resolutionKind, Pointer: base + "/resolution", Value: resolutionValue},
-	}}, nil
+	return QuestionMutation{Ledger: prospective, PriorStatus: question.Status, Patches: patches}, nil
 }
 
 func summarizeQuestion(question ledger.Question) QuestionSummary {
-	result := QuestionSummary{ID: question.ID, Title: question.Title, Type: question.Type, Status: question.Status, ForecastWindow: question.ForecastWindow, ExpectedResolutionAt: question.ExpectedResolutionAt, ForecastCount: len(question.Forecasts)}
+	current := question.Revisions[len(question.Revisions)-1]
+	result := QuestionSummary{ID: question.ID, Title: current.Title, OutcomeKind: current.OutcomeSpace.Kind, Status: question.Status, CurrentRevisionID: question.CurrentRevisionID, RevisionCount: len(question.Revisions), ExpectedResolutionAt: current.ExpectedResolutionAt, ForecastCount: len(question.Forecasts)}
 	for _, forecast := range question.Forecasts {
 		switch integrityStatus(forecast.Integrity) {
 		case ledger.IntegrityUnanchored:
@@ -370,66 +303,16 @@ func summarizeQuestion(question ledger.Question) QuestionSummary {
 	return result
 }
 
-func validateResolutionOutcome(question ledger.Question, input ResolutionOutcome) (ledger.ResolutionOutcome, error) {
-	switch question.Type {
-	case ledger.QuestionBinary:
-		if input.Boolean == nil || input.Text != nil {
-			return ledger.ResolutionOutcome{}, invalidField("outcome", "binary outcome must be true or false")
-		}
-		value := *input.Boolean
-		return ledger.ResolutionOutcome{Binary: &value}, nil
-	case ledger.QuestionMultipleChoice:
-		if input.Text == nil || input.Boolean != nil {
-			return ledger.ResolutionOutcome{}, invalidField("outcome", "multiple-choice outcome must be an option ID")
-		}
-		for _, option := range *question.Options {
-			if string(option.ID) == *input.Text {
-				value := *input.Text
-				return ledger.ResolutionOutcome{Text: &value}, nil
-			}
-		}
-		return ledger.ResolutionOutcome{}, invalidField("outcome", "multiple-choice outcome is not a current option ID")
-	case ledger.QuestionNumeric:
-		if input.Text == nil || input.Boolean != nil || !validExactDecimal(ledger.Decimal(*input.Text)) {
-			return ledger.ResolutionOutcome{}, invalidField("outcome", "numeric outcome must be an exact decimal string")
-		}
-	case ledger.QuestionDate:
-		if input.Text == nil || input.Boolean != nil || !validFullDate(ledger.Date(*input.Text)) {
-			return ledger.ResolutionOutcome{}, invalidField("outcome", "date outcome must be a valid full date string")
-		}
-	default:
-		return ledger.ResolutionOutcome{}, invalidField("outcome", "question type is unsupported")
+func resolutionSources(input []EvidenceSourceInput) []ledger.ResolutionSource {
+	result := make([]ledger.ResolutionSource, len(input))
+	for i, source := range input {
+		result[i] = ledger.ResolutionSource{Title: source.Title, Publisher: cloneString(source.Publisher), URL: source.URL, PublishedAt: source.PublishedAt, RetrievedAt: source.RetrievedAt, ContentDigest: source.ContentDigest}
 	}
-	value := *input.Text
-	return ledger.ResolutionOutcome{Text: &value}, nil
+	return result
 }
 
-func buildResolutionSources(inputs []EvidenceSourceInput) ([]ledger.ResolutionSource, error) {
-	result := make([]ledger.ResolutionSource, len(inputs))
-	for index, input := range inputs {
-		field := "sources." + strconv.Itoa(index)
-		if strings.TrimSpace(input.Title) == "" {
-			return nil, invalidField(field+".title", "source title must not be empty")
-		}
-		parsed, err := url.ParseRequestURI(input.URL)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return nil, invalidField(field+".url", "source URL must be absolute")
-		}
-		if _, err := ParseTimestamp(input.RetrievedAt, field+".retrieved_at"); err != nil {
-			return nil, err
-		}
-		if input.PublishedAt != nil {
-			if err := ValidateChronology(*input.PublishedAt, field+".published_at", input.RetrievedAt, field+".retrieved_at", true); err != nil {
-				return nil, err
-			}
-		}
-		var digest *ledger.Digest
-		if input.ContentSHA256 != nil {
-			digest = &ledger.Digest{Algorithm: "sha-256", Value: *input.ContentSHA256}
-		}
-		result[index] = ledger.ResolutionSource{Title: input.Title, Publisher: cloneString(input.Publisher), URL: input.URL, PublishedAt: cloneTimestamp(input.PublishedAt), RetrievedAt: input.RetrievedAt, ContentDigest: digest}
-	}
-	return result, nil
+func isNonterminalStatus(status ledger.QuestionStatus) bool {
+	return status == ledger.QuestionOpen || status == ledger.QuestionClosed || status == ledger.QuestionAwaitingResolution
 }
 
 func questionHasTargetMetadata(question ledger.Question) bool {
@@ -442,123 +325,28 @@ func questionHasTargetMetadata(question ledger.Question) bool {
 }
 
 func frozenQuestionConflict(id ledger.Slug) error {
-	return app.WithDetails(app.NewError(app.CodeConflict, "target-covered question fields are frozen because forecast evidence exists; annul this question and create a new question with a new ID", nil), map[string]any{"question_id": id, "guidance": "Annul the original question, create a new question, and record the predecessor ID in notes."})
+	return app.WithDetails(app.NewError(app.CodeConflict, "question fields covered by an existing forecast target cannot be changed", nil), map[string]any{"question_id": id})
 }
 
-func isUnresolvedStatus(status ledger.QuestionStatus) bool {
-	return status == ledger.QuestionOpen || status == ledger.QuestionClosed || status == ledger.QuestionAwaitingResolution
+func cloneResolution(value *ledger.Resolution) *ledger.Resolution {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	return &copyValue
 }
 
 func replacePatch(pointer string, value any) document.PatchOperation {
-	normalized, err := jsonPatchValue(value)
-	if err == nil {
-		value = normalized
-	}
 	return document.PatchOperation{Kind: document.PatchReplace, Pointer: pointer, Value: value}
 }
 
 func optionalFieldPatch(pointer string, existed bool, value any) document.PatchOperation {
-	if value == nil || reflect.ValueOf(value).Kind() == reflect.Pointer && reflect.ValueOf(value).IsNil() {
+	if value == nil {
 		return document.PatchOperation{Kind: document.PatchRemove, Pointer: pointer}
 	}
 	kind := document.PatchAdd
 	if existed {
 		kind = document.PatchReplace
 	}
-	normalized, err := jsonPatchValue(value)
-	if err == nil {
-		value = normalized
-	}
 	return document.PatchOperation{Kind: kind, Pointer: pointer, Value: value}
-}
-
-func removeNoopQuestionPatches(before, after ledger.Question, patches []document.PatchOperation, base string) []document.PatchOperation {
-	// Optional patch input may explicitly repeat the current value. Comparing the
-	// prospective source values keeps dry-run and commit correctly idempotent.
-	result := patches[:0]
-	for _, patch := range patches {
-		if questionPointerEqual(before, after, strings.TrimPrefix(patch.Pointer, base+"/")) {
-			continue
-		}
-		result = append(result, patch)
-	}
-	return result
-}
-
-func questionPointerEqual(before, after ledger.Question, field string) bool {
-	// JSON encoding is acceptable here because both values are already typed and
-	// this comparison never becomes persisted output.
-	var left, right any
-	switch field {
-	case "title":
-		left, right = before.Title, after.Title
-	case "resolution_criteria":
-		left, right = before.ResolutionCriteria, after.ResolutionCriteria
-	case "forecast_window/opens_at":
-		left, right = before.ForecastWindow.OpensAt, after.ForecastWindow.OpensAt
-	case "forecast_window":
-		left, right = before.ForecastWindow, after.ForecastWindow
-	case "expected_resolution_at":
-		left, right = before.ExpectedResolutionAt, after.ExpectedResolutionAt
-	case "platform_refs":
-		left, right = before.PlatformRefs, after.PlatformRefs
-	case "tags":
-		left, right = before.Tags, after.Tags
-	case "notes":
-		left, right = before.Notes, after.Notes
-	case "status":
-		left, right = before.Status, after.Status
-	default:
-		return false
-	}
-	leftValue, _ := jsonPatchValue(left)
-	rightValue, _ := jsonPatchValue(right)
-	return deepEqualJSON(leftValue, rightValue)
-}
-
-func deepEqualJSON(left, right any) bool {
-	return reflect.DeepEqual(left, right)
-}
-
-func clonePlatformRefsSlice(value []ledger.PlatformRef) *[]ledger.PlatformRef {
-	copy := append([]ledger.PlatformRef{}, value...)
-	return &copy
-}
-func cloneSlugsSlice(value []ledger.Slug) *[]ledger.Slug {
-	copy := append([]ledger.Slug{}, value...)
-	return &copy
-}
-func cloneTimestamp(value *ledger.Timestamp) *ledger.Timestamp {
-	if value == nil {
-		return nil
-	}
-	copy := *value
-	return &copy
-}
-func optionalSources(value []ledger.ResolutionSource, present bool) *[]ledger.ResolutionSource {
-	if !present {
-		return nil
-	}
-	copy := append([]ledger.ResolutionSource{}, value...)
-	return &copy
-}
-func cloneResolution(value *ledger.Resolution) *ledger.Resolution {
-	if value == nil {
-		return nil
-	}
-	copy, err := cloneLedgerValue(*value)
-	if err != nil {
-		return nil
-	}
-	return &copy
-}
-
-func cloneLedgerValue[T any](value T) (T, error) {
-	var result T
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return result, err
-	}
-	err = json.Unmarshal(encoded, &result)
-	return result, err
 }

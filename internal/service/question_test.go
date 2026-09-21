@@ -1,195 +1,76 @@
 package service
 
 import (
-	"bytes"
-	"context"
-	"errors"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
-	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
-func TestQuestionAddUpdateListAndShow(t *testing.T) {
+func TestQuestionRevisionIsAppendOnlyAndForecastHistoryStaysBound(t *testing.T) {
+	root, err := BuildLedgerRoot(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "andrey", ForecasterName: "Andrey"}, fixedTestClock{value: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, err := BuildInitialPublicLedger(root, binaryInitialQuestion())
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := binaryInitialQuestion().Revision
+	revision.ID = "qr-two"
+	revision.EffectiveAt = "2026-02-01T00:00:00Z"
+	revision.Title = "Will it happen under the clarified rule?"
+	mutation, err := BuildQuestionRevise(model, "q-one", revision, "2026-02-01T00:01:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	question := mutation.Ledger.Questions[0]
+	if len(question.Revisions) != 2 || question.CurrentRevisionID != "qr-two" || question.Forecasts[0].QuestionRevisionID != "qr-one" {
+		t.Fatalf("append-only revision result = %#v", question)
+	}
+	if len(mutation.Patches) != 2 || mutation.TargetCoveredChanged {
+		t.Fatalf("revision patches = %#v", mutation)
+	}
+}
+
+func TestQuestionMetadataUpdateCannotRewriteMeaning(t *testing.T) {
 	_, model := rootUpdateFixture(t, "individual-ledger.json")
-	add := NormalizedQuestionCreate{ID: "q-new", Type: ledger.QuestionBinary, Input: QuestionAddInput{
-		Title: "Will the new event happen?", ResolutionCriteria: "Resolve from the named source.",
-		CreatedAt:      timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: &InitialForecastInput{ID: "f-new-001", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5500}}},
-	}}
-	mutation, err := BuildQuestionAddPublic(model, add, "2026-08-20T00:01:00Z")
+	updated, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{Notes: Optional[string]{Set: true, Value: "Watch the coalition talks."}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(mutation.Patches) != 1 || mutation.Patches[0].Pointer != "/questions/-" || len(mutation.Ledger.Questions) != len(model.Questions)+1 {
-		t.Fatalf("add mutation = %#v", mutation)
-	}
-
-	newTitle := Optional[string]{Set: true, Value: "Updated question title"}
-	newTags := Optional[[]ledger.Slug]{Set: true, Value: []ledger.Slug{"reviewed"}}
-	updated, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{Title: newTitle, Tags: newTags})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Ledger.Questions[1].Title != "Updated question title" || updated.Ledger.Questions[1].Tags == nil || len(updated.Patches) != 2 {
-		t.Fatalf("update mutation = %#v", updated)
-	}
-	opening := Optional[ledger.Timestamp]{Set: true, Value: "2026-08-07T12:00:00+01:00"}
-	if _, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{ForecastWindow: Optional[ForecastWindowPatchInput]{Set: true, Value: ForecastWindowPatchInput{OpensAt: opening}}}); app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("moved opening error = %v", err)
-	}
-	model.Questions[1].Forecasts[0].Integrity = ledger.Integrity{Failed: &ledger.FailedIntegrity{Status: ledger.IntegrityFailed, FailureReason: "imported", Target: &ledger.ForecastTarget{}}}
-	if _, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{Title: newTitle}); app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("frozen target error = %v", err)
-	}
-
-	items, err := ListQuestions(model)
-	if err != nil || len(items) != 4 || items[0].ID != "q-central-bank-cut" {
-		t.Fatalf("question list = %#v, %v", items, err)
-	}
-	view, err := ShowQuestion(model, "q-election-coalition")
-	if err != nil || len(view.Forecasts) != 1 || view.Forecasts[0].Summary.ID == "" {
-		t.Fatalf("question view = %#v, %v", view, err)
+	if updated.Ledger.Questions[1].Revisions[1].Title != model.Questions[1].Revisions[1].Title || len(updated.Patches) != 1 {
+		t.Fatalf("metadata update changed semantic revision: %#v", updated)
 	}
 }
 
-func TestQuestionAddSealedCommitsProtectedKeyBeforeValidLedger(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+func TestResolvedAndUnresolvedTerminalShapes(t *testing.T) {
+	root, err := BuildLedgerRootAt(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "andrey", ForecasterName: "Andrey"}, "2026-01-01T00:00:00Z")
 	if err != nil {
 		t.Fatal(err)
 	}
-	directory := t.TempDir()
-	ledgerPath := filepath.Join(directory, "ledger.json")
-	keyPath := filepath.Join(directory, "f-secret.key")
-	if err := os.WriteFile(ledgerPath, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	rationale, comment := "PRIVATE-RATIONALE-CANARY", "PRIVATE-COMMENT-CANARY"
-	factors := []string{"PRIVATE-FACTOR-CANARY"}
-	input := NormalizedQuestionCreate{ID: "q-secret", Type: ledger.QuestionBinary, Input: QuestionAddInput{
-		Title: "Secret forecast question", ResolutionCriteria: "Resolve from the named source.", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: &InitialForecastInput{ID: "f-secret", Visibility: ledger.VisibilitySealed, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5100}}, Rationale: &rationale, KeyFactors: &factors, Comment: &comment},
-	}}
-	plan, err := PlanQuestionAddSealedFile(context.Background(), ledgerPath, keyPath, input, "2026-08-20T00:01:00Z")
-	if err != nil || !plan.Changed || plan.Recovery.State != "" {
-		t.Fatalf("plan = %#v, %v", plan, err)
-	}
-	if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
-		t.Fatalf("dry-run created key: %v", err)
-	}
-	effects := Effects{Clock: fixedTestClock{}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))}}
-	result, err := CommitQuestionAddSealedFile(context.Background(), ledgerPath, keyPath, input, "2026-08-20T00:01:00Z", effects)
+	model, err := BuildInitialPublicLedger(root, binaryInitialQuestion())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Recovery.State != RecoveryNone || len(result.Effects) != 2 {
-		t.Fatalf("result = %#v", result)
-	}
-	keyBytes, err := os.ReadFile(keyPath)
-	if err != nil || !bytes.Contains(keyBytes, []byte(`"schema":"forecast-key/v1"`)) {
-		t.Fatalf("key = %q, %v", keyBytes, err)
-	}
-	ledgerBytes, err := os.ReadFile(ledgerPath)
+	closed, err := BuildQuestionUpdate(model, "q-one", QuestionPatchInput{Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{rationale, comment, factors[0]} {
-		if strings.Contains(string(ledgerBytes), secret) {
-			t.Fatalf("ledger leaked %q", secret)
-		}
+	yes := true
+	resolved, err := BuildQuestionResolve(closed.Ledger, "q-one", ResolutionInput{
+		QuestionRevisionID: "qr-one", Outcome: ledger.ScalarValue{Boolean: &yes}, OutcomeKnownAt: "2027-01-01T00:00:00Z",
+		Sources: []EvidenceSourceInput{{Title: "Official result", URL: "https://example.org/result", RetrievedAt: "2027-01-01T00:01:00Z"}},
+	}, "2027-01-01T00:02:00Z")
+	if err != nil || resolved.Ledger.Questions[0].Resolution.Resolved == nil {
+		t.Fatalf("resolved=%#v err=%v", resolved, err)
 	}
-	loaded, err := LoadAndValidateLedger(context.Background(), ledgerPath, nil)
-	if err != nil || loaded.Model.Questions[len(loaded.Model.Questions)-1].Forecasts[0].Visibility != ledger.VisibilitySealed {
-		t.Fatalf("sealed ledger = %#v, %v", loaded, err)
+	disputed, err := BuildQuestionUnresolved(resolved.Ledger, "q-one", ledger.ResolutionDisputed, UnresolvedResolutionInput{Reason: "The source is under review."}, "2027-01-02T00:00:00Z")
+	if err != nil || disputed.Ledger.Questions[0].Resolution.Unresolved == nil || disputed.Ledger.Questions[0].Status != ledger.QuestionDisputed {
+		t.Fatalf("disputed=%#v err=%v", disputed, err)
 	}
-}
-
-func TestQuestionPublicFileAddThenUpdate(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "ledger.json")
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	input := NormalizedQuestionCreate{ID: "q-new", Type: ledger.QuestionBinary, Input: QuestionAddInput{
-		Title: "New", ResolutionCriteria: "Official source", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: &InitialForecastInput{ID: "f-new", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}},
-	}}
-	if _, err := CommitQuestionAddPublicFile(context.Background(), path, input, "2026-08-20T00:01:00Z"); err != nil {
-		t.Fatal(err)
-	}
-	beforeUpdate, err := LoadAndValidateLedger(context.Background(), path, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	retainedForecast := beforeUpdate.Model.Questions[len(beforeUpdate.Model.Questions)-1].Forecasts[0]
-	if _, err := CommitQuestionUpdateFile(context.Background(), path, "q-new", QuestionPatchInput{Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}}); err != nil {
-		t.Fatalf("update after add: %v; cause: %v", err, errors.Unwrap(err))
-	}
-	afterUpdate, err := LoadAndValidateLedger(context.Background(), path, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(retainedForecast, afterUpdate.Model.Questions[len(afterUpdate.Model.Questions)-1].Forecasts[0]) {
-		t.Fatal("question status update changed retained forecast")
-	}
-	targetDirectory := filepath.Join(filepath.Dir(path), "proofs", "targets")
-	if err := os.MkdirAll(targetDirectory, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(targetDirectory, "f-new.json"), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := PlanQuestionUpdateFile(context.Background(), path, "q-new", QuestionPatchInput{Title: Optional[string]{Set: true, Value: "Changed meaning"}}); app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("precomputed target conflict = %v", err)
-	}
-}
-
-func TestQuestionLifecycleTypedOutcomesAndReplacement(t *testing.T) {
-	_, model := rootUpdateFixture(t, "individual-ledger.json")
-	closed, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	outcome := "centre-left"
-	resolved, err := BuildQuestionResolve(closed.Ledger, "q-election-coalition", ResolutionInput{
-		Outcome: ResolutionOutcome{Text: &outcome}, OutcomeKnownAt: "2026-10-15T12:00:00+01:00", RecordedAt: timestampPointer("2026-10-15T12:05:00+01:00"),
-		Sources: []EvidenceSourceInput{{Title: "Official appointment", URL: "https://example.org/result", RetrievedAt: "2026-10-15T12:04:00+01:00"}},
-	}, "2026-10-15T12:05:00+01:00")
-	if err != nil {
-		t.Fatal(err)
-	}
-	question := resolved.Ledger.Questions[1]
-	if question.Status != ledger.QuestionResolved || question.Resolution == nil || question.Resolution.Resolved == nil || question.Resolution.Resolved.Outcome.Text == nil {
-		t.Fatalf("resolved question = %#v", question)
-	}
-	disputed, err := BuildQuestionDispute(resolved.Ledger, question.ID, DisputeInput{Reason: "The appointment is under review.", RecordedAt: timestampPointer("2026-10-16T00:00:00+01:00")}, "2026-10-16T00:00:00+01:00")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if disputed.PriorStatus != ledger.QuestionResolved || disputed.Ledger.Questions[1].Status != ledger.QuestionDisputed {
-		t.Fatalf("disputed = %#v", disputed)
-	}
-	annulled, err := BuildQuestionAnnul(disputed.Ledger, question.ID, AnnulInput{Reason: "The event definition became invalid."}, "2026-10-17T00:00:00+01:00")
-	if err != nil || annulled.Ledger.Questions[1].Status != ledger.QuestionAnnulled {
-		t.Fatalf("annulled = %#v, %v", annulled, err)
-	}
-	if _, err := BuildQuestionDispute(model, "q-election-coalition", DisputeInput{Reason: "too early"}, "2026-10-17T00:00:00+01:00"); app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("unresolved dispute error = %v", err)
-	}
-	badOutcome := "missing-option"
-	if _, err := BuildQuestionResolve(closed.Ledger, "q-election-coalition", ResolutionInput{Outcome: ResolutionOutcome{Text: &badOutcome}, OutcomeKnownAt: "2026-10-15T12:00:00+01:00", Sources: []EvidenceSourceInput{{Title: "Source", URL: "https://example.org", RetrievedAt: "2026-10-15T12:00:00+01:00"}}}, "2026-10-15T12:05:00+01:00"); app.ErrorCodeOf(err) != app.CodeInvalidData {
-		t.Fatalf("invalid typed outcome error = %v", err)
+	if _, err := BuildQuestionRevise(disputed.Ledger, "q-one", binaryInitialQuestion().Revision, "2027-01-03T00:00:00Z"); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("terminal revise error = %v", err)
 	}
 }

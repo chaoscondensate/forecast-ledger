@@ -1,24 +1,61 @@
 {
   "$defs": {
-    "evidenceSourceInput": {
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "resolutionInput": {
       "additionalProperties": false,
       "properties": {
-        "content_sha256": {
-          "$ref": "#/$defs/hex32"
+        "notes": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/scalarValue"
+        },
+        "outcome_known_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "question_revision_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/resolutionSource"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "question_revision_id",
+        "outcome",
+        "outcome_known_at",
+        "sources"
+      ],
+      "type": "object"
+    },
+    "resolutionSource": {
+      "additionalProperties": false,
+      "properties": {
+        "content_digest": {
+          "$ref": "#/$defs/sha256"
         },
         "published_at": {
           "$ref": "#/$defs/timestamp"
         },
         "publisher": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "retrieved_at": {
           "$ref": "#/$defs/timestamp"
         },
         "title": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "url": {
           "format": "uri",
@@ -32,57 +69,47 @@
       ],
       "type": "object"
     },
-    "hex32": {
-      "pattern": "^[0-9a-f]{64}$",
-      "type": "string"
+    "scalarValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
     },
-    "resolution": {
+    "sha256": {
       "additionalProperties": false,
       "properties": {
-        "notes": {
-          "minLength": 0,
+        "algorithm": {
+          "const": "sha-256"
+        },
+        "value": {
+          "pattern": "^[0-9a-f]{64}$",
           "type": "string"
-        },
-        "outcome": {
-          "oneOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "minLength": 1,
-              "type": "string"
-            }
-          ]
-        },
-        "outcome_known_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "recorded_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "sources": {
-          "items": {
-            "$ref": "#/$defs/evidenceSourceInput"
-          },
-          "minItems": 1,
-          "type": "array"
         }
       },
       "required": [
-        "outcome",
-        "outcome_known_at",
-        "sources"
+        "algorithm",
+        "value"
       ],
       "type": "object"
     },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
     "timestamp": {
-      "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
       "type": "string"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/resolution/v1",
-  "$ref": "#/$defs/resolution",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/resolution/v2",
+  "$ref": "#/$defs/resolutionInput",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

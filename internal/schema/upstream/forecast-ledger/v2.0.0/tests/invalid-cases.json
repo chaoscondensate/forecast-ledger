@@ -1,0 +1,358 @@
+[
+  {
+    "name": "schema-version-mismatch",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/schema_version", "value": "1.3.0" }
+    ],
+    "expect_contains": "$.schema_version"
+  },
+  {
+    "name": "impossible-timestamp",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/created_at", "value": "2026-99-99T99:99:99+99:99" }
+    ],
+    "expect_contains": "$.created_at"
+  },
+  {
+    "name": "outcome-space-domain-mismatch",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/revisions/0/domain",
+        "value": { "kind": "numeric", "values": { "kind": "continuous" } }
+      }
+    ],
+    "expect_contains": "must match outcome_space.kind"
+  },
+  {
+    "name": "sealed-forecast-with-plaintext",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      { "op": "replace", "path": "/questions/0/forecasts/0/visibility", "value": "sealed" }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0]"
+  },
+  {
+    "name": "invalid-sha256-length",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/commitment/commitment_hash/value",
+        "value": "a"
+      }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0]"
+  },
+  {
+    "name": "pmf-probabilities-do-not-sum",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/1/forecasts/0/representations/0/entries/2/probability",
+        "value": "0.12"
+      }
+    ],
+    "expect_contains": "probabilities sum to 0.99, not 1"
+  },
+  {
+    "name": "noncanonical-probability",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/representations/0/probability",
+        "value": "0.620"
+      }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0].representations[0]"
+  },
+  {
+    "name": "pmf-missing-option",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "remove", "path": "/questions/1/forecasts/0/representations/0/entries/2" }
+    ],
+    "expect_contains": "must cover every option exactly once"
+  },
+  {
+    "name": "option-set-version-mismatch",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/1/forecasts/0/representations/0/option_set_ref/version",
+        "value": 2
+      }
+    ],
+    "expect_contains": "must bind the exact question option-set version"
+  },
+  {
+    "name": "bin-gap",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/revisions/0/domain/bin_sets/0/bins/1/lower",
+        "value": "821"
+      }
+    ],
+    "expect_contains": "bins must have neither gaps nor overlaps"
+  },
+  {
+    "name": "bin-overlap",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/revisions/0/domain/bin_sets/0/bins/1/lower",
+        "value": "819"
+      }
+    ],
+    "expect_contains": "bins must have neither gaps nor overlaps"
+  },
+  {
+    "name": "binned-pmf-tails-do-not-sum",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/forecasts/0/representations/4/right_tail_probability",
+        "value": "0.05"
+      }
+    ],
+    "expect_contains": "bin and tail probabilities sum to 0.99, not 1"
+  },
+  {
+    "name": "noncanonical-numeric-value",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/forecasts/0/representations/0/value",
+        "value": "842.50"
+      }
+    ],
+    "expect_contains": "must be a canonical decimal string"
+  },
+  {
+    "name": "quantiles-not-monotonic",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/forecasts/0/representations/1/points/2/value",
+        "value": "800"
+      }
+    ],
+    "expect_contains": "quantile values must be non-decreasing"
+  },
+  {
+    "name": "cdf-not-monotonic",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/2/forecasts/0/representations/2/points/1/probability",
+        "value": "0.05"
+      }
+    ],
+    "expect_contains": "CDF probabilities must be non-decreasing"
+  },
+  {
+    "name": "unknown-platform-provenance",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/revisions/0/provenance/platform",
+        "value": "missing-platform"
+      }
+    ],
+    "expect_contains": "unknown platform"
+  },
+  {
+    "name": "unknown-group-reference",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/relationships/0/group_id",
+        "value": "missing-group"
+      }
+    ],
+    "expect_contains": "unknown group"
+  },
+  {
+    "name": "duplicate-question-id",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/questions/1/id", "value": "q-central-bank-cut" }
+    ],
+    "expect_contains": "duplicate value"
+  },
+  {
+    "name": "forecast-before-bound-revision",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/forecasted_at",
+        "value": "2026-07-31T10:00:00+01:00"
+      },
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/recorded_at",
+        "value": "2026-07-31T10:01:00+01:00"
+      }
+    ],
+    "expect_contains": "must not precede the bound revision effective_at"
+  },
+  {
+    "name": "tampered-revealed-probability",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/representations/0/probability",
+        "value": "0.66"
+      }
+    ],
+    "expect_contains": "does not match the decrypted sealed bundle"
+  },
+  {
+    "name": "resolved-outcome-outside-domain",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/questions/0/resolution/outcome", "value": "yes" }
+    ],
+    "expect_contains": "must be a boolean"
+  },
+  {
+    "name": "invalid-lifecycle-transition",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/1/forecasts/1/lifecycle_events/1/type",
+        "value": "expired"
+      }
+    ],
+    "expect_contains": "cannot deactivate an inactive forecast"
+  },
+  {
+    "name": "conditional-reference-cycle",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "add",
+        "path": "/relationships/1",
+        "value": {
+          "id": "conditional-one",
+          "kind": "conditional",
+          "parent_question_id": "q-central-bank-cut",
+          "parent_question_revision_id": "qr-central-bank-cut-1",
+          "parent_outcome": true,
+          "child_question_id": "q-election-coalition"
+        }
+      },
+      {
+        "op": "add",
+        "path": "/relationships/2",
+        "value": {
+          "id": "conditional-two",
+          "kind": "conditional",
+          "parent_question_id": "q-election-coalition",
+          "parent_question_revision_id": "qr-election-coalition-2",
+          "parent_outcome": "unity",
+          "child_question_id": "q-central-bank-cut"
+        }
+      }
+    ],
+    "expect_contains": "conditional relationships must be acyclic"
+  },
+  {
+    "name": "not-applicable-condition-was-satisfied",
+    "base": "tests/conformance/valid/relationships-and-datetime.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/relationships/0/parent_outcome",
+        "value": "high"
+      }
+    ],
+    "expect_contains": "cannot be not_applicable when the parent outcome satisfies the condition"
+  },
+  {
+    "name": "rfc3161-timestamp-after-known-outcome",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/integrity",
+        "value": {
+          "status": "verified",
+          "target": {
+            "scope": "forecast-envelope/v2",
+            "canonicalization": "RFC8785",
+            "artifact_path": "tests/vectors/forecast-seal-v1.json",
+            "digest": {
+              "algorithm": "sha-256",
+              "value": "59f3996b22e135d5c2d1a6977c2e5dfa025d3f2ececd226b6fb4096ddc7272f5"
+            }
+          },
+          "timestamps": [
+            {
+              "type": "rfc3161",
+              "request_path": "proofs/timestamps/f-central-bank-cut-001.tsq",
+              "response_path": "proofs/timestamps/f-central-bank-cut-001.tsr",
+              "tsa_url": "https://tsa.example.com/",
+              "hash_algorithm": "sha256",
+              "state": "verified",
+              "gen_time": "2026-09-17T12:01:00+01:00",
+              "policy_oid": "1.2.3.4.1",
+              "serial_number": "0123456789abcdef",
+              "ca_bundle_path": "proofs/timestamps/tsa-ca.pem"
+            }
+          ],
+          "verified_at": "2026-09-17T12:02:00+01:00"
+        }
+      }
+    ],
+    "expect_contains": "must contain a verified RFC 3161 timestamp predating the known outcome"
+  },
+  {
+    "name": "unsupported-opentimestamps-timestamp",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/integrity",
+        "value": {
+          "status": "pending",
+          "target": {
+            "scope": "forecast-envelope/v2",
+            "canonicalization": "RFC8785",
+            "artifact_path": "proofs/targets/f-central-bank-cut-001.json",
+            "digest": {
+              "algorithm": "sha-256",
+              "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          "timestamps": [
+            {
+              "type": "opentimestamps",
+              "proof_path": "proofs/targets/f-central-bank-cut-001.json.ots",
+              "state": "pending"
+            }
+          ]
+        }
+      }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0].integrity"
+  }
+]

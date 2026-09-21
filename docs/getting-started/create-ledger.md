@@ -11,7 +11,7 @@ next: ../how-to/index.md
 -->
 
 `forecast-ledger init` creates one new JSON or YAML ledger. It never overwrites
-an existing file and makes no network request. Forecast Ledger schema v1.3.0
+an existing file and makes no network request. Forecast Ledger schema v2.0.0
 allows an empty question list. Ordinary authoring uses flags only.
 
 Create an empty ledger first:
@@ -31,17 +31,19 @@ Add a backlog question and, later, its first forecast directly from flags:
 forecast-ledger question add \
   --file ledger.yaml \
   --question q-example \
-  --type binary \
+  --revision-id qr-example-1 \
   --title "Will the named event happen by the deadline?" \
   --resolution-criteria "Resolve from the named public source." \
   --created-at "26 Aug 2026 12:00" \
-  --expected-resolution-at "15 Jan 2027"
+  --expected-resolution-at "15 Jan 2027" \
+  --outcome-kind binary
 forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-example \
   --forecast f-example-001 \
-  --value-kind binary \
-  --probability-bp 6500
+  --question-revision qr-example-1 \
+  --probability 0.65 \
+  --probability-outcome
 ```
 
 The forecast flags are shown in [Manage public forecasts](../how-to/manage-public-forecasts.md).
@@ -68,9 +70,10 @@ Equality at inclusive forecast-window and recorded-time boundaries is valid.
 For a sealed first forecast, keep only the private bundle in an owner-only file:
 
 ```yaml
-value:
-  kind: binary
-  probability_bp: 6500
+representations:
+  - kind: probability
+    outcome: true
+    probability: "0.65"
 rationale: Private reasoning.
 key_factors:
   - A private observation.
@@ -88,10 +91,11 @@ forecast-ledger init \
   --forecaster-id me \
   --forecaster-name "My Name" \
   --question q-example \
-  --question-type binary \
+  --question-revision-id qr-example-1 \
   --question-title "Will the named event happen?" \
   --question-resolution-criteria "Resolve from the named public source." \
   --question-expected-resolution-at 2027-01-15T12:00:00Z \
+  --question-outcome-kind binary \
   --initial-forecast f-example-001 \
   --initial-visibility sealed \
   --initial-forecasted-at 2026-09-01T09:00:00+01:00 \
@@ -106,9 +110,9 @@ ledger cannot be created after the key is durable, the key is retained and the
 error returns a safe recovery instruction. Keep the key outside publication
 packages and source repositories.
 
-Initialization supports `binary`, `multiple_choice`, `numeric`, and `date`
-questions. IDs are global stable slugs, probabilities use integer basis points,
-numeric values use exact decimal strings. CLI timestamp flags accept RFC 3339,
+Initialization supports `binary`, `categorical`, `ordinal`, `numeric`, `date`,
+and `datetime` questions. IDs are global stable slugs. Probabilities and numeric
+values use exact canonical decimal strings, never binary floating point. CLI timestamp flags accept RFC 3339,
 ISO local date/time, or an English month date such as `10 Aug 2030`. Local
 forms use `--timezone`; ambiguous DST wall times require an explicit offset.
 
@@ -128,7 +132,7 @@ Omitted fields stay unchanged. `--clear-*` removes only optional title,
 description, contact, profiles, or members. A switch to a team must
 set `kind: team` and at least two unique members in the same patch; a switch to
 an individual must set `kind: individual` and `members: null` together. Ledger,
-forecaster, question, and forecast IDs are immutable here. Forecast Ledger v1
+forecaster, question, and forecast IDs are immutable here. Forecast Ledger v2
 stores only current forecaster metadata, has no internal identity history, and
 does not prove authorship.
 

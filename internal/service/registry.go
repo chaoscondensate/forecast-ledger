@@ -11,6 +11,8 @@ const (
 	SelectionForecast         SelectionKind = "forecast"
 	SelectionQuestionForecast SelectionKind = "question_forecast"
 	SelectionTarget           SelectionKind = "target"
+	SelectionGroup            SelectionKind = "group"
+	SelectionRelationship     SelectionKind = "relationship"
 )
 
 type RequestMode string
@@ -61,20 +63,32 @@ func OperationDefinitions() []OperationDefinition {
 		definition(OperationPlatformShow, "platform show", "platform_show", SelectionPlatform, "", RequestNone),
 		definition(OperationPlatformRemove, "platform remove", "platform_remove", SelectionPlatform, "", RequestNone),
 		definition(OperationQuestionAdd, "question add", "question_add", SelectionQuestion, InputSchemaQuestionAdd, RequestDirectWithInitialSecret,
-			RequestField{Name: "type", Required: true, Type: "string", Description: "Question type", Enum: []string{"binary", "multiple_choice", "numeric", "date"}},
 			RequestField{Name: "initial_secret_input_file", Type: "string", Description: "Protected private bundle for a sealed first forecast"},
 			RequestField{Name: "key_file", Type: "string", Description: "New protected key reference for a sealed first forecast"}),
 		definition(OperationQuestionUpdate, "question update", "question_update", SelectionQuestion, InputSchemaQuestionPatch, RequestDirect),
+		definition(OperationQuestionRevise, "question revise", "question_revise", SelectionQuestion, InputSchemaQuestionRevision, RequestDirect),
 		definition(OperationQuestionList, "question list", "question_list", SelectionLedger, "", RequestNone),
 		definition(OperationQuestionShow, "question show", "question_show", SelectionQuestion, "", RequestNone),
 		definition(OperationQuestionResolve, "question resolve", "question_resolve", SelectionQuestion, InputSchemaResolution, RequestDirect),
-		definition(OperationQuestionAnnul, "question annul", "question_annul", SelectionQuestion, InputSchemaAnnul, RequestDirect),
-		definition(OperationQuestionDispute, "question dispute", "question_dispute", SelectionQuestion, InputSchemaDispute, RequestDirect),
+		definition(OperationQuestionAmbiguous, "question ambiguous", "question_ambiguous", SelectionQuestion, InputSchemaUnresolvedResolution, RequestDirect),
+		definition(OperationQuestionVoid, "question void", "question_void", SelectionQuestion, InputSchemaUnresolvedResolution, RequestDirect),
+		definition(OperationQuestionDispute, "question dispute", "question_dispute", SelectionQuestion, InputSchemaUnresolvedResolution, RequestDirect),
+		definition(OperationQuestionNotApplicable, "question not-applicable", "question_not_applicable", SelectionQuestion, InputSchemaNotApplicable, RequestDirect),
+		definition(OperationGroupAdd, "group add", "group_add", SelectionGroup, InputSchemaGroupCreate, RequestDirect),
+		definition(OperationGroupUpdate, "group update", "group_update", SelectionGroup, InputSchemaGroupPatch, RequestDirect),
+		definition(OperationGroupList, "group list", "group_list", SelectionLedger, "", RequestNone),
+		definition(OperationGroupShow, "group show", "group_show", SelectionGroup, "", RequestNone),
+		definition(OperationGroupRemove, "group remove", "group_remove", SelectionGroup, "", RequestNone),
+		definition(OperationRelationshipAdd, "relationship add", "relationship_add", SelectionRelationship, InputSchemaRelationship, RequestDirect),
+		definition(OperationRelationshipList, "relationship list", "relationship_list", SelectionLedger, "", RequestNone),
+		definition(OperationRelationshipShow, "relationship show", "relationship_show", SelectionRelationship, "", RequestNone),
+		definition(OperationRelationshipRemove, "relationship remove", "relationship_remove", SelectionRelationship, "", RequestNone),
 		definition(OperationForecastAdd, "forecast add", "forecast_add", SelectionForecast, InputSchemaForecastCreate, RequestDirect),
 		definition(OperationForecastList, "forecast list", "forecast_list", SelectionQuestion, "", RequestNone),
 		definition(OperationForecastShow, "forecast show", "forecast_show", SelectionForecast, "", RequestNone),
 		definition(OperationForecastSeal, "forecast seal", "forecast_seal", SelectionForecast, InputSchemaForecastSealPrivate, RequestSecret,
 			RequestField{Name: "secret_input_file", Required: true, Type: "string", Description: "Protected private forecast bundle"},
+			requiredString("question_revision_id", "Bound question revision ID"),
 			RequestField{Name: "forecasted_at", Type: "string", Description: "Optional exact RFC 3339 forecast time"},
 			RequestField{Name: "recorded_at", Type: "string", Description: "Optional exact RFC 3339 record time"},
 			RequestField{Name: "public_note", Type: "string", Description: "Optional public note"},
@@ -83,6 +97,9 @@ func OperationDefinitions() []OperationDefinition {
 		definition(OperationForecastReveal, "forecast reveal", "forecast_reveal", SelectionForecast, "", RequestNone,
 			requiredString("key_file", "Protected key reference"),
 			RequestField{Name: "revealed_at", Type: "string", Description: "Optional exact RFC 3339 reveal time"}),
+		definition(OperationForecastWithdraw, "forecast withdraw", "forecast_withdraw", SelectionForecast, InputSchemaLifecycle, RequestDirect),
+		definition(OperationForecastExpire, "forecast expire", "forecast_expire", SelectionForecast, InputSchemaLifecycle, RequestDirect),
+		definition(OperationForecastReaffirm, "forecast reaffirm", "forecast_reaffirm", SelectionForecast, InputSchemaLifecycle, RequestDirect),
 		definition(OperationForecastKeyHintUpdate, "forecast key-hint update", "forecast_key_hint_update", SelectionForecast, InputSchemaKeyHintUpdate, RequestDirect),
 		definition(OperationTargetBuild, "target build", "target_build", SelectionTarget, "", RequestNone),
 		definition(OperationTargetCheck, "target check", "target_check", SelectionTarget, "", RequestNone),

@@ -23,17 +23,20 @@ func TestEmbeddedSchemaCompilesAndValidatesBothFormats(t *testing.T) {
 		parse  func(string) (*document.Document, error)
 		format string
 	}{
-		{name: "empty-ledger.json", format: "empty-json", parse: func(input string) (*document.Document, error) {
+		{name: "examples/valid/empty-ledger.json", format: "empty-json", parse: func(input string) (*document.Document, error) {
 			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
 		}},
-		{name: "individual-ledger.json", format: "json", parse: func(input string) (*document.Document, error) {
+		{name: "examples/valid/individual-ledger.json", format: "json", parse: func(input string) (*document.Document, error) {
 			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
 		}},
-		{name: "question-without-forecasts.yaml", format: "backlog-yaml", parse: func(input string) (*document.Document, error) {
+		{name: "examples/valid/question-without-forecasts.yaml", format: "backlog-yaml", parse: func(input string) (*document.Document, error) {
 			return document.ParseYAML(strings.NewReader(input), document.DefaultLimits)
 		}},
-		{name: "team-ledger.yaml", format: "yaml", parse: func(input string) (*document.Document, error) {
+		{name: "examples/valid/team-ledger.yaml", format: "yaml", parse: func(input string) (*document.Document, error) {
 			return document.ParseYAML(strings.NewReader(input), document.DefaultLimits)
+		}},
+		{name: "tests/conformance/valid/relationships-and-datetime.json", format: "relationships-json", parse: func(input string) (*document.Document, error) {
+			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
 		}},
 	}
 	fixtureFS := contractschema.Conformance()
@@ -155,7 +158,7 @@ func TestSchemaCompilerRejectsMalformedMetadataAndExternalRefs(t *testing.T) {
 
 func validIndividualDocument(t *testing.T) map[string]any {
 	t.Helper()
-	data, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	data, err := fs.ReadFile(contractschema.Conformance(), "examples/valid/individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}

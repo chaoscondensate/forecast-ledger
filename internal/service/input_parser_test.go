@@ -69,7 +69,7 @@ func TestDecodeOperationInputAcceptsTypedJSONAndYAML(t *testing.T) {
 }
 
 func TestDecodeOperationInputNormalizesOnlyTimestampTypedYAMLScalars(t *testing.T) {
-	input := "forecasted_at: 2026-09-01T09:00:00+01:00\nvalue:\n  kind: binary\n  probability_bp: 5000\n"
+	input := "question_revision_id: qr-one\nforecasted_at: 2026-09-01T09:00:00+01:00\nrepresentations:\n  - kind: probability\n    outcome: true\n    probability: '0.5'\n"
 	var destination ForecastCreateInput
 	if err := DecodeOperationInput(context.Background(), "-", strings.NewReader(input), InputSchemaForecastCreate, &destination); err != nil {
 		t.Fatal(err)

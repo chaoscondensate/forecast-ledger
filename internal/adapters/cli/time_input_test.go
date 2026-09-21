@@ -60,7 +60,7 @@ func TestHumanTimeNormalizationAppearsInStructuredSuccessAndDryRun(t *testing.T)
 		}
 	}
 
-	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--dry-run", "--file", path, "--question", "q-dry", "--type", "binary", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "10 Aug 2030")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--dry-run", "--file", path, "--question", "q-dry", "--revision-id", "qr-dry", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "10 Aug 2030", "--outcome-kind", "binary")
 	if code != 0 {
 		t.Fatalf("dry-run code=%d stderr=%s", code, stderr)
 	}
@@ -77,8 +77,8 @@ func TestCLIForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
 	effects.Clock = fixedCLIClock{value: time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)}
 	commands := [][]string{
 		{"forecast-ledger", "init", "--file", path, "--ledger-id", "clock", "--timezone", "Europe/London", "--forecaster-id", "owner", "--forecaster-name", "Owner"},
-		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-clock", "--type", "binary", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "10 Aug 2030"},
-		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-clock", "--forecast", "f-clock", "--value-kind", "binary", "--probability-bp", "5000"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-clock", "--revision-id", "qr-clock", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "10 Aug 2030", "--outcome-kind", "binary"},
+		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-clock", "--forecast", "f-clock", "--question-revision", "qr-clock", "--probability", "0.5", "--probability-outcome"},
 	}
 	for _, arguments := range commands {
 		code, _, stderr := runCLIWithEffects(effects, arguments...)

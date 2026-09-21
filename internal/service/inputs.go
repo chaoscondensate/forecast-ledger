@@ -3,13 +3,11 @@ package service
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 // Optional distinguishes an omitted patch field from an explicit JSON null.
-// A present non-null value is stored in Value.
 type Optional[T any] struct {
 	Set   bool
 	Null  bool
@@ -35,33 +33,43 @@ func (o Optional[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(o.Value)
 }
 
+// RevisionInput is the complete immutable semantic meaning of a question at
+// one point in time. Revision append always supplies the whole value; patches
+// are deliberately unsupported.
+type RevisionInput struct {
+	ID                   ledger.Slug         `json:"id"`
+	EffectiveAt          ledger.Timestamp    `json:"effective_at"`
+	RecordedAt           *ledger.Timestamp   `json:"recorded_at,omitempty"`
+	Title                string              `json:"title"`
+	ResolutionCriteria   string              `json:"resolution_criteria"`
+	ForecastingOpensAt   *ledger.Timestamp   `json:"forecasting_opens_at,omitempty"`
+	ExpectedResolutionAt ledger.Timestamp    `json:"expected_resolution_at"`
+	OutcomeSpace         ledger.OutcomeSpace `json:"outcome_space"`
+	Domain               ledger.Domain       `json:"domain"`
+	Provenance           *ledger.Provenance  `json:"provenance,omitempty"`
+}
+
 type InitialForecastInput struct {
-	Visibility           ledger.ForecastVisibility `json:"visibility"`
-	ID                   ledger.Slug               `json:"id"`
-	ForecastedAt         ledger.Timestamp          `json:"forecasted_at"`
-	RecordedAt           *ledger.Timestamp         `json:"recorded_at,omitempty"`
-	Value                ledger.ForecastValue      `json:"value"`
-	Rationale            *string                   `json:"rationale,omitempty"`
-	KeyFactors           *[]string                 `json:"key_factors,omitempty"`
-	Comment              *string                   `json:"comment,omitempty"`
-	PublicNote           *string                   `json:"public_note,omitempty"`
-	SupersedesForecastID *ledger.Slug              `json:"supersedes_forecast_id,omitempty"`
+	Visibility           ledger.ForecastVisibility       `json:"visibility"`
+	ID                   ledger.Slug                     `json:"id"`
+	ForecastedAt         ledger.Timestamp                `json:"forecasted_at"`
+	RecordedAt           *ledger.Timestamp               `json:"recorded_at,omitempty"`
+	Representations      []ledger.ForecastRepresentation `json:"representations"`
+	Rationale            *string                         `json:"rationale,omitempty"`
+	KeyFactors           *[]string                       `json:"key_factors,omitempty"`
+	Comment              *string                         `json:"comment,omitempty"`
+	PublicNote           *string                         `json:"public_note,omitempty"`
+	Provenance           *ledger.Provenance              `json:"provenance,omitempty"`
+	SupersedesForecastID *ledger.Slug                    `json:"supersedes_forecast_id,omitempty"`
 }
 
 type InitialQuestionInput struct {
-	ID                   ledger.Slug           `json:"id"`
-	Title                string                `json:"title"`
-	Type                 ledger.QuestionType   `json:"type"`
-	ResolutionCriteria   string                `json:"resolution_criteria"`
-	CreatedAt            *ledger.Timestamp     `json:"created_at,omitempty"`
-	ForecastWindow       ledger.ForecastWindow `json:"forecast_window"`
-	ExpectedResolutionAt ledger.Timestamp      `json:"expected_resolution_at"`
-	Options              *[]ledger.Option      `json:"options,omitempty"`
-	Unit                 *ledger.Unit          `json:"unit,omitempty"`
-	PlatformRefs         *[]ledger.PlatformRef `json:"platform_refs,omitempty"`
-	Tags                 *[]ledger.Slug        `json:"tags,omitempty"`
-	Notes                *string               `json:"notes,omitempty"`
-	InitialForecast      *InitialForecastInput `json:"initial_forecast,omitempty"`
+	ID              ledger.Slug           `json:"id"`
+	CreatedAt       *ledger.Timestamp     `json:"created_at,omitempty"`
+	Revision        RevisionInput         `json:"revision"`
+	Tags            *[]ledger.Slug        `json:"tags,omitempty"`
+	Notes           *string               `json:"notes,omitempty"`
+	InitialForecast *InitialForecastInput `json:"initial_forecast,omitempty"`
 }
 
 type InitInput struct {
@@ -110,40 +118,24 @@ type PlatformPatchInput struct {
 	Account Optional[PlatformAccountPatchInput] `json:"account"`
 }
 
-// QuestionAddInput deliberately excludes type. The CLI's required scalar
-// --type is normalized into NormalizedQuestionCreate before validation.
 type QuestionAddInput struct {
-	Title                string                `json:"title"`
-	ResolutionCriteria   string                `json:"resolution_criteria"`
-	CreatedAt            *ledger.Timestamp     `json:"created_at,omitempty"`
-	ForecastWindow       ledger.ForecastWindow `json:"forecast_window"`
-	ExpectedResolutionAt ledger.Timestamp      `json:"expected_resolution_at"`
-	Options              *[]ledger.Option      `json:"options,omitempty"`
-	Unit                 *ledger.Unit          `json:"unit,omitempty"`
-	PlatformRefs         *[]ledger.PlatformRef `json:"platform_refs,omitempty"`
-	Tags                 *[]ledger.Slug        `json:"tags,omitempty"`
-	Notes                *string               `json:"notes,omitempty"`
-	InitialForecast      *InitialForecastInput `json:"initial_forecast,omitempty"`
+	CreatedAt       *ledger.Timestamp     `json:"created_at,omitempty"`
+	Revision        RevisionInput         `json:"revision"`
+	Tags            *[]ledger.Slug        `json:"tags,omitempty"`
+	Notes           *string               `json:"notes,omitempty"`
+	InitialForecast *InitialForecastInput `json:"initial_forecast,omitempty"`
 }
 
 type NormalizedQuestionCreate struct {
 	ID    ledger.Slug
-	Type  ledger.QuestionType
 	Input QuestionAddInput
 }
 
 func NormalizeInitialQuestion(input InitialQuestionInput) NormalizedQuestionCreate {
-	return NormalizedQuestionCreate{
-		ID:   input.ID,
-		Type: input.Type,
-		Input: QuestionAddInput{
-			Title: input.Title, ResolutionCriteria: input.ResolutionCriteria,
-			CreatedAt: input.CreatedAt, ForecastWindow: input.ForecastWindow,
-			ExpectedResolutionAt: input.ExpectedResolutionAt, Options: input.Options,
-			Unit: input.Unit, PlatformRefs: input.PlatformRefs, Tags: input.Tags,
-			Notes: input.Notes, InitialForecast: input.InitialForecast,
-		},
-	}
+	return NormalizedQuestionCreate{ID: input.ID, Input: QuestionAddInput{
+		CreatedAt: input.CreatedAt, Revision: input.Revision, Tags: input.Tags,
+		Notes: input.Notes, InitialForecast: input.InitialForecast,
+	}}
 }
 
 type InitialCreationShape string
@@ -180,89 +172,51 @@ func classifyInitialForecast(input *InitialForecastInput) (InitialCreationShape,
 	}
 }
 
-type ForecastWindowPatchInput struct {
-	OpensAt Optional[ledger.Timestamp] `json:"opens_at"`
-}
-
+// QuestionPatchInput contains only mutable question-level metadata. Meaning is
+// changed by appending RevisionInput, never by rewriting an older revision.
 type QuestionPatchInput struct {
-	Title                Optional[string]                   `json:"title"`
-	ResolutionCriteria   Optional[string]                   `json:"resolution_criteria"`
-	ForecastWindow       Optional[ForecastWindowPatchInput] `json:"forecast_window"`
-	ExpectedResolutionAt Optional[ledger.Timestamp]         `json:"expected_resolution_at"`
-	PlatformRefs         Optional[[]ledger.PlatformRef]     `json:"platform_refs"`
-	Tags                 Optional[[]ledger.Slug]            `json:"tags"`
-	Notes                Optional[string]                   `json:"notes"`
-	Status               Optional[ledger.QuestionStatus]    `json:"status"`
+	Tags   Optional[[]ledger.Slug]         `json:"tags"`
+	Notes  Optional[string]                `json:"notes"`
+	Status Optional[ledger.QuestionStatus] `json:"status"`
 }
 
 type ForecastCreateInput struct {
-	ForecastedAt         ledger.Timestamp     `json:"forecasted_at"`
-	RecordedAt           *ledger.Timestamp    `json:"recorded_at,omitempty"`
-	Value                ledger.ForecastValue `json:"value"`
-	Rationale            *string              `json:"rationale,omitempty"`
-	KeyFactors           *[]string            `json:"key_factors,omitempty"`
-	Comment              *string              `json:"comment,omitempty"`
-	PublicNote           *string              `json:"public_note,omitempty"`
-	SupersedesForecastID *ledger.Slug         `json:"supersedes_forecast_id,omitempty"`
+	QuestionRevisionID   ledger.Slug                     `json:"question_revision_id"`
+	ForecastedAt         ledger.Timestamp                `json:"forecasted_at"`
+	RecordedAt           *ledger.Timestamp               `json:"recorded_at,omitempty"`
+	Representations      []ledger.ForecastRepresentation `json:"representations"`
+	Rationale            *string                         `json:"rationale,omitempty"`
+	KeyFactors           *[]string                       `json:"key_factors,omitempty"`
+	Comment              *string                         `json:"comment,omitempty"`
+	PublicNote           *string                         `json:"public_note,omitempty"`
+	Provenance           *ledger.Provenance              `json:"provenance,omitempty"`
+	SupersedesForecastID *ledger.Slug                    `json:"supersedes_forecast_id,omitempty"`
 }
 
 type SealedForecastInput struct {
-	ForecastedAt         ledger.Timestamp     `json:"forecasted_at"`
-	RecordedAt           *ledger.Timestamp    `json:"recorded_at,omitempty"`
-	Value                ledger.ForecastValue `json:"value"`
-	Rationale            string               `json:"rationale"`
-	KeyFactors           []string             `json:"key_factors"`
-	Comment              string               `json:"comment"`
-	PublicNote           *string              `json:"public_note,omitempty"`
-	SupersedesForecastID *ledger.Slug         `json:"supersedes_forecast_id,omitempty"`
+	QuestionRevisionID   ledger.Slug                     `json:"question_revision_id"`
+	ForecastedAt         ledger.Timestamp                `json:"forecasted_at"`
+	RecordedAt           *ledger.Timestamp               `json:"recorded_at,omitempty"`
+	Representations      []ledger.ForecastRepresentation `json:"representations"`
+	Rationale            string                          `json:"rationale"`
+	KeyFactors           []string                        `json:"key_factors"`
+	Comment              string                          `json:"comment"`
+	PublicNote           *string                         `json:"public_note,omitempty"`
+	Provenance           *ledger.Provenance              `json:"provenance,omitempty"`
+	SupersedesForecastID *ledger.Slug                    `json:"supersedes_forecast_id,omitempty"`
 }
 
-// SealedForecastPrivateInput is the protected portion of direct CLI sealing.
-// Public selectors and metadata stay in argv; these values never do.
+// SealedForecastPrivateInput is the only protected authoring input. All IDs,
+// times, selectors, provenance and public notes remain direct public fields.
 type SealedForecastPrivateInput struct {
-	Value      ledger.ForecastValue `json:"value"`
-	Rationale  string               `json:"rationale"`
-	KeyFactors []string             `json:"key_factors"`
-	Comment    string               `json:"comment"`
+	Representations []ledger.ForecastRepresentation `json:"representations"`
+	Rationale       string                          `json:"rationale"`
+	KeyFactors      []string                        `json:"key_factors"`
+	Comment         string                          `json:"comment"`
 }
 
 type KeyHintUpdateInput struct {
 	KeyHint string `json:"key_hint"`
-}
-
-type ResolutionOutcome struct {
-	Boolean *bool
-	Text    *string
-}
-
-func (o *ResolutionOutcome) UnmarshalJSON(data []byte) error {
-	trimmed := bytes.TrimSpace(data)
-	if bytes.Equal(trimmed, []byte("true")) || bytes.Equal(trimmed, []byte("false")) {
-		var value bool
-		if err := json.Unmarshal(trimmed, &value); err != nil {
-			return err
-		}
-		o.Boolean = &value
-		o.Text = nil
-		return nil
-	}
-	var value string
-	if err := json.Unmarshal(trimmed, &value); err != nil {
-		return fmt.Errorf("outcome must be a boolean or exact string: %w", err)
-	}
-	o.Text = &value
-	o.Boolean = nil
-	return nil
-}
-
-func (o ResolutionOutcome) MarshalJSON() ([]byte, error) {
-	if o.Boolean != nil && o.Text == nil {
-		return json.Marshal(*o.Boolean)
-	}
-	if o.Text != nil && o.Boolean == nil {
-		return json.Marshal(*o.Text)
-	}
-	return nil, fmt.Errorf("outcome must contain exactly one typed value")
 }
 
 type EvidenceSourceInput struct {
@@ -271,27 +225,50 @@ type EvidenceSourceInput struct {
 	RetrievedAt   ledger.Timestamp  `json:"retrieved_at"`
 	Publisher     *string           `json:"publisher,omitempty"`
 	PublishedAt   *ledger.Timestamp `json:"published_at,omitempty"`
-	ContentSHA256 *ledger.Hex32     `json:"content_sha256,omitempty"`
+	ContentDigest *ledger.Digest    `json:"content_digest,omitempty"`
 }
 
 type ResolutionInput struct {
-	Outcome        ResolutionOutcome     `json:"outcome"`
-	OutcomeKnownAt ledger.Timestamp      `json:"outcome_known_at"`
-	RecordedAt     *ledger.Timestamp     `json:"recorded_at,omitempty"`
-	Sources        []EvidenceSourceInput `json:"sources"`
-	Notes          *string               `json:"notes,omitempty"`
+	QuestionRevisionID ledger.Slug           `json:"question_revision_id"`
+	Outcome            ledger.ScalarValue    `json:"outcome"`
+	OutcomeKnownAt     ledger.Timestamp      `json:"outcome_known_at"`
+	RecordedAt         *ledger.Timestamp     `json:"recorded_at,omitempty"`
+	Sources            []EvidenceSourceInput `json:"sources"`
+	Notes              *string               `json:"notes,omitempty"`
 }
 
-type AnnulInput struct {
+type UnresolvedResolutionInput struct {
 	Reason     string                `json:"reason"`
 	RecordedAt *ledger.Timestamp     `json:"recorded_at,omitempty"`
 	Sources    []EvidenceSourceInput `json:"sources,omitempty"`
 }
 
-type DisputeInput struct {
-	Reason     string                `json:"reason"`
-	RecordedAt *ledger.Timestamp     `json:"recorded_at,omitempty"`
-	Sources    []EvidenceSourceInput `json:"sources,omitempty"`
+type NotApplicableInput struct {
+	RelationshipID ledger.Slug       `json:"relationship_id"`
+	Reason         string            `json:"reason"`
+	RecordedAt     *ledger.Timestamp `json:"recorded_at,omitempty"`
+}
+
+type GroupCreateInput struct {
+	Title       string  `json:"title"`
+	Description *string `json:"description,omitempty"`
+}
+
+type GroupPatchInput struct {
+	Title       Optional[string] `json:"title"`
+	Description Optional[string] `json:"description"`
+}
+
+type RelationshipInput struct {
+	Relationship ledger.Relationship `json:"relationship"`
+}
+
+type LifecycleInput struct {
+	ID          ledger.Slug        `json:"id"`
+	EffectiveAt ledger.Timestamp   `json:"effective_at"`
+	RecordedAt  *ledger.Timestamp  `json:"recorded_at,omitempty"`
+	Reason      *string            `json:"reason,omitempty"`
+	Provenance  *ledger.Provenance `json:"provenance,omitempty"`
 }
 
 type PublicationBuildInput struct {

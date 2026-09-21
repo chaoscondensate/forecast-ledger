@@ -1,0 +1,163 @@
+{
+  "$schema": "../../../schema/forecast-ledger.schema.json",
+  "schema_version": "2.0.0",
+  "ledger_id": "relationships-conformance",
+  "created_at": "2026-09-01T09:00:00Z",
+  "default_timezone": "UTC",
+  "forecaster": {
+    "id": "conformance-forecaster",
+    "kind": "individual",
+    "name": "Conformance Forecaster"
+  },
+  "platforms": {},
+  "relationships": [
+    {
+      "id": "condition-low-demand",
+      "kind": "conditional",
+      "parent_question_id": "q-demand-level",
+      "parent_question_revision_id": "qr-demand-level-1",
+      "parent_outcome": "low",
+      "child_question_id": "q-low-demand-action"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q-demand-level",
+      "status": "resolved",
+      "created_at": "2026-09-01T09:00:00Z",
+      "current_revision_id": "qr-demand-level-1",
+      "revisions": [
+        {
+          "id": "qr-demand-level-1",
+          "effective_at": "2026-09-01T09:00:00Z",
+          "recorded_at": "2026-09-01T09:00:00Z",
+          "title": "What demand band will be observed?",
+          "resolution_criteria": "Resolve from the audited demand index.",
+          "expected_resolution_at": "2026-09-30T18:00:00Z",
+          "outcome_space": { "kind": "ordinal" },
+          "domain": {
+            "kind": "ordinal",
+            "option_set": {
+              "id": "demand-bands",
+              "version": 1,
+              "options": [
+                { "id": "low", "label": "Low" },
+                { "id": "medium", "label": "Medium" },
+                { "id": "high", "label": "High" }
+              ]
+            }
+          }
+        }
+      ],
+      "forecasts": [
+        {
+          "id": "f-demand-level-1",
+          "question_revision_id": "qr-demand-level-1",
+          "forecasted_at": "2026-09-02T10:00:00Z",
+          "recorded_at": "2026-09-02T10:00:10Z",
+          "visibility": "public",
+          "representations": [
+            {
+              "kind": "pmf",
+              "option_set_ref": { "id": "demand-bands", "version": 1 },
+              "entries": [
+                { "option_id": "low", "probability": "0.2" },
+                { "option_id": "medium", "probability": "0.5" },
+                { "option_id": "high", "probability": "0.3" }
+              ]
+            },
+            { "kind": "point", "statistic": "mode", "value": "medium" }
+          ],
+          "integrity": { "status": "unanchored" }
+        }
+      ],
+      "resolution": {
+        "status": "resolved",
+        "question_revision_id": "qr-demand-level-1",
+        "outcome": "high",
+        "outcome_known_at": "2026-09-30T17:00:00Z",
+        "recorded_at": "2026-09-30T17:10:00Z",
+        "sources": [
+          {
+            "title": "Audited demand index",
+            "url": "https://example.org/demand-index",
+            "retrieved_at": "2026-09-30T17:05:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "q-low-demand-action",
+      "status": "not_applicable",
+      "created_at": "2026-09-01T09:05:00Z",
+      "current_revision_id": "qr-low-demand-action-1",
+      "revisions": [
+        {
+          "id": "qr-low-demand-action-1",
+          "effective_at": "2026-09-01T09:05:00Z",
+          "recorded_at": "2026-09-01T09:05:00Z",
+          "title": "Will the contingency plan start within 24 hours of a low-demand result?",
+          "resolution_criteria": "Resolve YES if the plan starts within 24 hours after a low-demand result.",
+          "expected_resolution_at": "2026-10-02T18:00:00Z",
+          "outcome_space": { "kind": "binary" },
+          "domain": { "kind": "binary" }
+        }
+      ],
+      "forecasts": [],
+      "resolution": {
+        "status": "not_applicable",
+        "relationship_id": "condition-low-demand",
+        "reason": "The parent question resolved high, so the low-demand condition was false.",
+        "recorded_at": "2026-09-30T17:11:00Z"
+      }
+    },
+    {
+      "id": "q-release-moment",
+      "status": "open",
+      "created_at": "2026-09-01T10:00:00Z",
+      "current_revision_id": "qr-release-moment-1",
+      "revisions": [
+        {
+          "id": "qr-release-moment-1",
+          "effective_at": "2026-09-01T10:00:00Z",
+          "recorded_at": "2026-09-01T10:00:00Z",
+          "title": "At what instant will the release become generally available?",
+          "resolution_criteria": "Resolve to the first timestamp at which unrestricted downloads are available.",
+          "expected_resolution_at": "2026-12-31T23:59:59Z",
+          "outcome_space": { "kind": "datetime" },
+          "domain": {
+            "kind": "datetime",
+            "bounds": {
+              "lower": { "value": "2026-10-01T00:00:00Z", "inclusive": true },
+              "upper": { "value": "2027-01-31T23:59:59Z", "inclusive": true }
+            },
+            "values": { "kind": "step", "step": "PT1S", "origin": "2026-10-01T00:00:00Z" }
+          }
+        }
+      ],
+      "forecasts": [
+        {
+          "id": "f-release-moment-1",
+          "question_revision_id": "qr-release-moment-1",
+          "forecasted_at": "2026-09-03T12:00:00Z",
+          "recorded_at": "2026-09-03T12:00:05Z",
+          "visibility": "public",
+          "representations": [
+            {
+              "kind": "cdf",
+              "interpolation": "step_right",
+              "points": [
+                { "value": "2026-11-01T12:00:00Z", "probability": "0.2" },
+                { "value": "2026-12-01T12:00:00Z", "probability": "0.7" },
+                { "value": "2027-01-01T12:00:00Z", "probability": "0.95" }
+              ],
+              "left_tail_probability": "0.1",
+              "right_tail_probability": "0.05"
+            }
+          ],
+          "integrity": { "status": "unanchored" }
+        }
+      ]
+    }
+  ]
+}

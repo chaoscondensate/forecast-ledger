@@ -13,12 +13,12 @@ func TestApplicationWrittenYAMLUsesBlockStyleForPopulatedCollections(t *testing.
 	path := filepath.Join(t.TempDir(), "ledger.yaml")
 	commands := [][]string{
 		{"forecast-ledger", "init", "--file", path, "--ledger-id", "yaml-style", "--timezone", "Europe/London", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--initial-platform", "internal,Internal,internal,https://example.com"},
-		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-style", "--type", "binary", "--title", "Will it happen?", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "10 Aug 2030", "--tag", "review", "--initial-forecast", "f-style-001", "--initial-value-kind", "binary", "--initial-probability-bp", "5100", "--initial-key-factor", "First factor", "--initial-key-factor", "Second factor"},
-		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-style", "--forecast", "f-style-002", "--value-kind", "binary", "--probability-bp", "5200", "--key-factor", "Third factor", "--supersedes-forecast", "f-style-001"},
-		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-empty", "--type", "binary", "--title", "Backlog question", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "11 Aug 2030"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-style", "--revision-id", "qr-style", "--title", "Will it happen?", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "10 Aug 2030", "--outcome-kind", "binary", "--tag", "review", "--initial-forecast", "f-style-001", "--initial-probability", "0.51", "--initial-probability-outcome", "--initial-key-factor", "First factor", "--initial-key-factor", "Second factor"},
+		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-style", "--forecast", "f-style-002", "--question-revision", "qr-style", "--probability", "0.52", "--probability-outcome", "--key-factor", "Third factor", "--supersedes-forecast", "f-style-001"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-empty", "--revision-id", "qr-empty", "--title", "Backlog question", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "11 Aug 2030", "--outcome-kind", "binary"},
 		{"forecast-ledger", "platform", "update", "--file", path, "--platform", "internal", "--name", "Updated internal", "--kind", "internal", "--account-username", "reviewer"},
 		{"forecast-ledger", "question", "update", "--file", path, "--question", "q-style", "--status", "closed", "--tag", "review", "--tag", "regression"},
-		{"forecast-ledger", "question", "annul", "--file", path, "--question", "q-style", "--reason", "Question became unresolvable", "--recorded-at", "2030-08-11T00:00:00+01:00", "--yes"},
+		{"forecast-ledger", "question", "void", "--file", path, "--question", "q-style", "--reason", "Question became unresolvable", "--recorded-at", "2030-08-11T00:00:00+01:00", "--yes"},
 	}
 	for _, arguments := range commands {
 		code, _, stderr := runCLI(arguments...)

@@ -37,6 +37,7 @@ func TestAllOperationInputSchemasCompileAndAreClosed(t *testing.T) {
 				t.Fatal(err)
 			}
 			compiler := jsonschema.NewCompiler()
+			compiler.UseRegexpEngine(compileInputECMARegexp)
 			if err := compiler.AddResource("schema.json", document); err != nil {
 				t.Fatal(err)
 			}
@@ -50,21 +51,42 @@ func TestAllOperationInputSchemasCompileAndAreClosed(t *testing.T) {
 	}
 }
 
-func TestInitAndQuestionAddHaveDeliberatelyDifferentTypeInputs(t *testing.T) {
+func TestInitAndQuestionAddHaveDeliberatelyDifferentIdentityInputs(t *testing.T) {
 	initSchema := compileInputSchema(t, InputSchemaInit)
 	questionSchema := compileInputSchema(t, InputSchemaQuestionAdd)
 
 	initDocument := minimalQuestionDocument(true)
 	if err := initSchema.Validate(initDocument); err != nil {
-		t.Fatalf("init input rejected its question type: %v", err)
+		t.Fatalf("init input rejected question identity: %v", err)
 	}
 	questionDocument := minimalQuestionDocument(false)
 	if err := questionSchema.Validate(questionDocument["question"]); err != nil {
-		t.Fatalf("question-add input rejected scalar-normalized shape: %v", err)
+		t.Fatalf("question-add input rejected selector-owned identity: %v", err)
 	}
-	questionDocument["question"].(map[string]any)["type"] = "binary"
+	questionDocument["question"].(map[string]any)["id"] = "q-one"
 	if err := questionSchema.Validate(questionDocument["question"]); err == nil {
-		t.Fatal("question-add schema accepted duplicate input type")
+		t.Fatal("question-add schema accepted duplicate request identity")
+	}
+}
+
+func TestRelationshipInputSchemaKeepsWrapperAndLedgerUnionDistinct(t *testing.T) {
+	schema := compileInputSchema(t, InputSchemaRelationship)
+	valid := map[string]any{"relationship": map[string]any{
+		"id": "rel-one", "kind": "group_membership", "group_id": "group-one", "question_id": "q-one",
+	}}
+	if err := schema.Validate(valid); err != nil {
+		t.Fatalf("valid relationship input was rejected: %v", err)
+	}
+	if err := schema.Validate(map[string]any{"relationship": valid}); err == nil {
+		t.Fatal("recursive relationship wrapper was accepted")
+	}
+	direct, err := DirectRequestSchema(InputSchemaRelationship)
+	if err != nil {
+		t.Fatal(err)
+	}
+	properties := direct["properties"].(map[string]any)
+	if reference := properties["relationship"].(map[string]any)["$ref"]; reference != "#/$defs/relationship" {
+		t.Fatalf("direct relationship reference = %v", reference)
 	}
 }
 
@@ -79,6 +101,7 @@ func compileInputSchema(t *testing.T, name InputSchemaName) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	compiler := jsonschema.NewCompiler()
+	compiler.UseRegexpEngine(compileInputECMARegexp)
 	if err := compiler.AddResource("schema.json", document); err != nil {
 		t.Fatal(err)
 	}
@@ -89,20 +112,21 @@ func compileInputSchema(t *testing.T, name InputSchemaName) *jsonschema.Schema {
 	return compiled
 }
 
-func minimalQuestionDocument(includeType bool) map[string]any {
+func minimalQuestionDocument(includeID bool) map[string]any {
 	question := map[string]any{
-		"id": "q-one", "title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
-		"forecast_window":        map[string]any{"opens_at": "2026-01-01T00:00:00Z"},
-		"expected_resolution_at": "2027-01-02T00:00:00Z",
+		"revision": map[string]any{
+			"id": "qr-one", "title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
+			"expected_resolution_at": "2027-01-02T00:00:00Z",
+			"outcome_space":          map[string]any{"kind": "binary"}, "domain": map[string]any{"kind": "binary"},
+		},
 		"initial_forecast": map[string]any{
 			"id": "f-one", "visibility": "public", "forecasted_at": "2026-01-01T00:00:00Z",
-			"value": map[string]any{"kind": "binary", "probability_bp": 5000},
+			"representations": []any{map[string]any{"kind": "probability", "outcome": true, "probability": "0.5"}},
 		},
 	}
-	if includeType {
-		question["type"] = "binary"
+	if includeID {
+		question["id"] = "q-one"
 		return map[string]any{"question": question}
 	}
-	delete(question, "id")
 	return map[string]any{"question": question}
 }

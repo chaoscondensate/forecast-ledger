@@ -116,20 +116,35 @@ func contracts() map[service.OperationName]toolContract {
 		service.OperationPlatformUpdate:        {Allowed: append(file, "platform", "dry_run"), Required: []string{"file", "platform"}},
 		service.OperationPlatformList:          {Allowed: file, Required: file},
 		service.OperationPlatformShow:          {Allowed: append(file, "platform"), Required: []string{"file", "platform"}},
-		service.OperationPlatformRemove:        {Allowed: append(file, "platform", "confirm", "dry_run"), Required: []string{"file", "platform"}},
-		service.OperationQuestionAdd:           {Allowed: append(file, "question", "type", "initial_secret_input_file", "key_file", "dry_run"), Required: []string{"file", "question", "type"}},
+		service.OperationPlatformRemove:        {Allowed: append(file, "platform", "confirm", "dry_run"), Required: []string{"file", "platform", "confirm"}},
+		service.OperationQuestionAdd:           {Allowed: append(file, "question", "initial_secret_input_file", "key_file", "dry_run"), Required: []string{"file", "question"}},
 		service.OperationQuestionUpdate:        {Allowed: append(file, "question", "dry_run"), Required: []string{"file", "question"}},
+		service.OperationQuestionRevise:        {Allowed: append(file, "question", "dry_run"), Required: []string{"file", "question"}},
 		service.OperationQuestionList:          {Allowed: file, Required: file},
 		service.OperationQuestionShow:          {Allowed: append(file, "question"), Required: []string{"file", "question"}},
-		service.OperationQuestionResolve:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
-		service.OperationQuestionAnnul:         {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
-		service.OperationQuestionDispute:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
+		service.OperationQuestionResolve:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question", "confirm"}},
+		service.OperationQuestionAmbiguous:     {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question", "confirm"}},
+		service.OperationQuestionVoid:          {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question", "confirm"}},
+		service.OperationQuestionDispute:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question", "confirm"}},
+		service.OperationQuestionNotApplicable: {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question", "confirm"}},
+		service.OperationGroupAdd:              {Allowed: append(file, "group", "dry_run"), Required: []string{"file", "group"}},
+		service.OperationGroupUpdate:           {Allowed: append(file, "group", "dry_run"), Required: []string{"file", "group"}},
+		service.OperationGroupList:             {Allowed: file, Required: file},
+		service.OperationGroupShow:             {Allowed: append(file, "group"), Required: []string{"file", "group"}},
+		service.OperationGroupRemove:           {Allowed: append(file, "group", "confirm", "dry_run"), Required: []string{"file", "group", "confirm"}},
+		service.OperationRelationshipAdd:       {Allowed: append(file, "dry_run"), Required: file},
+		service.OperationRelationshipList:      {Allowed: file, Required: file},
+		service.OperationRelationshipShow:      {Allowed: append(file, "relationship_id"), Required: []string{"file", "relationship_id"}},
+		service.OperationRelationshipRemove:    {Allowed: append(file, "relationship_id", "confirm", "dry_run"), Required: []string{"file", "relationship_id", "confirm"}},
 		service.OperationForecastAdd:           {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastList:          {Allowed: append(file, "question"), Required: []string{"file", "question"}},
 		service.OperationForecastShow:          {Allowed: append(file, "question", "forecast"), Required: []string{"file", "question", "forecast"}},
-		service.OperationForecastSeal:          {Allowed: append(file, "question", "forecast", "secret_input_file", "forecasted_at", "recorded_at", "public_note", "supersedes_forecast_id", "key_file", "dry_run"), Required: []string{"file", "question", "forecast", "secret_input_file", "key_file"}},
+		service.OperationForecastSeal:          {Allowed: append(file, "question", "forecast", "question_revision_id", "secret_input_file", "forecasted_at", "recorded_at", "public_note", "supersedes_forecast_id", "key_file", "dry_run"), Required: []string{"file", "question", "forecast", "question_revision_id", "secret_input_file", "key_file"}},
 		service.OperationForecastReveal:        {Allowed: append(file, "question", "forecast", "key_file", "revealed_at", "confirm", "dry_run"), Required: []string{"file", "question", "forecast", "key_file", "confirm"}},
 		service.OperationForecastKeyHintUpdate: {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationForecastWithdraw:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationForecastExpire:        {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationForecastReaffirm:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "all", "dry_run"), Required: file},
 		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "all"), Required: file},
 		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
@@ -254,8 +269,6 @@ func scalarProperty(name string) map[string]any {
 	switch name {
 	case "dry_run", "confirm", "all", "check_sources":
 		return map[string]any{"type": "boolean"}
-	case "type":
-		return map[string]any{"type": "string", "enum": []string{"binary", "multiple_choice", "numeric", "date"}}
 	case "forecaster_kind":
 		return map[string]any{"type": "string", "enum": []string{"individual", "team"}, "default": "individual"}
 	default:

@@ -1,5 +1,5 @@
 // Package schema embeds the exact supported Forecast Ledger contract and its
-// conformance fixtures. Runtime code must never fetch a floating schema.
+// upstream conformance material. Runtime code must never fetch a schema.
 package schema
 
 import (
@@ -8,42 +8,55 @@ import (
 )
 
 const (
-	Version                = "1.3.0"
-	Commit                 = "32218f682b3a650f41153e98817473bf429973a7"
-	AnnotatedTagObject     = "d3d1f06a7f27501b1419eaf78fc4a48e51de9ee3"
-	SchemaSHA256           = "f673e4f3fc867a83d8c42a6992c6020ea28359a293580c8c742fe9dcdcd8d2c1"
-	ReleaseArchiveSHA256   = "3b6b9f274a67d2714edaa308f9aad51b218dbf24ed95de1a1340292ad1df1f2a"
-	ReleaseChecksumsSHA256 = "6042508976246ddc62974ad3054dca9885525024d4bb543572b75b23c60ac284"
-	ForecastSealProtocol   = "forecast-seal/v1"
-	ForecastTargetProfile  = "forecast-envelope/v1"
+	Version                = "2.0.0"
+	Commit                 = "1d3b186a15136bc5aff38647cb59fbef475dbe55"
+	AnnotatedTagObject     = "7b4a9e85e0df9350750828a57b03ff729f704ee4"
+	SchemaSHA256           = "efd87b7432f7cb017fbedaba217e4cd1d3bff06133457927fb786a249a040b21"
+	ReleaseArchiveSHA256   = "1d56cbe4f6cbd1fccb046a99add2ff4f88c709904d027669039ba4139664f47e"
+	ReleaseChecksumsSHA256 = "77d093fbdb393dc9c1e3bdae053724e5ecdccd2e211f6f6c08c7678e78b178dc"
+	ForecastSealProtocol   = "forecast-seal/v2"
+	ForecastTargetProfile  = "forecast-envelope/v2"
 )
 
-//go:embed contract/forecast-ledger/v1.3.0/forecast-ledger.schema.json
+//go:embed upstream/forecast-ledger/v2.0.0/schema/forecast-ledger.schema.json
 var contract []byte
 
-//go:embed contract/forecast-ledger/v1.3.0/LICENSE
+//go:embed upstream/forecast-ledger/v2.0.0/LICENSE
 var license []byte
 
-//go:embed testdata/forecast-ledger/v1.3.0/*
-var conformance embed.FS
+//go:embed upstream/forecast-ledger/v2.0.0
+var upstream embed.FS
 
-// Contract returns an independent copy of the embedded schema bytes.
+// Contract returns an independent copy of the active v2 schema bytes.
 func Contract() []byte {
-	result := make([]byte, len(contract))
-	copy(result, contract)
-	return result
+	return clone(contract)
 }
 
-// License returns an independent copy of the exact upstream license bytes.
+// License returns an independent copy of the exact upstream v2 license bytes.
 func License() []byte {
-	result := make([]byte, len(license))
-	copy(result, license)
+	return clone(license)
+}
+
+// Conformance returns the complete retained v2.0.0 upstream release subtree.
+// Paths retain their upstream layout, for example examples/valid and
+// tests/vectors.
+func Conformance() fs.FS {
+	return mustSub(upstream, "upstream/forecast-ledger/v2.0.0")
+}
+
+// ValidExamples returns the v2 valid-example directory.
+func ValidExamples() fs.FS {
+	return mustSub(Conformance(), "examples/valid")
+}
+
+func clone(source []byte) []byte {
+	result := make([]byte, len(source))
+	copy(result, source)
 	return result
 }
 
-// Conformance returns the embedded v1.3.0 fixture directory.
-func Conformance() fs.FS {
-	result, err := fs.Sub(conformance, "testdata/forecast-ledger/v1.3.0")
+func mustSub(source fs.FS, directory string) fs.FS {
+	result, err := fs.Sub(source, directory)
 	if err != nil {
 		panic(err)
 	}

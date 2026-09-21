@@ -239,7 +239,7 @@ func TestApplyPatchExpandsPopulatedYAMLCollectionsButKeepsEmptyCollectionsCompac
 }
 
 func TestApplyPatchKeepsLargeExpandedYAMLLedgerReviewable(t *testing.T) {
-	input := "# keep this review note\nquestions:\n  - id: q-one\n    forecasts:\n      - id: f-000\n        value:\n          kind: binary\n          probability_bp: 5000\n"
+	input := "# keep this review note\nquestions:\n  - id: q-one\n    forecasts:\n      - id: f-000\n        representations:\n          - kind: probability\n            outcome: true\n            probability: \"0.5\"\n"
 	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
@@ -247,9 +247,9 @@ func TestApplyPatchKeepsLargeExpandedYAMLLedgerReviewable(t *testing.T) {
 	operations := make([]PatchOperation, 0, 30)
 	for index := 1; index <= 30; index++ {
 		operations = append(operations, PatchOperation{Kind: PatchAdd, Pointer: "/questions/0/forecasts/-", Value: map[string]any{
-			"id":          fmt.Sprintf("f-%03d", index),
-			"value":       map[string]any{"kind": "binary", "probability_bp": 5000 + index},
-			"key_factors": []string{"first factor", "second factor"},
+			"id":              fmt.Sprintf("f-%03d", index),
+			"representations": []any{map[string]any{"kind": "point", "statistic": "mean", "value": fmt.Sprintf("%d", index)}},
+			"key_factors":     []string{"first factor", "second factor"},
 		}})
 	}
 	got, err := ApplyPatch(doc, operations)
@@ -268,7 +268,7 @@ func TestApplyPatchKeepsLargeExpandedYAMLLedgerReviewable(t *testing.T) {
 }
 
 func TestOrderedPatchValueKeepsDeclaredOrderInJSONAndYAML(t *testing.T) {
-	valueDocument, err := ParseJSON(strings.NewReader(`{"id":"f-new","forecasted_at":"2026-08-26T12:00:00Z","recorded_at":"2026-08-26T12:01:00Z","visibility":"public","value":{"kind":"binary","probability_bp":5100},"integrity":{"status":"unanchored"}}`), DefaultLimits)
+	valueDocument, err := ParseJSON(strings.NewReader(`{"id":"f-new","forecasted_at":"2026-08-26T12:00:00Z","recorded_at":"2026-08-26T12:01:00Z","visibility":"public","representations":[{"kind":"probability","outcome":true,"probability":"0.51"}],"integrity":{"status":"unanchored"}}`), DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestOrderedPatchValueKeepsDeclaredOrderInJSONAndYAML(t *testing.T) {
 				t.Fatal(err)
 			}
 			text := string(output)
-			positions := []int{strings.Index(text, "id"), strings.Index(text, "forecasted_at"), strings.Index(text, "recorded_at"), strings.Index(text, "visibility"), strings.Index(text, "value"), strings.Index(text, "integrity")}
+			positions := []int{strings.Index(text, "id"), strings.Index(text, "forecasted_at"), strings.Index(text, "recorded_at"), strings.Index(text, "visibility"), strings.Index(text, "representations"), strings.Index(text, "integrity")}
 			for index := 1; index < len(positions); index++ {
 				if positions[index-1] < 0 || positions[index] <= positions[index-1] {
 					t.Fatalf("semantic order changed: %s", text)
@@ -307,7 +307,7 @@ func TestApplyPatchIndentsNewFragmentsInPrettyJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := ApplyPatch(doc, []PatchOperation{{Kind: PatchAdd, Pointer: "/questions/0/forecasts/-", Value: map[string]any{
-		"id": "f-one", "value": map[string]any{"kind": "binary", "probability_bp": 5000},
+		"id": "f-one", "representations": []any{map[string]any{"kind": "probability", "outcome": true, "probability": "0.5"}},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -330,7 +330,7 @@ func TestApplyPatchKeepsRepeatedJSONAdditionsExpanded(t *testing.T) {
 	operations := make([]PatchOperation, 0, 30)
 	for index := 1; index <= 30; index++ {
 		operations = append(operations, PatchOperation{Kind: PatchAdd, Pointer: "/forecasts/-", Value: map[string]any{
-			"id": fmt.Sprintf("f-%03d", index), "value": map[string]any{"kind": "binary", "probability_bp": 5000 + index},
+			"id": fmt.Sprintf("f-%03d", index), "representations": []any{map[string]any{"kind": "point", "statistic": "mean", "value": fmt.Sprintf("%d", index)}},
 		}})
 	}
 	got, err := ApplyPatch(doc, operations)

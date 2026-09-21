@@ -1,122 +1,126 @@
 {
   "$defs": {
-    "binaryValue": {
+    "allowedValues": {
       "additionalProperties": false,
       "properties": {
         "kind": {
-          "const": "binary"
+          "const": "allowed_values"
         },
-        "probability_bp": {
-          "description": "Probability of YES in basis points.",
-          "maximum": 10000,
-          "minimum": 0,
-          "type": "integer"
+        "values": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
         }
       },
       "required": [
         "kind",
-        "probability_bp"
+        "values"
       ],
       "type": "object"
     },
-    "choiceProbability": {
+    "artifactSnapshot": {
       "additionalProperties": false,
       "properties": {
-        "option_id": {
+        "artifact_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "artifact_path",
+        "media_type",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "bin": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
           "$ref": "#/$defs/slug"
         },
-        "probability_bp": {
-          "maximum": 10000,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "option_id",
-        "probability_bp"
-      ],
-      "type": "object"
-    },
-    "date": {
-      "format": "date",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "type": "string"
-    },
-    "dateInterval": {
-      "additionalProperties": false,
-      "properties": {
-        "credibility_bp": {
-          "maximum": 10000,
-          "minimum": 1,
-          "type": "integer"
+        "label": {
+          "$ref": "#/$defs/nonEmptyString"
         },
         "lower": {
-          "$ref": "#/$defs/date"
+          "minLength": 1,
+          "type": "string"
+        },
+        "lower_inclusive": {
+          "type": "boolean"
         },
         "upper": {
-          "$ref": "#/$defs/date"
+          "minLength": 1,
+          "type": "string"
+        },
+        "upper_inclusive": {
+          "type": "boolean"
         }
       },
       "required": [
+        "id",
         "lower",
         "upper",
-        "credibility_bp"
+        "lower_inclusive",
+        "upper_inclusive"
       ],
       "type": "object"
     },
-    "dateQuantile": {
+    "binSet": {
       "additionalProperties": false,
       "properties": {
-        "probability_bp": {
-          "maximum": 9999,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "value": {
-          "$ref": "#/$defs/date"
-        }
-      },
-      "required": [
-        "probability_bp",
-        "value"
-      ],
-      "type": "object"
-    },
-    "dateValue": {
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "point"
-          ]
-        },
-        {
-          "required": [
-            "interval"
-          ]
-        },
-        {
-          "required": [
-            "quantiles"
-          ]
-        }
-      ],
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/dateInterval"
-        },
-        "kind": {
-          "const": "date"
-        },
-        "point": {
-          "$ref": "#/$defs/date"
-        },
-        "quantiles": {
+        "bins": {
           "items": {
-            "$ref": "#/$defs/dateQuantile"
+            "$ref": "#/$defs/bin"
           },
           "minItems": 1,
           "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "bins"
+      ],
+      "type": "object"
+    },
+    "binSetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "binaryDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "binary"
         }
       },
       "required": [
@@ -124,36 +128,342 @@
       ],
       "type": "object"
     },
-    "decimal": {
-      "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
-      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-      "type": "string"
-    },
-    "forecastValue": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/binaryValue"
-        },
-        {
-          "$ref": "#/$defs/multipleChoiceValue"
-        },
-        {
-          "$ref": "#/$defs/numericValue"
-        },
-        {
-          "$ref": "#/$defs/dateValue"
-        }
-      ]
-    },
-    "forecastWindow": {
+    "binnedPmfEntry": {
       "additionalProperties": false,
       "properties": {
-        "opens_at": {
-          "$ref": "#/$defs/timestamp"
+        "bin_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
         }
       },
       "required": [
-        "opens_at"
+        "bin_id",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "binnedPmfRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "bin_set_ref": {
+          "$ref": "#/$defs/binSetRef"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/binnedPmfEntry"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "kind": {
+          "const": "binned_pmf"
+        },
+        "left_tail_probability": {
+          "$ref": "#/$defs/probability"
+        },
+        "right_tail_probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "kind",
+        "bin_set_ref",
+        "entries",
+        "left_tail_probability",
+        "right_tail_probability"
+      ],
+      "type": "object"
+    },
+    "bound": {
+      "additionalProperties": false,
+      "properties": {
+        "inclusive": {
+          "type": "boolean"
+        },
+        "value": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "inclusive"
+      ],
+      "type": "object"
+    },
+    "bounds": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "lower": {
+          "$ref": "#/$defs/bound"
+        },
+        "upper": {
+          "$ref": "#/$defs/bound"
+        }
+      },
+      "type": "object"
+    },
+    "categoricalDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "categorical"
+        },
+        "option_set": {
+          "$ref": "#/$defs/optionSet"
+        }
+      },
+      "required": [
+        "kind",
+        "option_set"
+      ],
+      "type": "object"
+    },
+    "cdfPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "probability": {
+          "$ref": "#/$defs/probability"
+        },
+        "value": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "value",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "cdfRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "enum": [
+            "step_right",
+            "linear"
+          ]
+        },
+        "kind": {
+          "const": "cdf"
+        },
+        "left_tail_probability": {
+          "$ref": "#/$defs/probability"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/cdfPoint"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "right_tail_probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "kind",
+        "interpolation",
+        "points",
+        "left_tail_probability",
+        "right_tail_probability"
+      ],
+      "type": "object"
+    },
+    "continuousValues": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "continuous"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "credibleInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/openProbability"
+        },
+        "interval_kind": {
+          "enum": [
+            "equal_tailed",
+            "central",
+            "highest_density",
+            "author_selected"
+          ]
+        },
+        "lower": {
+          "$ref": "#/$defs/scalarValue"
+        },
+        "upper": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "coverage",
+        "interval_kind",
+        "lower",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "credibleIntervalsRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/credibleInterval"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "kind": {
+          "const": "credible_intervals"
+        }
+      },
+      "required": [
+        "kind",
+        "intervals"
+      ],
+      "type": "object"
+    },
+    "dateDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "bin_sets": {
+          "items": {
+            "$ref": "#/$defs/binSet"
+          },
+          "type": "array"
+        },
+        "bounds": {
+          "$ref": "#/$defs/bounds"
+        },
+        "kind": {
+          "const": "date"
+        },
+        "values": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/continuousValues"
+            },
+            {
+              "$ref": "#/$defs/stepValues"
+            },
+            {
+              "$ref": "#/$defs/allowedValues"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "values"
+      ],
+      "type": "object"
+    },
+    "datetimeDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "bin_sets": {
+          "items": {
+            "$ref": "#/$defs/binSet"
+          },
+          "type": "array"
+        },
+        "bounds": {
+          "$ref": "#/$defs/bounds"
+        },
+        "kind": {
+          "const": "datetime"
+        },
+        "values": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/continuousValues"
+            },
+            {
+              "$ref": "#/$defs/stepValues"
+            },
+            {
+              "$ref": "#/$defs/allowedValues"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "values"
+      ],
+      "type": "object"
+    },
+    "domain": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/binaryDomain"
+        },
+        {
+          "$ref": "#/$defs/categoricalDomain"
+        },
+        {
+          "$ref": "#/$defs/ordinalDomain"
+        },
+        {
+          "$ref": "#/$defs/numericDomain"
+        },
+        {
+          "$ref": "#/$defs/dateDomain"
+        },
+        {
+          "$ref": "#/$defs/datetimeDomain"
+        }
+      ]
+    },
+    "forecastRepresentation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/probabilityRepresentation"
+        },
+        {
+          "$ref": "#/$defs/pmfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/binnedPmfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/quantilesRepresentation"
+        },
+        {
+          "$ref": "#/$defs/cdfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/pointRepresentation"
+        },
+        {
+          "$ref": "#/$defs/credibleIntervalsRepresentation"
+        }
+      ]
+    },
+    "importer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "name",
+        "version"
       ],
       "type": "object"
     },
@@ -166,14 +476,11 @@
               "visibility": {
                 "const": "public"
               }
-            },
-            "required": [
-              "visibility"
-            ]
+            }
           },
           "then": {
             "required": [
-              "value"
+              "representations"
             ]
           }
         },
@@ -183,17 +490,14 @@
               "visibility": {
                 "const": "sealed"
               }
-            },
-            "required": [
-              "visibility"
-            ]
+            }
           },
           "then": {
             "not": {
               "anyOf": [
                 {
                   "required": [
-                    "value"
+                    "representations"
                   ]
                 },
                 {
@@ -234,6 +538,9 @@
           },
           "type": "array"
         },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
         "public_note": {
           "minLength": 0,
           "type": "string"
@@ -245,11 +552,15 @@
         "recorded_at": {
           "$ref": "#/$defs/timestamp"
         },
+        "representations": {
+          "items": {
+            "$ref": "#/$defs/forecastRepresentation"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
         "supersedes_forecast_id": {
           "$ref": "#/$defs/slug"
-        },
-        "value": {
-          "$ref": "#/$defs/forecastValue"
         },
         "visibility": {
           "enum": [
@@ -264,117 +575,70 @@
       ],
       "type": "object"
     },
-    "multipleChoiceValue": {
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "numericDomain": {
       "additionalProperties": false,
       "properties": {
-        "kind": {
-          "const": "multiple_choice"
-        },
-        "probabilities": {
+        "bin_sets": {
           "items": {
-            "$ref": "#/$defs/choiceProbability"
+            "$ref": "#/$defs/binSet"
           },
-          "minItems": 2,
           "type": "array"
-        }
-      },
-      "required": [
-        "kind",
-        "probabilities"
-      ],
-      "type": "object"
-    },
-    "numericInterval": {
-      "additionalProperties": false,
-      "properties": {
-        "credibility_bp": {
-          "maximum": 10000,
-          "minimum": 1,
-          "type": "integer"
         },
-        "lower": {
-          "$ref": "#/$defs/decimal"
+        "bounds": {
+          "$ref": "#/$defs/bounds"
         },
-        "upper": {
-          "$ref": "#/$defs/decimal"
-        }
-      },
-      "required": [
-        "lower",
-        "upper",
-        "credibility_bp"
-      ],
-      "type": "object"
-    },
-    "numericQuantile": {
-      "additionalProperties": false,
-      "properties": {
-        "probability_bp": {
-          "maximum": 9999,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "value": {
-          "$ref": "#/$defs/decimal"
-        }
-      },
-      "required": [
-        "probability_bp",
-        "value"
-      ],
-      "type": "object"
-    },
-    "numericValue": {
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "point"
+        "elicitation_scale": {
+          "enum": [
+            "linear",
+            "log"
           ]
-        },
-        {
-          "required": [
-            "interval"
-          ]
-        },
-        {
-          "required": [
-            "quantiles"
-          ]
-        }
-      ],
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/numericInterval"
         },
         "kind": {
           "const": "numeric"
         },
-        "point": {
-          "$ref": "#/$defs/decimal"
+        "unit": {
+          "$ref": "#/$defs/unit"
         },
-        "quantiles": {
-          "items": {
-            "$ref": "#/$defs/numericQuantile"
-          },
-          "minItems": 1,
-          "type": "array"
+        "values": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/continuousValues"
+            },
+            {
+              "$ref": "#/$defs/stepValues"
+            },
+            {
+              "$ref": "#/$defs/allowedValues"
+            }
+          ]
         }
       },
       "required": [
-        "kind"
+        "kind",
+        "values"
       ],
       "type": "object"
+    },
+    "openProbability": {
+      "description": "An exact canonical decimal probability strictly between 0 and 1.",
+      "pattern": "^0\\.[0-9]{0,17}[1-9]$",
+      "type": "string"
     },
     "option": {
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
         "id": {
           "$ref": "#/$defs/slug"
         },
         "label": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         }
       },
       "required": [
@@ -383,15 +647,200 @@
       ],
       "type": "object"
     },
-    "platformRef": {
+    "optionSet": {
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "options"
+      ],
+      "type": "object"
+    },
+    "optionSetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ordinalDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "ordinal"
+        },
+        "option_set": {
+          "$ref": "#/$defs/optionSet"
+        }
+      },
+      "required": [
+        "kind",
+        "option_set"
+      ],
+      "type": "object"
+    },
+    "outcomeSpace": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "binary",
+            "categorical",
+            "ordinal",
+            "numeric",
+            "date",
+            "datetime"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "pmfEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "option_id",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "pmfRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/pmfEntry"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "kind": {
+          "const": "pmf"
+        },
+        "option_set_ref": {
+          "$ref": "#/$defs/optionSetRef"
+        }
+      },
+      "required": [
+        "kind",
+        "option_set_ref",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "pointRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "point"
+        },
+        "statistic": {
+          "enum": [
+            "mean",
+            "median",
+            "mode",
+            "best_estimate"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "kind",
+        "statistic",
+        "value"
+      ],
+      "type": "object"
+    },
+    "probability": {
+      "description": "An exact canonical decimal probability in [0,1], with at most 18 fractional digits.",
+      "pattern": "^(?:0|1|0\\.[0-9]{0,17}[1-9])$",
+      "type": "string"
+    },
+    "probabilityRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "probability"
+        },
+        "outcome": {
+          "const": true
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "kind",
+        "outcome",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+      "properties": {
+        "importer": {
+          "$ref": "#/$defs/importer"
+        },
         "platform": {
           "$ref": "#/$defs/slug"
         },
-        "question_id": {
-          "minLength": 1,
-          "type": "string"
+        "remote_object_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "remote_object_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "retrieved_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/artifactSnapshot"
+        },
+        "source_created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "source_updated_at": {
+          "$ref": "#/$defs/timestamp"
         },
         "url": {
           "format": "uri",
@@ -399,7 +848,54 @@
         }
       },
       "required": [
-        "platform"
+        "platform",
+        "remote_object_id",
+        "retrieved_at"
+      ],
+      "type": "object"
+    },
+    "quantilePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/openProbability"
+        },
+        "value": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "level",
+        "value"
+      ],
+      "type": "object"
+    },
+    "quantilesRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "enum": [
+            "none",
+            "linear",
+            "step_lower",
+            "step_upper"
+          ]
+        },
+        "kind": {
+          "const": "quantiles"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/quantilePoint"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "interpolation",
+        "points"
       ],
       "type": "object"
     },
@@ -412,12 +908,6 @@
         "created_at": {
           "$ref": "#/$defs/timestamp"
         },
-        "expected_resolution_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "forecast_window": {
-          "$ref": "#/$defs/forecastWindow"
-        },
         "initial_forecast": {
           "$ref": "#/$defs/initialForecastInput"
         },
@@ -425,41 +915,97 @@
           "minLength": 0,
           "type": "string"
         },
-        "options": {
-          "items": {
-            "$ref": "#/$defs/option"
-          },
-          "minItems": 2,
-          "type": "array"
-        },
-        "platform_refs": {
-          "items": {
-            "$ref": "#/$defs/platformRef"
-          },
-          "type": "array"
-        },
-        "resolution_criteria": {
-          "minLength": 1,
-          "type": "string"
+        "revision": {
+          "$ref": "#/$defs/revisionInput"
         },
         "tags": {
           "items": {
             "$ref": "#/$defs/slug"
           },
           "type": "array"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "type": "object"
+    },
+    "relativePath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+      "type": "string"
+    },
+    "revisionInput": {
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "effective_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expected_resolution_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "forecasting_opens_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "outcome_space": {
+          "$ref": "#/$defs/outcomeSpace"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "resolution_criteria": {
+          "minLength": 1,
+          "type": "string"
         },
         "title": {
           "minLength": 1,
           "type": "string"
-        },
-        "unit": {
-          "$ref": "#/$defs/unit"
         }
       },
       "required": [
+        "id",
         "title",
         "resolution_criteria",
-        "expected_resolution_at"
+        "expected_resolution_at",
+        "outcome_space",
+        "domain"
+      ],
+      "type": "object"
+    },
+    "scalarValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "sha256": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha-256"
+        },
+        "value": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
       ],
       "type": "object"
     },
@@ -469,8 +1015,28 @@
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
       "type": "string"
     },
+    "stepValues": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "step"
+        },
+        "origin": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "step": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "step"
+      ],
+      "type": "object"
+    },
     "timestamp": {
-      "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
       "type": "string"
@@ -479,16 +1045,13 @@
       "additionalProperties": false,
       "properties": {
         "name": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "symbol": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "ucum_code": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         }
       },
       "required": [
@@ -497,7 +1060,7 @@
       "type": "object"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-add/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-add/v2",
   "$ref": "#/$defs/question-add",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

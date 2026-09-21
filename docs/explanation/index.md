@@ -15,6 +15,7 @@ reviewed context is available in:
 
 - the [product and evidence baseline](../development/documentation-baseline.md);
 - the [verification claims and evidence terms](verification-claims.md);
+- [how v2 revisions, domains, representations, activity, and conditions fit together](v2-data-model.md);
 - the [repository contributor context](../../AGENTS.md); and
 - the accepted [OpenSpec changes](../../openspec/changes/).
 

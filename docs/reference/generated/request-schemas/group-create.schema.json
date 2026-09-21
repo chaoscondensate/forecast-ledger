@@ -1,0 +1,24 @@
+{
+  "$defs": {
+    "group-create": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/group-create/v2",
+  "$ref": "#/$defs/group-create",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

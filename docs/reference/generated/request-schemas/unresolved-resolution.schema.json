@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "resolutionSource": {
+      "additionalProperties": false,
+      "properties": {
+        "content_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "published_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "publisher": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "retrieved_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "retrieved_at"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha-256"
+        },
+        "value": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "type": "object"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "type": "string"
+    },
+    "unresolved-resolution": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/resolutionSource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/unresolved-resolution/v2",
+  "$ref": "#/$defs/unresolved-resolution",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

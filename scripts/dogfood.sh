@@ -31,10 +31,11 @@ yaml_key="$work/native-replacements.key"
 # forecasted_at or recorded_at. Both omitted values come from this operation.
 "$binary" --json init --file "$backdated_ledger" --ledger-id backdated --timezone UTC \
   --forecaster-id dogfood --forecaster-name Dogfood --created-at 2020-01-01T00:00:00Z \
-  --question q-backdated --question-type binary --question-title "Will the event happen?" \
+  --question q-backdated --question-revision-id qr-backdated --question-title "Will the event happen?" \
   --question-resolution-criteria "Resolve from the named source." \
   --question-created-at 2020-01-01T00:00:00Z --question-expected-resolution-at 2099-01-02T00:00:00Z \
-  --initial-forecast f-backdated-001 --initial-value-kind binary --initial-probability-bp 5000 >/dev/null
+  --question-outcome-kind binary --initial-forecast f-backdated-001 \
+  --initial-probability 0.5 --initial-probability-outcome >/dev/null
 backdated_show=$("$binary" --json forecast show --file "$backdated_ledger" --question q-backdated --forecast f-backdated-001)
 if grep -F '"forecasted_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null ||
    grep -F '"recorded_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null; then
@@ -49,11 +50,13 @@ fi
   --forecaster-id dogfood-forecaster \
   --forecaster-name "Dogfood Forecaster" \
   --created-at 2026-01-01T00:00:00Z \
-  --question q-one --question-type binary --question-title "Will it happen?" \
+  --question q-one --question-revision-id qr-one --question-title "Will it happen?" \
   --question-resolution-criteria "Resolve from the named source." \
-  --question-created-at 2026-01-01T00:00:00Z --question-expected-resolution-at 2027-01-01T00:00:00Z \
+  --question-created-at 2026-01-01T00:00:00Z --question-effective-at 2026-01-01T00:00:00Z \
+  --question-revision-recorded-at 2026-01-01T00:00:00Z --question-expected-resolution-at 2027-01-01T00:00:00Z \
+  --question-outcome-kind binary \
   --initial-forecast f-one --initial-forecasted-at 2026-01-01T00:00:00Z \
-  --initial-recorded-at 2026-01-01T00:00:00Z --initial-value-kind binary --initial-probability-bp 5000 >/dev/null
+  --initial-recorded-at 2026-01-01T00:00:00Z --initial-probability 0.5 --initial-probability-outcome >/dev/null
 
 "$binary" --json ledger update --file "$ledger" --title "Dogfood ledger" --description "Cross-platform command lifecycle" >/dev/null
 
@@ -72,19 +75,23 @@ if [[ $diagnostic_exit -ne 3 ]] || grep -E '"(line|column)":0' "$work/diagnostic
   exit 1
 fi
 
-"$binary" --json question add --file "$ledger" --question q-second --type binary \
+"$binary" --json question add --file "$ledger" --question q-second --revision-id qr-second \
   --title "Will the second event happen?" --resolution-criteria "Resolve from the named source." \
-  --created-at 2026-02-01T00:00:00Z --expected-resolution-at 2027-01-02T00:00:00Z \
+  --created-at 2026-02-01T00:00:00Z --effective-at 2026-02-01T00:00:00Z \
+  --revision-recorded-at 2026-02-01T00:00:00Z --expected-resolution-at 2027-01-02T00:00:00Z \
+  --outcome-kind binary \
   --initial-forecast f-second-001 --initial-forecasted-at 2026-02-01T00:00:00Z \
-  --initial-recorded-at 2026-02-01T00:01:00Z --initial-value-kind binary --initial-probability-bp 4000 >/dev/null
+  --initial-recorded-at 2026-02-01T00:01:00Z --initial-probability 0.4 --initial-probability-outcome >/dev/null
 
 "$binary" --json forecast add --file "$ledger" --question q-one --forecast f-public-002 \
+  --question-revision qr-one \
   --forecasted-at 2026-03-01T00:00:00Z --recorded-at 2026-03-01T00:01:00Z \
-  --value-kind binary --probability-bp 6000 --rationale "Public dogfood revision." --supersedes-forecast f-one >/dev/null
+  --probability 0.6 --probability-outcome --rationale "Public dogfood revision." --supersedes-forecast f-one >/dev/null
 
 private_canary='PRIVATE-DOGFOOD-CANARY'
-printf '%s\n' "{\"value\":{\"kind\":\"binary\",\"probability_bp\":6500},\"rationale\":\"$private_canary\",\"key_factors\":[\"private factor\"],\"comment\":\"private comment\"}" |
+printf '%s\n' "{\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}],\"rationale\":\"$private_canary\",\"key_factors\":[\"private factor\"],\"comment\":\"private comment\"}" |
   "$binary" --json forecast seal --file "$ledger" --question q-one --forecast f-sealed-003 \
+  --question-revision qr-one \
   --forecasted-at 2026-04-01T00:00:00Z --recorded-at 2026-04-01T00:01:00Z \
   --supersedes-forecast f-public-002 --secret-input - --key-file "$key" >/dev/null
 
@@ -128,10 +135,12 @@ fi
 
 "$binary" --json question update --file "$ledger" --question q-one --status closed --notes "Closed by dogfood lifecycle." >/dev/null
 "$binary" --json question resolve --file "$ledger" --question q-one --outcome-boolean=true \
+  --question-revision qr-one \
   --outcome-known-at 2027-01-01T00:00:00Z --recorded-at 2027-01-01T00:01:00Z \
   --source "Official result,https://example.org/result,2027-01-01T00:00:30Z" --yes >/dev/null
 
-"$binary" --json question annul --file "$ledger" --question q-second \
+"$binary" --json question update --file "$ledger" --question q-second --status closed >/dev/null
+"$binary" --json question void --file "$ledger" --question q-second \
   --reason "The second event was cancelled." --recorded-at 2027-01-02T00:01:00Z --yes >/dev/null
 "$binary" --json question dispute --file "$ledger" --question q-second \
   --reason "The cancellation is under review." --recorded-at 2027-01-02T00:02:00Z --yes >/dev/null
@@ -143,22 +152,28 @@ fi
   --forecaster-id dogfood --forecaster-name Dogfood --created-at 2026-01-01T00:00:00Z >/dev/null
 "$binary" --json platform add --file "$yaml_ledger" --platform native --name "Native platform" --kind self_hosted >/dev/null
 "$binary" --json platform update --file "$yaml_ledger" --platform native --name "Updated native platform" --kind internal --account-username native >/dev/null
-"$binary" --json question add --file "$yaml_ledger" --question q-yaml --type binary \
+"$binary" --json question add --file "$yaml_ledger" --question q-yaml --revision-id qr-yaml \
   --title "Will YAML replacements work?" --resolution-criteria "Use the named result." \
-  --created-at 2026-01-01T00:00:00Z --expected-resolution-at 2027-01-01T00:00:00Z \
-  --platform-ref native --tag initial >/dev/null
+  --created-at 2026-01-01T00:00:00Z --effective-at 2026-01-01T00:00:00Z \
+  --revision-recorded-at 2026-01-01T00:00:00Z --expected-resolution-at 2027-01-01T00:00:00Z \
+  --outcome-kind binary --tag initial >/dev/null
 "$binary" --json forecast add --file "$yaml_ledger" --question q-yaml --forecast f-yaml \
+  --question-revision qr-yaml \
   --forecasted-at 2026-02-01T00:00:00Z --recorded-at 2026-02-01T00:01:00Z \
-  --value-kind binary --probability-bp 5500 >/dev/null
-printf '%s\n' '{"value":{"kind":"binary","probability_bp":6500},"rationale":"PRIVATE-NATIVE-YAML","key_factors":["private"],"comment":"private"}' |
+  --probability 0.55 --probability-outcome >/dev/null
+printf '%s\n' '{"representations":[{"kind":"probability","outcome":true,"probability":"0.65"}],"rationale":"PRIVATE-NATIVE-YAML","key_factors":["private"],"comment":"private"}' |
   "$binary" --json forecast seal --file "$yaml_ledger" --question q-yaml --forecast f-yaml-sealed \
+  --question-revision qr-yaml \
   --forecasted-at 2026-03-01T00:00:00Z --recorded-at 2026-03-01T00:01:00Z \
   --secret-input - --key-file "$yaml_key" >/dev/null
 "$binary" --json forecast reveal --file "$yaml_ledger" --question q-yaml --forecast f-yaml-sealed \
   --key-file "$yaml_key" --revealed-at 2026-03-02T00:00:00Z --yes >/dev/null
-"$binary" --json question update --file "$yaml_ledger" --question q-yaml \
-  --title "Updated YAML replacement question" --status closed --tag updated --tag native >/dev/null
-"$binary" --json question annul --file "$yaml_ledger" --question q-yaml \
+"$binary" --json question revise --file "$yaml_ledger" --question q-yaml \
+  --revision-id qr-yaml-2 --effective-at 2026-04-01T00:00:00Z --revision-recorded-at 2026-04-01T00:01:00Z \
+  --title "Updated YAML replacement question" --resolution-criteria "Use the named result." \
+  --expected-resolution-at 2027-01-01T00:00:00Z --outcome-kind binary >/dev/null
+"$binary" --json question update --file "$yaml_ledger" --question q-yaml --status closed --tag updated --tag native >/dev/null
+"$binary" --json question void --file "$yaml_ledger" --question q-yaml \
   --reason "Native YAML lifecycle complete." --recorded-at 2027-01-01T00:01:00Z --yes >/dev/null
 "$binary" --json validate --file "$yaml_ledger" >/dev/null
 if grep -E '^[[:space:]]+[^#[:space:]][^:]*: \{.+\}$|^[[:space:]]+[^#[:space:]][^:]*: \[.+\]$' "$yaml_ledger" >/dev/null; then

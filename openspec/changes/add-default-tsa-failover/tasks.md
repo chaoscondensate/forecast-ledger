@@ -1,3 +1,8 @@
+> v2 cutover note (2026-09-21): `adopt-forecast-ledger-v2` owns the current
+> target and ledger shapes. All unfinished provider, verification, publication,
+> dogfood, and release tasks below run against v2 `forecast-envelope/v2`
+> targets and v2 ledgers; older target names are historical context only.
+
 ## 1. Reconcile the RFC 3161 Contract and Qualify the Current Provider
 
 - [x] 1.1 Reconcile the completed `replace-ots-with-rfc3161` and `complete-forecast-ledger-command-surface` artifacts and current project invariants so their explicit-TSA-only requirements are visibly superseded by this change without rewriting historical release facts.

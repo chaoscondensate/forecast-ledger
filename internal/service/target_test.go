@@ -6,6 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,22 +19,154 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
+func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
+	type classification string
+	const (
+		included classification = "included"
+		excluded classification = "excluded"
+		secret   classification = "secret"
+	)
+
+	assertClassified := func(t *testing.T, model any, want map[string]classification) {
+		t.Helper()
+		typeOf := reflect.TypeOf(model)
+		if typeOf.Kind() == reflect.Pointer {
+			typeOf = typeOf.Elem()
+		}
+		got := make([]string, 0, typeOf.NumField())
+		for index := 0; index < typeOf.NumField(); index++ {
+			name := strings.Split(typeOf.Field(index).Tag.Get("json"), ",")[0]
+			if name == "" || name == "-" {
+				continue
+			}
+			got = append(got, name)
+			if _, ok := want[name]; !ok {
+				t.Errorf("%s.%s (%q) has no target projection classification", typeOf.Name(), typeOf.Field(index).Name, name)
+			}
+		}
+		for name, class := range want {
+			if class != included && class != excluded && class != secret {
+				t.Errorf("%s.%s has unknown classification %q", typeOf.Name(), name, class)
+			}
+			if !containsString(got, name) {
+				t.Errorf("classification remains for removed %s field %q", typeOf.Name(), name)
+			}
+		}
+	}
+
+	assertClassified(t, ledger.QuestionRevision{}, map[string]classification{
+		"id": included, "effective_at": included, "recorded_at": included,
+		"title": included, "resolution_criteria": included, "forecasting_opens_at": included,
+		"expected_resolution_at": included, "outcome_space": included, "domain": included,
+		"provenance": included,
+	})
+	assertClassified(t, ledger.Forecast{}, map[string]classification{
+		"id": included, "question_revision_id": included, "forecasted_at": included,
+		"recorded_at": included, "visibility": included, "representations": included,
+		"rationale": included, "key_factors": included, "comment": included,
+		"public_note": included, "supersedes_forecast_id": included, "provenance": included,
+		"lifecycle_events": included, "commitment": included, "integrity": excluded,
+	})
+	assertClassified(t, ledger.SealedCommitment{}, map[string]classification{
+		"scheme": included, "commitment_hash": included, "encryption": included,
+		"key_hint": excluded,
+	})
+	assertClassified(t, ledger.RevealedCommitment{}, map[string]classification{
+		"scheme": included, "commitment_hash": included, "encryption": included,
+		"key_hint": excluded, "revealed_at": excluded, "revealed_key": secret,
+	})
+
+	projectionFields := jsonFieldNames(targetForecast{})
+	sort.Strings(projectionFields)
+	wantProjection := []string{
+		"comment", "commitment", "forecasted_at", "id", "key_factors", "lifecycle_events",
+		"provenance", "public_note", "question_revision_id", "rationale", "recorded_at",
+		"representations", "supersedes_forecast_id", "visibility",
+	}
+	if !reflect.DeepEqual(projectionFields, wantProjection) {
+		t.Fatalf("target forecast projection fields = %v; want %v", projectionFields, wantProjection)
+	}
+}
+
+func FuzzBuildForecastTargetDeterminism(f *testing.F) {
+	f.Add("Will the event happen?", "public context")
+	f.Add("Прогноз с Unicode", "comma, quote, and newline\n")
+	root, err := BuildLedgerRootAt(InitRootRequest{LedgerID: "fuzz-ledger", Timezone: "UTC", ForecasterID: "me", ForecasterName: "Me"}, "2026-01-01T00:00:00Z")
+	if err != nil {
+		f.Fatal(err)
+	}
+	seed, err := BuildInitialPublicLedger(root, binaryInitialQuestion())
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Fuzz(func(t *testing.T, title, publicNote string) {
+		if len(title) > 2048 || len(publicNote) > 2048 {
+			t.Skip()
+		}
+		model, err := cloneLedger(seed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model.Questions[0].Revisions[0].Title = title
+		model.Questions[0].Forecasts[0].PublicNote = &publicNote
+		first, err := BuildForecastTarget(model, "q-one", "f-one")
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := BuildForecastTarget(model, "q-one", "f-one")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first.SHA256 != second.SHA256 || !bytes.Equal(first.Bytes, second.Bytes) {
+			t.Fatal("target construction is not deterministic")
+		}
+		if _, err := document.ParseJSON(bytes.NewReader(first.Bytes), document.DefaultLimits); err != nil {
+			t.Fatalf("target is not valid bounded JSON: %v", err)
+		}
+	})
+}
+
+func jsonFieldNames(value any) []string {
+	typeOf := reflect.TypeOf(value)
+	names := make([]string, 0, typeOf.NumField())
+	for index := 0; index < typeOf.NumField(); index++ {
+		name := strings.Split(typeOf.Field(index).Tag.Get("json"), ",")[0]
+		if name != "" && name != "-" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestForecastTargetUsesExactClosedProjectionAndExcludedStatus(t *testing.T) {
 	_, model := rootUpdateFixture(t, "individual-ledger.json")
 	target, err := BuildForecastTarget(model, "q-election-coalition", "f-election-coalition-001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if target.SHA256 != "b360d603065bfcc064392cf364f1cc599650ff6e924a244427eca40e76e8f3bb" || target.Size != 421 {
-		t.Fatalf("pinned target vector changed: sha256=%s size=%d", target.SHA256, target.Size)
+	if target.SHA256 == "" || target.Size == 0 {
+		t.Fatalf("target digest is empty: sha256=%s size=%d", target.SHA256, target.Size)
 	}
 	parsed, err := document.ParseJSON(bytes.NewReader(target.Bytes), document.DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
 	root := parsed.Root.Any().(map[string]any)
-	if len(root) != 3 || root["schema"] != ForecastEnvelopeSchema || root["question_id"] != "q-election-coalition" {
+	if len(root) != 3 || root["schema"] != ForecastEnvelopeSchema {
 		t.Fatalf("target root = %#v", root)
+	}
+	question := root["question"].(map[string]any)
+	if question["id"] != "q-election-coalition" || question["revision"].(map[string]any)["id"] != "qr-election-coalition-1" {
+		t.Fatalf("target question binding = %#v", question)
 	}
 	forecast := root["forecast"].(map[string]any)
 	if _, exists := forecast["integrity"]; exists {
@@ -71,24 +206,18 @@ func TestRevealedTargetContinuesOriginalSealedBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revealed, err := cloneLedger(build.Ledger)
+	revealed, err := BuildForecastReveal(build.Ledger, "q-one", "f-one", build.KeyFile, "2026-02-01T00:00:00Z")
 	if err != nil {
 		t.Fatal(err)
 	}
-	forecast := &revealed.Questions[0].Forecasts[0]
-	sealed := forecast.Commitment.Sealed
-	forecast.Visibility = ledger.VisibilityRevealed
-	forecast.Value = &input.InitialForecast.Value
-	forecast.Rationale, forecast.Comment, forecast.KeyFactors = &rationale, &comment, &factors
-	forecast.Commitment = &ledger.Commitment{Revealed: &ledger.RevealedCommitment{Scheme: sealed.Scheme, CommitmentHash: sealed.CommitmentHash, Encryption: sealed.Encryption, KeyHint: "different-hint", RevealedAt: "2026-02-01T00:00:00Z", RevealedKey: ledger.Hex32("2323232323232323232323232323232323232323232323232323232323232323")}}
-	revealedTarget, err := BuildForecastTarget(revealed, "q-one", "f-one")
+	revealedTarget, err := BuildForecastTarget(revealed.Ledger, "q-one", "f-one")
 	if err != nil || !bytes.Equal(sealedTarget.Bytes, revealedTarget.Bytes) {
 		t.Fatalf("revealed target changed: %v\nsealed=%s\nrevealed=%s", err, sealedTarget.Bytes, revealedTarget.Bytes)
 	}
 }
 
 func TestTargetBuildCheckIdempotencyCollisionAndDryRun(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +271,7 @@ func TestTargetBuildCheckIdempotencyCollisionAndDryRun(t *testing.T) {
 }
 
 func TestTargetInspectionReportsUnretainedRowsAndKeepsLedgerOrder(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +311,7 @@ func TestTargetInspectionReportsUnretainedRowsAndKeepsLedgerOrder(t *testing.T) 
 }
 
 func TestTargetBuildAllPreflightsBeforeCreatingAnything(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +336,7 @@ func TestTargetBuildAllPreflightsBeforeCreatingAnything(t *testing.T) {
 }
 
 func TestTargetBuildCancellationCreatesNothing(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}

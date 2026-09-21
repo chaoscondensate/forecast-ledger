@@ -1,5 +1,9 @@
 {
   "$defs": {
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
     "platform": {
       "additionalProperties": false,
       "properties": {
@@ -12,12 +16,10 @@
               "type": "string"
             },
             "user_id": {
-              "minLength": 1,
-              "type": "string"
+              "$ref": "#/$defs/nonEmptyString"
             },
             "username": {
-              "minLength": 1,
-              "type": "string"
+              "$ref": "#/$defs/nonEmptyString"
             }
           },
           "type": "object"
@@ -32,8 +34,7 @@
           ]
         },
         "name": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "url": {
           "format": "uri",
@@ -50,7 +51,7 @@
       "$ref": "#/$defs/platform"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-create/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-create/v2",
   "$ref": "#/$defs/platform-create",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

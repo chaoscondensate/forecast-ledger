@@ -19,7 +19,7 @@
       "type": "object"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/publication-verify/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/publication-verify/v2",
   "$ref": "#/$defs/publication-verify",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

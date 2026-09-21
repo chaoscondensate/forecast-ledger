@@ -7,7 +7,7 @@ import (
 	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
-func TestCurrentIncludesCompatibilityPins(t *testing.T) {
+func TestCurrentIncludesContractPins(t *testing.T) {
 	t.Parallel()
 
 	info := Current()

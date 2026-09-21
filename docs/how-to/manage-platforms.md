@@ -14,7 +14,7 @@ Platform records describe external or local places associated with questions.
 They do not publish data or contact a service. Every command names the ledger
 with `--file`.
 
-Add a platform under a stable ID. The v1.3.0 contract requires both its name and
+Add a platform under a stable ID. The v2.0.0 contract requires both its name and
 kind, so an ID alone reports those missing flags instead of inventing defaults:
 
 ```sh
@@ -57,8 +57,8 @@ Both commands accept a ledger on stdin with `--file -`. List order and
 referencing question IDs are stable and sorted. JSON output includes the ledger
 ID, exact platform record, and reference counts.
 
-Removal is allowed only when no question references the platform and requires
-confirmation:
+Removal is allowed only when no revision, forecast, or lifecycle provenance
+references the platform and requires confirmation:
 
 ```sh
 forecast-ledger platform remove \

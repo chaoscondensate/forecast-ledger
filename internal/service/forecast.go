@@ -16,13 +16,15 @@ type ForecastMutation struct {
 }
 
 type ForecastSummary struct {
-	ID                   ledger.Slug               `json:"id"`
-	ForecastedAt         ledger.Timestamp          `json:"forecasted_at"`
-	RecordedAt           ledger.Timestamp          `json:"recorded_at"`
-	Visibility           ledger.ForecastVisibility `json:"visibility"`
-	SupersedesForecastID *ledger.Slug              `json:"supersedes_forecast_id,omitempty"`
-	IntegrityStatus      ledger.IntegrityStatus    `json:"integrity_status"`
-	ValueSummary         string                    `json:"value_summary,omitempty"`
+	ID                   ledger.Slug                 `json:"id"`
+	QuestionRevisionID   ledger.Slug                 `json:"question_revision_id"`
+	ForecastedAt         ledger.Timestamp            `json:"forecasted_at"`
+	RecordedAt           ledger.Timestamp            `json:"recorded_at"`
+	Visibility           ledger.ForecastVisibility   `json:"visibility"`
+	RepresentationKinds  []ledger.RepresentationKind `json:"representation_kinds,omitempty"`
+	Active               bool                        `json:"active"`
+	SupersedesForecastID *ledger.Slug                `json:"supersedes_forecast_id,omitempty"`
+	IntegrityStatus      ledger.IntegrityStatus      `json:"integrity_status"`
 }
 
 type CommitmentView struct {
@@ -35,14 +37,16 @@ type CommitmentView struct {
 }
 
 type ForecastView struct {
-	Summary    ForecastSummary       `json:"summary"`
-	Value      *ledger.ForecastValue `json:"value,omitempty"`
-	Rationale  *string               `json:"rationale,omitempty"`
-	KeyFactors *[]string             `json:"key_factors,omitempty"`
-	Comment    *string               `json:"comment,omitempty"`
-	PublicNote *string               `json:"public_note,omitempty"`
-	Commitment *CommitmentView       `json:"commitment,omitempty"`
-	Integrity  ForecastIntegrityView `json:"integrity"`
+	Summary         ForecastSummary                  `json:"summary"`
+	Representations *[]ledger.ForecastRepresentation `json:"representations,omitempty"`
+	Rationale       *string                          `json:"rationale,omitempty"`
+	KeyFactors      *[]string                        `json:"key_factors,omitempty"`
+	Comment         *string                          `json:"comment,omitempty"`
+	PublicNote      *string                          `json:"public_note,omitempty"`
+	Provenance      *ledger.Provenance               `json:"provenance,omitempty"`
+	LifecycleEvents *[]ledger.LifecycleEvent         `json:"lifecycle_events,omitempty"`
+	Commitment      *CommitmentView                  `json:"commitment,omitempty"`
+	Integrity       ForecastIntegrityView            `json:"integrity"`
 }
 
 type ForecastIntegrityView struct {
@@ -57,21 +61,25 @@ type ForecastIntegrityView struct {
 func BuildPublicForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, input ForecastCreateInput, observedAt ledger.Timestamp) (ForecastMutation, error) {
 	var result ForecastMutation
 	forecastedAt, recordedAt := DefaultForecastTimes(input.ForecastedAt, input.RecordedAt, observedAt)
-	questionPosition, question, err := prepareForecastAppend(model, questionID, forecastID, forecastedAt, recordedAt, input.SupersedesForecastID)
+	questionPosition, question, revision, err := prepareForecastAppend(model, questionID, input.QuestionRevisionID, forecastID, forecastedAt, recordedAt, input.SupersedesForecastID)
 	if err != nil {
 		return result, err
 	}
-	if err := ValidateForecastValue(question.Type, question.Options, &input.Value); err != nil {
-		return result, err
+	if len(input.Representations) == 0 {
+		return result, invalidField("representations", "at least one forecast representation is required")
 	}
 	if err := validateOptionalKeyFactors(input.KeyFactors); err != nil {
 		return result, err
 	}
-	value := input.Value
+	if err := validateForecastChronology(&revision, forecastedAt, recordedAt); err != nil {
+		return result, err
+	}
+	representations := append([]ledger.ForecastRepresentation(nil), input.Representations...)
 	forecast := ledger.Forecast{
-		ID: forecastID, ForecastedAt: forecastedAt, RecordedAt: recordedAt,
-		Visibility: ledger.VisibilityPublic, Value: &value,
-		Rationale: cloneString(input.Rationale), KeyFactors: cloneStrings(input.KeyFactors), Comment: cloneString(input.Comment), PublicNote: cloneString(input.PublicNote),
+		ID: forecastID, QuestionRevisionID: revision.ID, ForecastedAt: forecastedAt, RecordedAt: recordedAt,
+		Visibility: ledger.VisibilityPublic, Representations: &representations,
+		Rationale: cloneString(input.Rationale), KeyFactors: cloneStrings(input.KeyFactors), Comment: cloneString(input.Comment),
+		PublicNote: cloneString(input.PublicNote), Provenance: input.Provenance,
 		SupersedesForecastID: cloneSlug(input.SupersedesForecastID),
 		Integrity:            ledger.Integrity{Unanchored: &ledger.UnanchoredIntegrity{Status: ledger.IntegrityUnanchored}},
 	}
@@ -89,12 +97,10 @@ func BuildPublicForecastAppend(model *ledger.Ledger, questionID, forecastID ledg
 	}
 	result.Ledger = prospective
 	result.Patches = []document.PatchOperation{{Kind: document.PatchAdd, Pointer: questionForecastAppendPointer(questionPosition), Value: valuePatch}}
+	_ = question
 	return result, nil
 }
 
-// DefaultForecastTimes applies the one-capture authoring rule shared by CLI and
-// MCP: omitted forecasted_at and recorded_at both use the caller's single
-// observed timestamp.
 func DefaultForecastTimes(forecastedAt ledger.Timestamp, explicitRecordedAt *ledger.Timestamp, observedAt ledger.Timestamp) (ledger.Timestamp, ledger.Timestamp) {
 	if forecastedAt == "" {
 		forecastedAt = observedAt
@@ -106,47 +112,57 @@ func DefaultForecastTimes(forecastedAt ledger.Timestamp, explicitRecordedAt *led
 	return forecastedAt, recordedAt
 }
 
-func prepareForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, forecastedAt, recordedAt ledger.Timestamp, supersedes *ledger.Slug) (int, ledger.Question, error) {
+func prepareForecastAppend(model *ledger.Ledger, questionID, revisionID, forecastID ledger.Slug, forecastedAt, recordedAt ledger.Timestamp, supersedes *ledger.Slug) (int, ledger.Question, ledger.QuestionRevision, error) {
 	if model == nil {
-		return 0, ledger.Question{}, app.NewError(app.CodeInternal, "ledger is nil", nil)
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, app.NewError(app.CodeInternal, "ledger is nil", nil)
 	}
 	if err := ValidateSlug(questionID, "question"); err != nil {
-		return 0, ledger.Question{}, err
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, err
+	}
+	if err := ValidateSlug(revisionID, "question_revision_id"); err != nil {
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, err
 	}
 	if err := ValidateSlug(forecastID, "forecast"); err != nil {
-		return 0, ledger.Question{}, err
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, err
 	}
 	index, err := ledger.BuildIndex(model)
 	if err != nil {
-		return 0, ledger.Question{}, app.NewError(app.CodeInvalidData, "ledger indexes are invalid", err)
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, app.NewError(app.CodeInvalidData, "ledger indexes are invalid", err)
 	}
 	questionPosition, exists := index.Question(questionID)
 	if !exists {
-		return 0, ledger.Question{}, app.WithDetails(app.NewError(app.CodeNotFound, "question was not found", nil), map[string]any{"question_id": questionID})
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, app.WithDetails(app.NewError(app.CodeNotFound, "question was not found", nil), map[string]any{"question_id": questionID})
 	}
 	question := model.Questions[questionPosition]
 	if question.Status != ledger.QuestionOpen {
-		return 0, ledger.Question{}, app.WithDetails(app.NewError(app.CodeConflict, "forecasts can be added only to an open question", nil), map[string]any{"question_id": questionID, "status": question.Status})
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, app.WithDetails(app.NewError(app.CodeConflict, "forecasts can be added only to an open question", nil), map[string]any{"question_id": questionID, "status": question.Status})
+	}
+	var revision *ledger.QuestionRevision
+	for i := range question.Revisions {
+		if question.Revisions[i].ID == revisionID {
+			revision = &question.Revisions[i]
+			break
+		}
+	}
+	if revision == nil {
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, invalidField("question_revision_id", "revision does not belong to the selected question")
 	}
 	if _, exists := index.Forecast(forecastID); exists {
-		return 0, ledger.Question{}, app.WithDetails(app.NewError(app.CodeConflict, "forecast ID already exists", nil), map[string]any{"forecast_id": forecastID})
-	}
-	if err := validateForecastChronology(question.ForecastWindow, forecastedAt, recordedAt); err != nil {
-		return 0, ledger.Question{}, err
+		return 0, ledger.Question{}, ledger.QuestionRevision{}, app.WithDetails(app.NewError(app.CodeConflict, "forecast ID already exists", nil), map[string]any{"forecast_id": forecastID})
 	}
 	if len(question.Forecasts) > 0 {
 		last := question.Forecasts[len(question.Forecasts)-1]
 		if err := ValidateChronology(last.RecordedAt, "previous.recorded_at", recordedAt, "recorded_at", true); err != nil {
-			return 0, ledger.Question{}, invalidField("recorded_at", "forecast records must remain ordered by recorded time")
+			return 0, ledger.Question{}, ledger.QuestionRevision{}, invalidField("recorded_at", "forecast records must remain ordered by recorded time")
 		}
 	}
 	if supersedes != nil {
 		location, exists := index.Forecast(*supersedes)
 		if !exists || location.QuestionID != questionID {
-			return 0, ledger.Question{}, invalidField("supersedes_forecast_id", "supersedes must identify an earlier forecast in the same question")
+			return 0, ledger.Question{}, ledger.QuestionRevision{}, invalidField("supersedes_forecast_id", "supersedes must identify an earlier forecast in the same question")
 		}
 	}
-	return questionPosition, question, nil
+	return questionPosition, question, *revision, nil
 }
 
 func ListForecasts(model *ledger.Ledger, questionID ledger.Slug) ([]ForecastSummary, error) {
@@ -155,8 +171,8 @@ func ListForecasts(model *ledger.Ledger, questionID ledger.Slug) ([]ForecastSumm
 		return nil, err
 	}
 	result := make([]ForecastSummary, len(question.Forecasts))
-	for index, forecast := range question.Forecasts {
-		result[index] = summarizeForecast(forecast)
+	for i, forecast := range question.Forecasts {
+		result[i] = summarizeForecast(forecast)
 	}
 	return result, nil
 }
@@ -167,28 +183,23 @@ func ShowForecast(model *ledger.Ledger, questionID, forecastID ledger.Slug) (For
 		return ForecastView{}, err
 	}
 	var selected *ledger.Forecast
-	for index := range question.Forecasts {
-		if question.Forecasts[index].ID == forecastID {
-			selected = &question.Forecasts[index]
+	for i := range question.Forecasts {
+		if question.Forecasts[i].ID == forecastID {
+			selected = &question.Forecasts[i]
 			break
 		}
 	}
 	if selected == nil {
 		return ForecastView{}, app.WithDetails(app.NewError(app.CodeNotFound, "forecast was not found in the selected question", nil), map[string]any{"question_id": questionID, "forecast_id": forecastID})
 	}
-	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote), Integrity: forecastIntegrityView(selected.Integrity)}
+	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote), Provenance: selected.Provenance, LifecycleEvents: selected.LifecycleEvents, Integrity: forecastIntegrityView(selected.Integrity)}
 	if selected.Visibility != ledger.VisibilitySealed {
-		view.Value = cloneForecastValue(selected.Value)
-		view.Rationale = cloneString(selected.Rationale)
-		view.KeyFactors = cloneStrings(selected.KeyFactors)
-		view.Comment = cloneString(selected.Comment)
+		view.Representations = cloneRepresentations(selected.Representations)
+		view.Rationale, view.KeyFactors, view.Comment = cloneString(selected.Rationale), cloneStrings(selected.KeyFactors), cloneString(selected.Comment)
 	}
-	if selected.Commitment != nil {
-		view.Commitment = commitmentView(selected.Commitment)
-		if selected.Visibility == ledger.VisibilitySealed && view.Commitment != nil {
-			view.Commitment.Encryption.Ciphertext = ""
-			view.Commitment.Encryption.Nonce = ""
-		}
+	view.Commitment = commitmentView(selected.Commitment)
+	if selected.Visibility == ledger.VisibilitySealed && view.Commitment != nil {
+		view.Commitment.Encryption.Ciphertext, view.Commitment.Encryption.Nonce = "", ""
 	}
 	return view, nil
 }
@@ -201,10 +212,10 @@ func forecastIntegrityView(value ledger.Integrity) ForecastIntegrityView {
 		view.Target = &target
 		view.Timestamps = append([]ledger.RFC3161Timestamp(nil), value.Pending.Timestamps...)
 	case value.Verified != nil:
-		target, verifiedAt := value.Verified.Target, value.Verified.VerifiedAt
+		target, at := value.Verified.Target, value.Verified.VerifiedAt
 		view.Target = &target
 		view.Timestamps = append([]ledger.RFC3161Timestamp(nil), value.Verified.Timestamps...)
-		view.VerifiedAt = &verifiedAt
+		view.VerifiedAt = &at
 		view.StoredOnly = true
 	case value.Failed != nil:
 		view.FailureReason = value.Failed.FailureReason
@@ -235,22 +246,41 @@ func selectQuestion(model *ledger.Ledger, id ledger.Slug) (int, ledger.Question,
 }
 
 func summarizeForecast(forecast ledger.Forecast) ForecastSummary {
-	return ForecastSummary{
-		ID: forecast.ID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt,
-		Visibility: forecast.Visibility, SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), IntegrityStatus: integrityStatus(forecast.Integrity),
-		ValueSummary: forecastValueSummary(forecast.Value),
+	kinds := []ledger.RepresentationKind{}
+	if forecast.Representations != nil {
+		for _, representation := range *forecast.Representations {
+			kinds = append(kinds, representationKind(representation))
+		}
 	}
+	return ForecastSummary{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, RepresentationKinds: kinds, Active: forecastActive(forecast), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), IntegrityStatus: integrityStatus(forecast.Integrity)}
 }
 
-func forecastValueSummary(value *ledger.ForecastValue) string {
-	if value == nil {
-		return ""
+func representationKind(value ledger.ForecastRepresentation) ledger.RepresentationKind {
+	switch {
+	case value.Probability != nil:
+		return value.Probability.Kind
+	case value.PMF != nil:
+		return value.PMF.Kind
+	case value.BinnedPMF != nil:
+		return value.BinnedPMF.Kind
+	case value.Quantiles != nil:
+		return value.Quantiles.Kind
+	case value.CDF != nil:
+		return value.CDF.Kind
+	case value.Point != nil:
+		return value.Point.Kind
+	case value.CredibleIntervals != nil:
+		return value.CredibleIntervals.Kind
 	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return ""
+	return ""
+}
+
+func forecastActive(value ledger.Forecast) bool {
+	if value.LifecycleEvents == nil || len(*value.LifecycleEvents) == 0 {
+		return true
 	}
-	return string(encoded)
+	last := (*value.LifecycleEvents)[len(*value.LifecycleEvents)-1]
+	return last.Type == ledger.LifecycleReaffirmed
 }
 
 func integrityStatus(value ledger.Integrity) ledger.IntegrityStatus {
@@ -263,9 +293,8 @@ func integrityStatus(value ledger.Integrity) ledger.IntegrityStatus {
 		return value.Verified.Status
 	case value.Failed != nil:
 		return value.Failed.Status
-	default:
-		return ""
 	}
+	return ""
 }
 
 func commitmentView(value *ledger.Commitment) *CommitmentView {
@@ -273,31 +302,33 @@ func commitmentView(value *ledger.Commitment) *CommitmentView {
 		return nil
 	}
 	if value.Sealed != nil {
-		sealed := value.Sealed
-		return &CommitmentView{Scheme: sealed.Scheme, CommitmentHash: sealed.CommitmentHash, Encryption: sealed.Encryption, KeyHint: sealed.KeyHint}
+		v := value.Sealed
+		return &CommitmentView{Scheme: v.Scheme, CommitmentHash: v.CommitmentHash, Encryption: v.Encryption, KeyHint: v.KeyHint}
 	}
 	if value.Revealed != nil {
-		revealed := value.Revealed
-		at := revealed.RevealedAt
-		return &CommitmentView{Scheme: revealed.Scheme, CommitmentHash: revealed.CommitmentHash, Encryption: revealed.Encryption, KeyHint: revealed.KeyHint, RevealedAt: &at, RevealedKeyRedacted: true}
+		v := value.Revealed
+		at := v.RevealedAt
+		return &CommitmentView{Scheme: v.Scheme, CommitmentHash: v.CommitmentHash, Encryption: v.Encryption, KeyHint: v.KeyHint, RevealedAt: &at, RevealedKeyRedacted: true}
 	}
 	return nil
 }
 
-func cloneForecastValue(value *ledger.ForecastValue) *ledger.ForecastValue {
+func cloneRepresentations(value *[]ledger.ForecastRepresentation) *[]ledger.ForecastRepresentation {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	encoded, _ := json.Marshal(value)
+	var result []ledger.ForecastRepresentation
+	_ = json.Unmarshal(encoded, &result)
+	return &result
 }
 
 func cloneSlug(value *ledger.Slug) *ledger.Slug {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	copyValue := *value
+	return &copyValue
 }
 
 func validateOptionalKeyFactors(value *[]string) error {

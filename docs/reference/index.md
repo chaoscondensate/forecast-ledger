@@ -10,7 +10,7 @@ prerequisites: ../index.md
 next: ../explanation/index.md
 -->
 
-Reference material records exact interfaces and compatibility facts. The
+Reference material records exact interfaces and contract facts. The
 current reviewed sources are:
 
 - [implementation, release, and contract baseline](../development/documentation-baseline.md);

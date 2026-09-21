@@ -18,7 +18,7 @@ import (
 )
 
 func TestCommitRootMetadataFileUpdatePreservesUnrelatedYAMLBytes(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "team-ledger.yaml")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "team-ledger.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestCommitRootMetadataFileUpdatePreservesUnrelatedYAMLBytes(t *testing.T) {
 }
 
 func TestServiceMutationAutomaticallyRecoversInterruptedLedgerWrite(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestServiceMutationAutomaticallyRecoversInterruptedLedgerWrite(t *testing.T
 }
 
 func TestPlanRootMetadataFileUpdateDoesNotWrite(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}

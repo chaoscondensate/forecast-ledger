@@ -1,0 +1,29 @@
+{
+  "$defs": {
+    "group-patch": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "minLength": 0,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/group-patch/v2",
+  "$ref": "#/$defs/group-patch",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

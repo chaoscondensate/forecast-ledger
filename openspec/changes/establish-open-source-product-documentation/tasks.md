@@ -1,3 +1,9 @@
+> v2 cutover note (2026-09-21): `adopt-forecast-ledger-v2` owns current public
+> behavior and examples. Every unfinished documentation, scenario, reference,
+> compatibility, and release task below must describe and test the v2 command
+> surface; v1.x material may appear only as clearly labelled migration or
+> historical information.
+
 ## 1. Decisions and Documentation Baseline
 
 - [x] 1.1 Reconcile this change with documentation tasks 11.1–11.6 in `build-forecast-ledger-cli-mcp`, assigning each deliverable to one checklist and eliminating duplicate ownership

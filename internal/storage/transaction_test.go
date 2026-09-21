@@ -16,7 +16,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
 )
 
-func TestUpdateLedgerValidatesTwiceAndPreservesPresentation(t *testing.T) {
+func TestUpdateLedgerValidatesBeforeLockAndTwiceInsideTransaction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ledger.yaml")
 	original := "# keep\ntitle: 'Before'\ncount: 1\n"
 	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
@@ -38,8 +38,8 @@ func TestUpdateLedgerValidatesTwiceAndPreservesPresentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validations != 2 {
-		t.Fatalf("validations = %d, want 2", validations)
+	if validations != 3 {
+		t.Fatalf("validations = %d, want 3", validations)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestUpdateLedgerRollsBackOnPreAndPostValidationFailure(t *testing.T) {
 	err = UpdateLedger(context.Background(), path, TransactionOptions{
 		Validate: func(*document.Document) error {
 			validations++
-			if validations == 2 {
+			if validations == 3 {
 				return errors.New("invalid after")
 			}
 			return nil
@@ -125,7 +125,7 @@ func TestYAMLReplacementParseAndPostValidationFailuresLeaveNoTransactionArtifact
 				calls := 0
 				return func(*document.Document) error {
 					calls++
-					if calls == 2 {
+					if calls == 3 {
 						return errors.New("injected post-mutation rejection")
 					}
 					return nil

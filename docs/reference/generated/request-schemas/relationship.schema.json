@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "conditionalRelationship": {
+      "additionalProperties": false,
+      "properties": {
+        "child_question_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "kind": {
+          "const": "conditional"
+        },
+        "parent_outcome": {
+          "$ref": "#/$defs/scalarValue"
+        },
+        "parent_question_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "parent_question_revision_id": {
+          "$ref": "#/$defs/slug"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "parent_question_id",
+        "parent_question_revision_id",
+        "parent_outcome",
+        "child_question_id"
+      ],
+      "type": "object"
+    },
+    "groupMembership": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "kind": {
+          "const": "group_membership"
+        },
+        "question_id": {
+          "$ref": "#/$defs/slug"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "group_id",
+        "question_id"
+      ],
+      "type": "object"
+    },
+    "relationship": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/groupMembership"
+        },
+        {
+          "$ref": "#/$defs/conditionalRelationship"
+        }
+      ]
+    },
+    "relationshipInput": {
+      "additionalProperties": false,
+      "properties": {
+        "relationship": {
+          "$ref": "#/$defs/relationship"
+        }
+      },
+      "required": [
+        "relationship"
+      ],
+      "type": "object"
+    },
+    "scalarValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/relationship/v2",
+  "$ref": "#/$defs/relationshipInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

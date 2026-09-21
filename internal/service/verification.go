@@ -72,7 +72,7 @@ type VerificationOptions struct {
 }
 
 var verificationLimitations = []string{
-	"Forecast Ledger v1 does not prove authorship.",
+	"Forecast Ledger v2 does not prove authorship.",
 	"It does not prove that the ledger or forecast set is complete.",
 	"It does not prove forecast truth or calibration.",
 	"Forecast and outcome times are self-reported; verified RFC 3161 evidence supplies a signed generation time for the exact target.",
@@ -230,12 +230,12 @@ func verifyRevealLayer(question ledger.Question, forecast ledger.Forecast, conte
 	if err != nil {
 		return failedLayer(layer.Name, "reveal.key_invalid", err)
 	}
-	keyFile, err := forecastcrypto.EncodeKeyFile(question.ID, forecast.ID, key)
+	keyFile, err := forecastcrypto.EncodeKeyFile(question.ID, forecast.QuestionRevisionID, forecast.ID, key)
 	clear(key)
 	if err != nil {
 		return failedLayer(layer.Name, "reveal.key_invalid", err)
 	}
-	opened, err := forecastcrypto.Open(keyFile, question.ID, forecast.ID, ledger.SealedCommitment{Scheme: revealed.Scheme, CommitmentHash: revealed.CommitmentHash, Encryption: revealed.Encryption, KeyHint: revealed.KeyHint})
+	opened, err := forecastcrypto.Open(keyFile, question.ID, forecast.QuestionRevisionID, forecast.ID, ledger.SealedCommitment{Scheme: revealed.Scheme, CommitmentHash: revealed.CommitmentHash, Encryption: revealed.Encryption, KeyHint: revealed.KeyHint})
 	clear(keyFile)
 	if err != nil {
 		return failedLayer(layer.Name, "reveal.authentication_failed", err)
@@ -257,8 +257,8 @@ func verifyOutcomeLayer(ctx context.Context, question ledger.Question, options V
 	var sources []ledger.ResolutionSource
 	if question.Resolution.Resolved != nil {
 		sources = question.Resolution.Resolved.Sources
-	} else if question.Resolution.NonResolved != nil && question.Resolution.NonResolved.Sources != nil {
-		sources = *question.Resolution.NonResolved.Sources
+	} else if question.Resolution.Unresolved != nil && question.Resolution.Unresolved.Sources != nil {
+		sources = *question.Resolution.Unresolved.Sources
 	}
 	layer.State, layer.ReasonCodes = LayerPass, []string{"outcome.metadata_valid"}
 	layer.Evidence = map[string]any{"source_count": len(sources), "status": question.Status}

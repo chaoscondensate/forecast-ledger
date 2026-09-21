@@ -32,7 +32,7 @@ Each checked layer reports one of these states:
 
 Do not collapse these states into one boolean named `verified`.
 
-Forecast Ledger v1.2 permits an empty ledger and a question with no forecasts.
+Forecast Ledger v2 permits an empty ledger and a question with no forecasts.
 Verification over such an empty selection returns overall `no_evidence`, not
 `pass`, even when the document itself is valid. Overall `pass` is reserved for
 a selection with at least one applicable forecast-evidence layer. Empty
@@ -118,7 +118,7 @@ validity, publication, or a passing group of unrelated checks.
 
 ### Authorship
 
-Authorship identifies who created or approved material. Forecast Ledger v1 does
+Authorship identifies who created or approved material. Forecast Ledger v2 does
 not provide a digital authorship signature. An ID, account name, repository
 commit, file owner, or possession of a reveal key is not sufficient authorship
 proof.

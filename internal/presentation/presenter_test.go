@@ -93,13 +93,13 @@ func TestNonTTYPlainQuietVerboseAndNoColor(t *testing.T) {
 
 func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
 	data := struct {
-		Value     ledger.ForecastValue `json:"value"`
-		Integrity ledger.Integrity     `json:"integrity"`
+		Representations []ledger.ForecastRepresentation `json:"representations"`
+		Integrity       ledger.Integrity                `json:"integrity"`
 	}{
-		Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 6250}},
+		Representations: []ledger.ForecastRepresentation{{Probability: &ledger.ProbabilityRepresentation{Kind: ledger.RepresentationProbability, Outcome: true, Probability: "0.625"}}},
 		Integrity: ledger.Integrity{Pending: &ledger.PendingIntegrity{
 			Status: ledger.IntegrityPending,
-			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v1", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
+			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v2", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
 		}},
 	}
 	redacted, err := Redact(data)
@@ -111,12 +111,12 @@ func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(encoded)
-	for _, forbidden := range []string{"Binary", "MultipleChoice", "Numeric", "Date", "Unanchored", "Pending", "Verified", "Failed"} {
+	for _, forbidden := range []string{"Probability", "PMF", "BinnedPMF", "Quantiles", "CDF", "Point", "CredibleIntervals", "Unanchored", "Pending", "Verified", "Failed"} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("internal union branch %q leaked in %s", forbidden, text)
 		}
 	}
-	if !strings.Contains(text, `"kind":"binary"`) || !strings.Contains(text, `"status":"pending"`) {
+	if !strings.Contains(text, `"kind":"probability"`) || !strings.Contains(text, `"status":"pending"`) {
 		t.Fatalf("public union shape missing from %s", text)
 	}
 }

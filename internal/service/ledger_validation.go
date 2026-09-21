@@ -31,7 +31,7 @@ func ValidateLedgerDocument(parsed *document.Document, artifacts fs.FS) error {
 	}
 	if len(issues) > 0 {
 		return app.WithDetails(
-			app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v1", nil),
+			app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v2", nil),
 			map[string]any{"issues": ledgerSchemaDiagnostics(parsed, issues)},
 		)
 	}

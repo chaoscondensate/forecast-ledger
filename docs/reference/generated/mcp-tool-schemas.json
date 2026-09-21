@@ -14,253 +14,388 @@
       },
       "tool_schema": {
         "$defs": {
-          "binaryValue": {
+          "artifactSnapshot": {
             "additionalProperties": false,
             "properties": {
-              "kind": {
-                "const": "binary"
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
               },
-              "probability_bp": {
-                "description": "Probability of YES in basis points.",
-                "maximum": 10000,
-                "minimum": 0,
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "binSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
                 "type": "integer"
               }
             },
             "required": [
-              "kind",
-              "probability_bp"
+              "id",
+              "version"
             ],
             "type": "object"
           },
-          "choiceProbability": {
+          "binnedPmfEntry": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "bin_id",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "binnedPmfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_set_ref": {
+                "$ref": "#/$defs/binSetRef"
+              },
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/binnedPmfEntry"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "binned_pmf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "bin_set_ref",
+              "entries",
+              "left_tail_probability",
+              "right_tail_probability"
+            ],
+            "type": "object"
+          },
+          "cdfPoint": {
+            "additionalProperties": false,
+            "properties": {
+              "probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "value",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "cdfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "step_right",
+                  "linear"
+                ]
+              },
+              "kind": {
+                "const": "cdf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/cdfPoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points",
+              "left_tail_probability",
+              "right_tail_probability"
+            ],
+            "type": "object"
+          },
+          "credibleInterval": {
+            "additionalProperties": false,
+            "properties": {
+              "coverage": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "interval_kind": {
+                "enum": [
+                  "equal_tailed",
+                  "central",
+                  "highest_density",
+                  "author_selected"
+                ]
+              },
+              "lower": {
+                "$ref": "#/$defs/scalarValue"
+              },
+              "upper": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "coverage",
+              "interval_kind",
+              "lower",
+              "upper"
+            ],
+            "type": "object"
+          },
+          "credibleIntervalsRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "intervals": {
+                "items": {
+                  "$ref": "#/$defs/credibleInterval"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "credible_intervals"
+              }
+            },
+            "required": [
+              "kind",
+              "intervals"
+            ],
+            "type": "object"
+          },
+          "forecast-create": {
+            "$ref": "#/$defs/publicForecastInput"
+          },
+          "forecastRepresentation": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/probabilityRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/binnedPmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/quantilesRepresentation"
+              },
+              {
+                "$ref": "#/$defs/cdfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pointRepresentation"
+              },
+              {
+                "$ref": "#/$defs/credibleIntervalsRepresentation"
+              }
+            ]
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "openProbability": {
+            "description": "An exact canonical decimal probability strictly between 0 and 1.",
+            "pattern": "^0\\.[0-9]{0,17}[1-9]$",
+            "type": "string"
+          },
+          "optionSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "type": "object"
+          },
+          "pmfEntry": {
             "additionalProperties": false,
             "properties": {
               "option_id": {
                 "$ref": "#/$defs/slug"
               },
-              "probability_bp": {
-                "maximum": 10000,
-                "minimum": 0,
-                "type": "integer"
+              "probability": {
+                "$ref": "#/$defs/probability"
               }
             },
             "required": [
               "option_id",
-              "probability_bp"
+              "probability"
             ],
             "type": "object"
           },
-          "date": {
-            "format": "date",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "type": "string"
-          },
-          "dateInterval": {
+          "pmfRepresentation": {
             "additionalProperties": false,
             "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "lower": {
-                "$ref": "#/$defs/date"
-              },
-              "upper": {
-                "$ref": "#/$defs/date"
-              }
-            },
-            "required": [
-              "lower",
-              "upper",
-              "credibility_bp"
-            ],
-            "type": "object"
-          },
-          "dateQuantile": {
-            "additionalProperties": false,
-            "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "value": {
-                "$ref": "#/$defs/date"
-              }
-            },
-            "required": [
-              "probability_bp",
-              "value"
-            ],
-            "type": "object"
-          },
-          "dateValue": {
-            "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
-                ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
-            "properties": {
-              "interval": {
-                "$ref": "#/$defs/dateInterval"
-              },
-              "kind": {
-                "const": "date"
-              },
-              "point": {
-                "$ref": "#/$defs/date"
-              },
-              "quantiles": {
+              "entries": {
                 "items": {
-                  "$ref": "#/$defs/dateQuantile"
-                },
-                "minItems": 1,
-                "type": "array"
-              }
-            },
-            "required": [
-              "kind"
-            ],
-            "type": "object"
-          },
-          "decimal": {
-            "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": "string"
-          },
-          "forecast-create": {
-            "$ref": "#/$defs/publicForecastInput"
-          },
-          "forecastValue": {
-            "oneOf": [
-              {
-                "$ref": "#/$defs/binaryValue"
-              },
-              {
-                "$ref": "#/$defs/multipleChoiceValue"
-              },
-              {
-                "$ref": "#/$defs/numericValue"
-              },
-              {
-                "$ref": "#/$defs/dateValue"
-              }
-            ]
-          },
-          "multipleChoiceValue": {
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "multiple_choice"
-              },
-              "probabilities": {
-                "items": {
-                  "$ref": "#/$defs/choiceProbability"
+                  "$ref": "#/$defs/pmfEntry"
                 },
                 "minItems": 2,
                 "type": "array"
+              },
+              "kind": {
+                "const": "pmf"
+              },
+              "option_set_ref": {
+                "$ref": "#/$defs/optionSetRef"
               }
             },
             "required": [
               "kind",
-              "probabilities"
+              "option_set_ref",
+              "entries"
             ],
             "type": "object"
           },
-          "numericInterval": {
+          "pointRepresentation": {
             "additionalProperties": false,
             "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
+              "kind": {
+                "const": "point"
               },
-              "lower": {
-                "$ref": "#/$defs/decimal"
-              },
-              "upper": {
-                "$ref": "#/$defs/decimal"
-              }
-            },
-            "required": [
-              "lower",
-              "upper",
-              "credibility_bp"
-            ],
-            "type": "object"
-          },
-          "numericQuantile": {
-            "additionalProperties": false,
-            "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
+              "statistic": {
+                "enum": [
+                  "mean",
+                  "median",
+                  "mode",
+                  "best_estimate"
+                ]
               },
               "value": {
-                "$ref": "#/$defs/decimal"
+                "$ref": "#/$defs/scalarValue"
               }
             },
             "required": [
-              "probability_bp",
+              "kind",
+              "statistic",
               "value"
             ],
             "type": "object"
           },
-          "numericValue": {
+          "probability": {
+            "description": "An exact canonical decimal probability in [0,1], with at most 18 fractional digits.",
+            "pattern": "^(?:0|1|0\\.[0-9]{0,17}[1-9])$",
+            "type": "string"
+          },
+          "probabilityRepresentation": {
             "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
-                ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
             "properties": {
-              "interval": {
-                "$ref": "#/$defs/numericInterval"
-              },
               "kind": {
-                "const": "numeric"
+                "const": "probability"
               },
-              "point": {
-                "$ref": "#/$defs/decimal"
+              "outcome": {
+                "const": true
               },
-              "quantiles": {
-                "items": {
-                  "$ref": "#/$defs/numericQuantile"
-                },
-                "minItems": 1,
-                "type": "array"
+              "probability": {
+                "$ref": "#/$defs/probability"
               }
             },
             "required": [
-              "kind"
+              "kind",
+              "outcome",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
             ],
             "type": "object"
           },
@@ -281,9 +416,15 @@
                 },
                 "type": "array"
               },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
               "public_note": {
                 "minLength": 0,
                 "type": "string"
+              },
+              "question_revision_id": {
+                "$ref": "#/$defs/slug"
               },
               "rationale": {
                 "minLength": 0,
@@ -292,14 +433,97 @@
               "recorded_at": {
                 "$ref": "#/$defs/timestamp"
               },
+              "representations": {
+                "items": {
+                  "$ref": "#/$defs/forecastRepresentation"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "supersedes_forecast_id": {
                 "$ref": "#/$defs/slug"
-              },
-              "value": {
-                "$ref": "#/$defs/forecastValue"
               }
             },
             "required": [
+              "question_revision_id",
+              "representations"
+            ],
+            "type": "object"
+          },
+          "quantilePoint": {
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "level",
+              "value"
+            ],
+            "type": "object"
+          },
+          "quantilesRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "none",
+                  "linear",
+                  "step_lower",
+                  "step_upper"
+                ]
+              },
+              "kind": {
+                "const": "quantiles"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/quantilePoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "scalarValue": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
               "value"
             ],
             "type": "object"
@@ -311,7 +535,6 @@
             "type": "string"
           },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
@@ -348,6 +571,9 @@
             },
             "type": "array"
           },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
           "public_note": {
             "minLength": 0,
             "type": "string"
@@ -357,6 +583,9 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "question_revision_id": {
+            "$ref": "#/$defs/slug"
+          },
           "rationale": {
             "minLength": 0,
             "type": "string"
@@ -364,18 +593,223 @@
           "recorded_at": {
             "$ref": "#/$defs/timestamp"
           },
+          "representations": {
+            "items": {
+              "$ref": "#/$defs/forecastRepresentation"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
           "supersedes_forecast_id": {
             "$ref": "#/$defs/slug"
-          },
-          "value": {
-            "$ref": "#/$defs/forecastValue"
           }
         },
         "required": [
           "file",
           "forecast",
           "question",
-          "value"
+          "question_revision_id",
+          "representations"
+        ],
+        "type": "object"
+      }
+    },
+    "forecast_expire": {
+      "operation": "forecast.expire",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "artifactSnapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          },
+          "lifecycle": {
+            "additionalProperties": false,
+            "properties": {
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            },
+            "required": [
+              "id",
+              "effective_at"
+            ],
+            "type": "object"
+          },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "effective_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/$defs/slug"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          }
+        },
+        "required": [
+          "effective_at",
+          "file",
+          "forecast",
+          "id",
+          "question"
         ],
         "type": "object"
       }
@@ -467,6 +901,206 @@
         },
         "required": [
           "file",
+          "question"
+        ],
+        "type": "object"
+      }
+    },
+    "forecast_reaffirm": {
+      "operation": "forecast.reaffirm",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "artifactSnapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          },
+          "lifecycle": {
+            "additionalProperties": false,
+            "properties": {
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            },
+            "required": [
+              "id",
+              "effective_at"
+            ],
+            "type": "object"
+          },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "effective_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/$defs/slug"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          }
+        },
+        "required": [
+          "effective_at",
+          "file",
+          "forecast",
+          "id",
           "question"
         ],
         "type": "object"
@@ -572,6 +1206,10 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "question_revision_id": {
+            "description": "Bound question revision ID",
+            "type": "string"
+          },
           "recorded_at": {
             "description": "Optional exact RFC 3339 record time",
             "type": "string"
@@ -590,6 +1228,7 @@
           "forecast",
           "key_file",
           "question",
+          "question_revision_id",
           "secret_input_file"
         ],
         "type": "object"
@@ -631,6 +1270,438 @@
         "type": "object"
       }
     },
+    "forecast_withdraw": {
+      "operation": "forecast.withdraw",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "artifactSnapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          },
+          "lifecycle": {
+            "additionalProperties": false,
+            "properties": {
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            },
+            "required": [
+              "id",
+              "effective_at"
+            ],
+            "type": "object"
+          },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "effective_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/$defs/slug"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          }
+        },
+        "required": [
+          "effective_at",
+          "file",
+          "forecast",
+          "id",
+          "question"
+        ],
+        "type": "object"
+      }
+    },
+    "group_add": {
+      "operation": "group.add",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "group-create": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "minLength": 0,
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "minLength": 0,
+            "type": "string"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "group": {
+            "description": "Stable group ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "group",
+          "title"
+        ],
+        "type": "object"
+      }
+    },
+    "group_list": {
+      "operation": "group.list",
+      "outcome_states": [
+        "success"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      }
+    },
+    "group_remove": {
+      "operation": "group.remove",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "group": {
+            "description": "Stable group ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "group"
+        ],
+        "type": "object"
+      }
+    },
+    "group_show": {
+      "operation": "group.show",
+      "outcome_states": [
+        "success"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "group": {
+            "description": "Stable group ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "group"
+        ],
+        "type": "object"
+      }
+    },
+    "group_update": {
+      "operation": "group.update",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "group-patch": {
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "minLength": 0,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "group": {
+            "description": "Stable group ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "group"
+        ],
+        "type": "object"
+      }
+    },
     "ledger_init": {
       "operation": "ledger.init",
       "outcome_states": [
@@ -642,45 +1713,282 @@
       },
       "tool_schema": {
         "$defs": {
-          "binaryValue": {
+          "allowedValues": {
             "additionalProperties": false,
             "properties": {
               "kind": {
-                "const": "binary"
+                "const": "allowed_values"
               },
-              "probability_bp": {
-                "description": "Probability of YES in basis points.",
-                "maximum": 10000,
-                "minimum": 0,
-                "type": "integer"
+              "values": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
               }
             },
             "required": [
               "kind",
-              "probability_bp"
+              "values"
             ],
             "type": "object"
           },
-          "choiceProbability": {
+          "artifactSnapshot": {
             "additionalProperties": false,
             "properties": {
-              "option_id": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "bin": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
                 "$ref": "#/$defs/slug"
               },
-              "probability_bp": {
-                "maximum": 10000,
-                "minimum": 0,
+              "label": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "lower": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "lower_inclusive": {
+                "type": "boolean"
+              },
+              "upper": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "upper_inclusive": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "lower",
+              "upper",
+              "lower_inclusive",
+              "upper_inclusive"
+            ],
+            "type": "object"
+          },
+          "binSet": {
+            "additionalProperties": false,
+            "properties": {
+              "bins": {
+                "items": {
+                  "$ref": "#/$defs/bin"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
                 "type": "integer"
               }
             },
             "required": [
-              "option_id",
-              "probability_bp"
+              "id",
+              "version",
+              "bins"
+            ],
+            "type": "object"
+          },
+          "binSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "type": "object"
+          },
+          "binaryDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "binary"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "binnedPmfEntry": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "bin_id",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "binnedPmfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_set_ref": {
+                "$ref": "#/$defs/binSetRef"
+              },
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/binnedPmfEntry"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "binned_pmf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "bin_set_ref",
+              "entries",
+              "left_tail_probability",
+              "right_tail_probability"
+            ],
+            "type": "object"
+          },
+          "bound": {
+            "additionalProperties": false,
+            "properties": {
+              "inclusive": {
+                "type": "boolean"
+              },
+              "value": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "inclusive"
+            ],
+            "type": "object"
+          },
+          "bounds": {
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "lower": {
+                "$ref": "#/$defs/bound"
+              },
+              "upper": {
+                "$ref": "#/$defs/bound"
+              }
+            },
+            "type": "object"
+          },
+          "categoricalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "categorical"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "cdfPoint": {
+            "additionalProperties": false,
+            "properties": {
+              "probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "value",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "cdfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "step_right",
+                  "linear"
+                ]
+              },
+              "kind": {
+                "const": "cdf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/cdfPoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points",
+              "left_tail_probability",
+              "right_tail_probability"
             ],
             "type": "object"
           },
           "contact": {
             "additionalProperties": false,
+            "minProperties": 1,
             "properties": {
               "email": {
                 "format": "email",
@@ -693,86 +2001,11 @@
             },
             "type": "object"
           },
-          "date": {
-            "format": "date",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "type": "string"
-          },
-          "dateInterval": {
+          "continuousValues": {
             "additionalProperties": false,
             "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "lower": {
-                "$ref": "#/$defs/date"
-              },
-              "upper": {
-                "$ref": "#/$defs/date"
-              }
-            },
-            "required": [
-              "lower",
-              "upper",
-              "credibility_bp"
-            ],
-            "type": "object"
-          },
-          "dateQuantile": {
-            "additionalProperties": false,
-            "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "value": {
-                "$ref": "#/$defs/date"
-              }
-            },
-            "required": [
-              "probability_bp",
-              "value"
-            ],
-            "type": "object"
-          },
-          "dateValue": {
-            "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
-                ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
-            "properties": {
-              "interval": {
-                "$ref": "#/$defs/dateInterval"
-              },
               "kind": {
-                "const": "date"
-              },
-              "point": {
-                "$ref": "#/$defs/date"
-              },
-              "quantiles": {
-                "items": {
-                  "$ref": "#/$defs/dateQuantile"
-                },
-                "minItems": 1,
-                "type": "array"
+                "const": "continuous"
               }
             },
             "required": [
@@ -780,36 +2013,185 @@
             ],
             "type": "object"
           },
-          "decimal": {
-            "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": "string"
-          },
-          "forecastValue": {
-            "oneOf": [
-              {
-                "$ref": "#/$defs/binaryValue"
-              },
-              {
-                "$ref": "#/$defs/multipleChoiceValue"
-              },
-              {
-                "$ref": "#/$defs/numericValue"
-              },
-              {
-                "$ref": "#/$defs/dateValue"
-              }
-            ]
-          },
-          "forecastWindow": {
+          "credibleInterval": {
             "additionalProperties": false,
             "properties": {
-              "opens_at": {
-                "$ref": "#/$defs/timestamp"
+              "coverage": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "interval_kind": {
+                "enum": [
+                  "equal_tailed",
+                  "central",
+                  "highest_density",
+                  "author_selected"
+                ]
+              },
+              "lower": {
+                "$ref": "#/$defs/scalarValue"
+              },
+              "upper": {
+                "$ref": "#/$defs/scalarValue"
               }
             },
             "required": [
-              "opens_at"
+              "coverage",
+              "interval_kind",
+              "lower",
+              "upper"
+            ],
+            "type": "object"
+          },
+          "credibleIntervalsRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "intervals": {
+                "items": {
+                  "$ref": "#/$defs/credibleInterval"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "credible_intervals"
+              }
+            },
+            "required": [
+              "kind",
+              "intervals"
+            ],
+            "type": "object"
+          },
+          "dateDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "date"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "datetimeDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "datetime"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "domain": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/binaryDomain"
+              },
+              {
+                "$ref": "#/$defs/categoricalDomain"
+              },
+              {
+                "$ref": "#/$defs/ordinalDomain"
+              },
+              {
+                "$ref": "#/$defs/numericDomain"
+              },
+              {
+                "$ref": "#/$defs/dateDomain"
+              },
+              {
+                "$ref": "#/$defs/datetimeDomain"
+              }
+            ]
+          },
+          "forecastRepresentation": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/probabilityRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/binnedPmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/quantilesRepresentation"
+              },
+              {
+                "$ref": "#/$defs/cdfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pointRepresentation"
+              },
+              {
+                "$ref": "#/$defs/credibleIntervalsRepresentation"
+              }
+            ]
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
             ],
             "type": "object"
           },
@@ -867,14 +2249,11 @@
                     "visibility": {
                       "const": "public"
                     }
-                  },
-                  "required": [
-                    "visibility"
-                  ]
+                  }
                 },
                 "then": {
                   "required": [
-                    "value"
+                    "representations"
                   ]
                 }
               },
@@ -884,17 +2263,14 @@
                     "visibility": {
                       "const": "sealed"
                     }
-                  },
-                  "required": [
-                    "visibility"
-                  ]
+                  }
                 },
                 "then": {
                   "not": {
                     "anyOf": [
                       {
                         "required": [
-                          "value"
+                          "representations"
                         ]
                       },
                       {
@@ -935,6 +2311,9 @@
                 },
                 "type": "array"
               },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
               "public_note": {
                 "minLength": 0,
                 "type": "string"
@@ -946,11 +2325,15 @@
               "recorded_at": {
                 "$ref": "#/$defs/timestamp"
               },
+              "representations": {
+                "items": {
+                  "$ref": "#/$defs/forecastRepresentation"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "supersedes_forecast_id": {
                 "$ref": "#/$defs/slug"
-              },
-              "value": {
-                "$ref": "#/$defs/forecastValue"
               },
               "visibility": {
                 "enum": [
@@ -967,92 +2350,9 @@
           },
           "initialQuestionInput": {
             "additionalProperties": false,
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "multiple_choice"
-                    }
-                  },
-                  "required": [
-                    "type"
-                  ]
-                },
-                "then": {
-                  "not": {
-                    "required": [
-                      "unit"
-                    ]
-                  },
-                  "required": [
-                    "options"
-                  ]
-                }
-              },
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "numeric"
-                    }
-                  },
-                  "required": [
-                    "type"
-                  ]
-                },
-                "then": {
-                  "not": {
-                    "required": [
-                      "options"
-                    ]
-                  },
-                  "required": [
-                    "unit"
-                  ]
-                }
-              },
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "binary",
-                        "date"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "type"
-                  ]
-                },
-                "then": {
-                  "not": {
-                    "anyOf": [
-                      {
-                        "required": [
-                          "options"
-                        ]
-                      },
-                      {
-                        "required": [
-                          "unit"
-                        ]
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
             "properties": {
               "created_at": {
                 "$ref": "#/$defs/timestamp"
-              },
-              "expected_resolution_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "forecast_window": {
-                "$ref": "#/$defs/forecastWindow"
               },
               "id": {
                 "$ref": "#/$defs/slug"
@@ -1064,51 +2364,19 @@
                 "minLength": 0,
                 "type": "string"
               },
-              "options": {
-                "items": {
-                  "$ref": "#/$defs/option"
-                },
-                "minItems": 2,
-                "type": "array"
-              },
-              "platform_refs": {
-                "items": {
-                  "$ref": "#/$defs/platformRef"
-                },
-                "type": "array"
-              },
-              "resolution_criteria": {
-                "minLength": 1,
-                "type": "string"
+              "revision": {
+                "$ref": "#/$defs/revisionInput"
               },
               "tags": {
                 "items": {
                   "$ref": "#/$defs/slug"
                 },
                 "type": "array"
-              },
-              "title": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "type": {
-                "enum": [
-                  "binary",
-                  "multiple_choice",
-                  "numeric",
-                  "date"
-                ]
-              },
-              "unit": {
-                "$ref": "#/$defs/unit"
               }
             },
             "required": [
               "id",
-              "title",
-              "type",
-              "resolution_criteria",
-              "expected_resolution_at"
+              "revision"
             ],
             "type": "object"
           },
@@ -1119,8 +2387,7 @@
                 "$ref": "#/$defs/slug"
               },
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "profiles": {
                 "items": {
@@ -1129,8 +2396,7 @@
                 "type": "array"
               },
               "role": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -1139,122 +2405,152 @@
             ],
             "type": "object"
           },
-          "multipleChoiceValue": {
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "numericDomain": {
             "additionalProperties": false,
             "properties": {
-              "kind": {
-                "const": "multiple_choice"
-              },
-              "probabilities": {
+              "bin_sets": {
                 "items": {
-                  "$ref": "#/$defs/choiceProbability"
+                  "$ref": "#/$defs/binSet"
                 },
-                "minItems": 2,
                 "type": "array"
-              }
-            },
-            "required": [
-              "kind",
-              "probabilities"
-            ],
-            "type": "object"
-          },
-          "numericInterval": {
-            "additionalProperties": false,
-            "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
               },
-              "lower": {
-                "$ref": "#/$defs/decimal"
+              "bounds": {
+                "$ref": "#/$defs/bounds"
               },
-              "upper": {
-                "$ref": "#/$defs/decimal"
-              }
-            },
-            "required": [
-              "lower",
-              "upper",
-              "credibility_bp"
-            ],
-            "type": "object"
-          },
-          "numericQuantile": {
-            "additionalProperties": false,
-            "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "value": {
-                "$ref": "#/$defs/decimal"
-              }
-            },
-            "required": [
-              "probability_bp",
-              "value"
-            ],
-            "type": "object"
-          },
-          "numericValue": {
-            "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
+              "elicitation_scale": {
+                "enum": [
+                  "linear",
+                  "log"
                 ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
-            "properties": {
-              "interval": {
-                "$ref": "#/$defs/numericInterval"
               },
               "kind": {
                 "const": "numeric"
               },
-              "point": {
-                "$ref": "#/$defs/decimal"
+              "unit": {
+                "$ref": "#/$defs/unit"
               },
-              "quantiles": {
-                "items": {
-                  "$ref": "#/$defs/numericQuantile"
-                },
-                "minItems": 1,
-                "type": "array"
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
               }
             },
             "required": [
-              "kind"
+              "kind",
+              "values"
             ],
             "type": "object"
+          },
+          "openProbability": {
+            "description": "An exact canonical decimal probability strictly between 0 and 1.",
+            "pattern": "^0\\.[0-9]{0,17}[1-9]$",
+            "type": "string"
           },
           "option": {
             "additionalProperties": false,
             "properties": {
+              "description": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
               "id": {
                 "$ref": "#/$defs/slug"
               },
               "label": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
               "id",
               "label"
+            ],
+            "type": "object"
+          },
+          "optionSet": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/option"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "options"
+            ],
+            "type": "object"
+          },
+          "optionSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "type": "object"
+          },
+          "ordinalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "ordinal"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "outcomeSpace": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "binary",
+                  "categorical",
+                  "ordinal",
+                  "numeric",
+                  "date",
+                  "datetime"
+                ]
+              }
+            },
+            "required": [
+              "kind"
             ],
             "type": "object"
           },
@@ -1270,12 +2566,10 @@
                     "type": "string"
                   },
                   "user_id": {
-                    "minLength": 1,
-                    "type": "string"
+                    "$ref": "#/$defs/nonEmptyString"
                   },
                   "username": {
-                    "minLength": 1,
-                    "type": "string"
+                    "$ref": "#/$defs/nonEmptyString"
                   }
                 },
                 "type": "object"
@@ -1290,8 +2584,7 @@
                 ]
               },
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
@@ -1304,23 +2597,93 @@
             ],
             "type": "object"
           },
-          "platformRef": {
+          "pmfEntry": {
             "additionalProperties": false,
             "properties": {
-              "platform": {
+              "option_id": {
                 "$ref": "#/$defs/slug"
               },
-              "question_id": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "url": {
-                "format": "uri",
-                "type": "string"
+              "probability": {
+                "$ref": "#/$defs/probability"
               }
             },
             "required": [
-              "platform"
+              "option_id",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "pmfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/pmfEntry"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "kind": {
+                "const": "pmf"
+              },
+              "option_set_ref": {
+                "$ref": "#/$defs/optionSetRef"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set_ref",
+              "entries"
+            ],
+            "type": "object"
+          },
+          "pointRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "point"
+              },
+              "statistic": {
+                "enum": [
+                  "mean",
+                  "median",
+                  "mode",
+                  "best_estimate"
+                ]
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "kind",
+              "statistic",
+              "value"
+            ],
+            "type": "object"
+          },
+          "probability": {
+            "description": "An exact canonical decimal probability in [0,1], with at most 18 fractional digits.",
+            "pattern": "^(?:0|1|0\\.[0-9]{0,17}[1-9])$",
+            "type": "string"
+          },
+          "probabilityRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "probability"
+              },
+              "outcome": {
+                "const": true
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "outcome",
+              "probability"
             ],
             "type": "object"
           },
@@ -1328,21 +2691,183 @@
             "additionalProperties": false,
             "properties": {
               "service": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
                 "type": "string"
               },
               "username": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
               "service",
               "url"
+            ],
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "quantilePoint": {
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "level",
+              "value"
+            ],
+            "type": "object"
+          },
+          "quantilesRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "none",
+                  "linear",
+                  "step_lower",
+                  "step_upper"
+                ]
+              },
+              "kind": {
+                "const": "quantiles"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/quantilePoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "revisionInput": {
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "expected_resolution_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "forecasting_opens_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "outcome_space": {
+                "$ref": "#/$defs/outcomeSpace"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "resolution_criteria": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "resolution_criteria",
+              "expected_resolution_at",
+              "outcome_space",
+              "domain"
+            ],
+            "type": "object"
+          },
+          "scalarValue": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
             ],
             "type": "object"
           },
@@ -1352,8 +2877,28 @@
             "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
             "type": "string"
           },
+          "stepValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "step"
+              },
+              "origin": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "step": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "step"
+            ],
+            "type": "object"
+          },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
@@ -1362,16 +2907,13 @@
             "additionalProperties": false,
             "properties": {
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "symbol": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "ucum_code": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -1512,6 +3054,7 @@
         "$defs": {
           "contact": {
             "additionalProperties": false,
+            "minProperties": 1,
             "properties": {
               "email": {
                 "format": "email",
@@ -1585,8 +3128,7 @@
                 "$ref": "#/$defs/slug"
               },
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "profiles": {
                 "items": {
@@ -1595,8 +3137,7 @@
                 "type": "array"
               },
               "role": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -1605,20 +3146,22 @@
             ],
             "type": "object"
           },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
           "profile": {
             "additionalProperties": false,
             "properties": {
               "service": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
                 "type": "string"
               },
               "username": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -1753,6 +3296,10 @@
       },
       "tool_schema": {
         "$defs": {
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
           "platform": {
             "additionalProperties": false,
             "properties": {
@@ -1765,12 +3312,10 @@
                     "type": "string"
                   },
                   "user_id": {
-                    "minLength": 1,
-                    "type": "string"
+                    "$ref": "#/$defs/nonEmptyString"
                   },
                   "username": {
-                    "minLength": 1,
-                    "type": "string"
+                    "$ref": "#/$defs/nonEmptyString"
                   }
                 },
                 "type": "object"
@@ -1785,8 +3330,7 @@
                 ]
               },
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
@@ -1815,12 +3359,10 @@
                 "type": "string"
               },
               "user_id": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "username": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "type": "object"
@@ -1844,8 +3386,7 @@
             ]
           },
           "name": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/$defs/nonEmptyString"
           },
           "platform": {
             "description": "Stable platform ID",
@@ -2218,123 +3759,127 @@
       },
       "tool_schema": {
         "$defs": {
-          "binaryValue": {
+          "allowedValues": {
             "additionalProperties": false,
             "properties": {
               "kind": {
-                "const": "binary"
+                "const": "allowed_values"
               },
-              "probability_bp": {
-                "description": "Probability of YES in basis points.",
-                "maximum": 10000,
-                "minimum": 0,
-                "type": "integer"
+              "values": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
               }
             },
             "required": [
               "kind",
-              "probability_bp"
+              "values"
             ],
             "type": "object"
           },
-          "choiceProbability": {
+          "artifactSnapshot": {
             "additionalProperties": false,
             "properties": {
-              "option_id": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "bin": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
                 "$ref": "#/$defs/slug"
               },
-              "probability_bp": {
-                "maximum": 10000,
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "option_id",
-              "probability_bp"
-            ],
-            "type": "object"
-          },
-          "date": {
-            "format": "date",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-            "type": "string"
-          },
-          "dateInterval": {
-            "additionalProperties": false,
-            "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
+              "label": {
+                "$ref": "#/$defs/nonEmptyString"
               },
               "lower": {
-                "$ref": "#/$defs/date"
+                "minLength": 1,
+                "type": "string"
+              },
+              "lower_inclusive": {
+                "type": "boolean"
               },
               "upper": {
-                "$ref": "#/$defs/date"
+                "minLength": 1,
+                "type": "string"
+              },
+              "upper_inclusive": {
+                "type": "boolean"
               }
             },
             "required": [
+              "id",
               "lower",
               "upper",
-              "credibility_bp"
+              "lower_inclusive",
+              "upper_inclusive"
             ],
             "type": "object"
           },
-          "dateQuantile": {
+          "binSet": {
             "additionalProperties": false,
             "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "value": {
-                "$ref": "#/$defs/date"
-              }
-            },
-            "required": [
-              "probability_bp",
-              "value"
-            ],
-            "type": "object"
-          },
-          "dateValue": {
-            "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
-                ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
-            "properties": {
-              "interval": {
-                "$ref": "#/$defs/dateInterval"
-              },
-              "kind": {
-                "const": "date"
-              },
-              "point": {
-                "$ref": "#/$defs/date"
-              },
-              "quantiles": {
+              "bins": {
                 "items": {
-                  "$ref": "#/$defs/dateQuantile"
+                  "$ref": "#/$defs/bin"
                 },
                 "minItems": 1,
                 "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "bins"
+            ],
+            "type": "object"
+          },
+          "binSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "type": "object"
+          },
+          "binaryDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "binary"
               }
             },
             "required": [
@@ -2342,36 +3887,342 @@
             ],
             "type": "object"
           },
-          "decimal": {
-            "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": "string"
-          },
-          "forecastValue": {
-            "oneOf": [
-              {
-                "$ref": "#/$defs/binaryValue"
-              },
-              {
-                "$ref": "#/$defs/multipleChoiceValue"
-              },
-              {
-                "$ref": "#/$defs/numericValue"
-              },
-              {
-                "$ref": "#/$defs/dateValue"
-              }
-            ]
-          },
-          "forecastWindow": {
+          "binnedPmfEntry": {
             "additionalProperties": false,
             "properties": {
-              "opens_at": {
-                "$ref": "#/$defs/timestamp"
+              "bin_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
               }
             },
             "required": [
-              "opens_at"
+              "bin_id",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "binnedPmfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_set_ref": {
+                "$ref": "#/$defs/binSetRef"
+              },
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/binnedPmfEntry"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "binned_pmf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "bin_set_ref",
+              "entries",
+              "left_tail_probability",
+              "right_tail_probability"
+            ],
+            "type": "object"
+          },
+          "bound": {
+            "additionalProperties": false,
+            "properties": {
+              "inclusive": {
+                "type": "boolean"
+              },
+              "value": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "inclusive"
+            ],
+            "type": "object"
+          },
+          "bounds": {
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "lower": {
+                "$ref": "#/$defs/bound"
+              },
+              "upper": {
+                "$ref": "#/$defs/bound"
+              }
+            },
+            "type": "object"
+          },
+          "categoricalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "categorical"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "cdfPoint": {
+            "additionalProperties": false,
+            "properties": {
+              "probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "value",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "cdfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "step_right",
+                  "linear"
+                ]
+              },
+              "kind": {
+                "const": "cdf"
+              },
+              "left_tail_probability": {
+                "$ref": "#/$defs/probability"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/cdfPoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "right_tail_probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points",
+              "left_tail_probability",
+              "right_tail_probability"
+            ],
+            "type": "object"
+          },
+          "continuousValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "continuous"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "credibleInterval": {
+            "additionalProperties": false,
+            "properties": {
+              "coverage": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "interval_kind": {
+                "enum": [
+                  "equal_tailed",
+                  "central",
+                  "highest_density",
+                  "author_selected"
+                ]
+              },
+              "lower": {
+                "$ref": "#/$defs/scalarValue"
+              },
+              "upper": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "coverage",
+              "interval_kind",
+              "lower",
+              "upper"
+            ],
+            "type": "object"
+          },
+          "credibleIntervalsRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "intervals": {
+                "items": {
+                  "$ref": "#/$defs/credibleInterval"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "credible_intervals"
+              }
+            },
+            "required": [
+              "kind",
+              "intervals"
+            ],
+            "type": "object"
+          },
+          "dateDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "date"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "datetimeDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "datetime"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "domain": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/binaryDomain"
+              },
+              {
+                "$ref": "#/$defs/categoricalDomain"
+              },
+              {
+                "$ref": "#/$defs/ordinalDomain"
+              },
+              {
+                "$ref": "#/$defs/numericDomain"
+              },
+              {
+                "$ref": "#/$defs/dateDomain"
+              },
+              {
+                "$ref": "#/$defs/datetimeDomain"
+              }
+            ]
+          },
+          "forecastRepresentation": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/probabilityRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/binnedPmfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/quantilesRepresentation"
+              },
+              {
+                "$ref": "#/$defs/cdfRepresentation"
+              },
+              {
+                "$ref": "#/$defs/pointRepresentation"
+              },
+              {
+                "$ref": "#/$defs/credibleIntervalsRepresentation"
+              }
+            ]
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
             ],
             "type": "object"
           },
@@ -2384,14 +4235,11 @@
                     "visibility": {
                       "const": "public"
                     }
-                  },
-                  "required": [
-                    "visibility"
-                  ]
+                  }
                 },
                 "then": {
                   "required": [
-                    "value"
+                    "representations"
                   ]
                 }
               },
@@ -2401,17 +4249,14 @@
                     "visibility": {
                       "const": "sealed"
                     }
-                  },
-                  "required": [
-                    "visibility"
-                  ]
+                  }
                 },
                 "then": {
                   "not": {
                     "anyOf": [
                       {
                         "required": [
-                          "value"
+                          "representations"
                         ]
                       },
                       {
@@ -2452,6 +4297,9 @@
                 },
                 "type": "array"
               },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
               "public_note": {
                 "minLength": 0,
                 "type": "string"
@@ -2463,11 +4311,15 @@
               "recorded_at": {
                 "$ref": "#/$defs/timestamp"
               },
+              "representations": {
+                "items": {
+                  "$ref": "#/$defs/forecastRepresentation"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "supersedes_forecast_id": {
                 "$ref": "#/$defs/slug"
-              },
-              "value": {
-                "$ref": "#/$defs/forecastValue"
               },
               "visibility": {
                 "enum": [
@@ -2482,117 +4334,70 @@
             ],
             "type": "object"
           },
-          "multipleChoiceValue": {
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "numericDomain": {
             "additionalProperties": false,
             "properties": {
-              "kind": {
-                "const": "multiple_choice"
-              },
-              "probabilities": {
+              "bin_sets": {
                 "items": {
-                  "$ref": "#/$defs/choiceProbability"
+                  "$ref": "#/$defs/binSet"
                 },
-                "minItems": 2,
                 "type": "array"
-              }
-            },
-            "required": [
-              "kind",
-              "probabilities"
-            ],
-            "type": "object"
-          },
-          "numericInterval": {
-            "additionalProperties": false,
-            "properties": {
-              "credibility_bp": {
-                "maximum": 10000,
-                "minimum": 1,
-                "type": "integer"
               },
-              "lower": {
-                "$ref": "#/$defs/decimal"
+              "bounds": {
+                "$ref": "#/$defs/bounds"
               },
-              "upper": {
-                "$ref": "#/$defs/decimal"
-              }
-            },
-            "required": [
-              "lower",
-              "upper",
-              "credibility_bp"
-            ],
-            "type": "object"
-          },
-          "numericQuantile": {
-            "additionalProperties": false,
-            "properties": {
-              "probability_bp": {
-                "maximum": 9999,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "value": {
-                "$ref": "#/$defs/decimal"
-              }
-            },
-            "required": [
-              "probability_bp",
-              "value"
-            ],
-            "type": "object"
-          },
-          "numericValue": {
-            "additionalProperties": false,
-            "anyOf": [
-              {
-                "required": [
-                  "point"
+              "elicitation_scale": {
+                "enum": [
+                  "linear",
+                  "log"
                 ]
-              },
-              {
-                "required": [
-                  "interval"
-                ]
-              },
-              {
-                "required": [
-                  "quantiles"
-                ]
-              }
-            ],
-            "properties": {
-              "interval": {
-                "$ref": "#/$defs/numericInterval"
               },
               "kind": {
                 "const": "numeric"
               },
-              "point": {
-                "$ref": "#/$defs/decimal"
+              "unit": {
+                "$ref": "#/$defs/unit"
               },
-              "quantiles": {
-                "items": {
-                  "$ref": "#/$defs/numericQuantile"
-                },
-                "minItems": 1,
-                "type": "array"
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
               }
             },
             "required": [
-              "kind"
+              "kind",
+              "values"
             ],
             "type": "object"
+          },
+          "openProbability": {
+            "description": "An exact canonical decimal probability strictly between 0 and 1.",
+            "pattern": "^0\\.[0-9]{0,17}[1-9]$",
+            "type": "string"
           },
           "option": {
             "additionalProperties": false,
             "properties": {
+              "description": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
               "id": {
                 "$ref": "#/$defs/slug"
               },
               "label": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -2601,15 +4406,200 @@
             ],
             "type": "object"
           },
-          "platformRef": {
+          "optionSet": {
             "additionalProperties": false,
             "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/option"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "options"
+            ],
+            "type": "object"
+          },
+          "optionSetRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "type": "object"
+          },
+          "ordinalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "ordinal"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "outcomeSpace": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "binary",
+                  "categorical",
+                  "ordinal",
+                  "numeric",
+                  "date",
+                  "datetime"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "pmfEntry": {
+            "additionalProperties": false,
+            "properties": {
+              "option_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "option_id",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "pmfRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/$defs/pmfEntry"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "kind": {
+                "const": "pmf"
+              },
+              "option_set_ref": {
+                "$ref": "#/$defs/optionSetRef"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set_ref",
+              "entries"
+            ],
+            "type": "object"
+          },
+          "pointRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "point"
+              },
+              "statistic": {
+                "enum": [
+                  "mean",
+                  "median",
+                  "mode",
+                  "best_estimate"
+                ]
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "kind",
+              "statistic",
+              "value"
+            ],
+            "type": "object"
+          },
+          "probability": {
+            "description": "An exact canonical decimal probability in [0,1], with at most 18 fractional digits.",
+            "pattern": "^(?:0|1|0\\.[0-9]{0,17}[1-9])$",
+            "type": "string"
+          },
+          "probabilityRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "probability"
+              },
+              "outcome": {
+                "const": true
+              },
+              "probability": {
+                "$ref": "#/$defs/probability"
+              }
+            },
+            "required": [
+              "kind",
+              "outcome",
+              "probability"
+            ],
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
               "platform": {
                 "$ref": "#/$defs/slug"
               },
-              "question_id": {
-                "minLength": 1,
-                "type": "string"
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
               },
               "url": {
                 "format": "uri",
@@ -2617,7 +4607,54 @@
               }
             },
             "required": [
-              "platform"
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "quantilePoint": {
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "$ref": "#/$defs/openProbability"
+              },
+              "value": {
+                "$ref": "#/$defs/scalarValue"
+              }
+            },
+            "required": [
+              "level",
+              "value"
+            ],
+            "type": "object"
+          },
+          "quantilesRepresentation": {
+            "additionalProperties": false,
+            "properties": {
+              "interpolation": {
+                "enum": [
+                  "none",
+                  "linear",
+                  "step_lower",
+                  "step_upper"
+                ]
+              },
+              "kind": {
+                "const": "quantiles"
+              },
+              "points": {
+                "items": {
+                  "$ref": "#/$defs/quantilePoint"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "interpolation",
+              "points"
             ],
             "type": "object"
           },
@@ -2630,12 +4667,6 @@
               "created_at": {
                 "$ref": "#/$defs/timestamp"
               },
-              "expected_resolution_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "forecast_window": {
-                "$ref": "#/$defs/forecastWindow"
-              },
               "initial_forecast": {
                 "$ref": "#/$defs/initialForecastInput"
               },
@@ -2643,41 +4674,97 @@
                 "minLength": 0,
                 "type": "string"
               },
-              "options": {
-                "items": {
-                  "$ref": "#/$defs/option"
-                },
-                "minItems": 2,
-                "type": "array"
-              },
-              "platform_refs": {
-                "items": {
-                  "$ref": "#/$defs/platformRef"
-                },
-                "type": "array"
-              },
-              "resolution_criteria": {
-                "minLength": 1,
-                "type": "string"
+              "revision": {
+                "$ref": "#/$defs/revisionInput"
               },
               "tags": {
                 "items": {
                   "$ref": "#/$defs/slug"
                 },
                 "type": "array"
+              }
+            },
+            "required": [
+              "revision"
+            ],
+            "type": "object"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "revisionInput": {
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "expected_resolution_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "forecasting_opens_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "outcome_space": {
+                "$ref": "#/$defs/outcomeSpace"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "resolution_criteria": {
+                "minLength": 1,
+                "type": "string"
               },
               "title": {
                 "minLength": 1,
                 "type": "string"
-              },
-              "unit": {
-                "$ref": "#/$defs/unit"
               }
             },
             "required": [
+              "id",
               "title",
               "resolution_criteria",
-              "expected_resolution_at"
+              "expected_resolution_at",
+              "outcome_space",
+              "domain"
+            ],
+            "type": "object"
+          },
+          "scalarValue": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
             ],
             "type": "object"
           },
@@ -2687,8 +4774,28 @@
             "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
             "type": "string"
           },
+          "stepValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "step"
+              },
+              "origin": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "step": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "step"
+            ],
+            "type": "object"
+          },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
@@ -2697,16 +4804,13 @@
             "additionalProperties": false,
             "properties": {
               "name": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "symbol": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "ucum_code": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               }
             },
             "required": [
@@ -2725,16 +4829,10 @@
             "description": "Validate and return a plan without persistent or network effects",
             "type": "boolean"
           },
-          "expected_resolution_at": {
-            "$ref": "#/$defs/timestamp"
-          },
           "file": {
             "description": "Ledger reference as root-name:relative/path",
             "minLength": 1,
             "type": "string"
-          },
-          "forecast_window": {
-            "$ref": "#/$defs/forecastWindow"
           },
           "initial_forecast": {
             "$ref": "#/$defs/initialForecastInput"
@@ -2751,65 +4849,31 @@
             "minLength": 0,
             "type": "string"
           },
-          "options": {
-            "items": {
-              "$ref": "#/$defs/option"
-            },
-            "minItems": 2,
-            "type": "array"
-          },
-          "platform_refs": {
-            "items": {
-              "$ref": "#/$defs/platformRef"
-            },
-            "type": "array"
-          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
-          "resolution_criteria": {
-            "minLength": 1,
-            "type": "string"
+          "revision": {
+            "$ref": "#/$defs/revisionInput"
           },
           "tags": {
             "items": {
               "$ref": "#/$defs/slug"
             },
             "type": "array"
-          },
-          "title": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": {
-            "description": "Question type",
-            "enum": [
-              "binary",
-              "multiple_choice",
-              "numeric",
-              "date"
-            ],
-            "type": "string"
-          },
-          "unit": {
-            "$ref": "#/$defs/unit"
           }
         },
         "required": [
-          "expected_resolution_at",
           "file",
           "question",
-          "resolution_criteria",
-          "title",
-          "type"
+          "revision"
         ],
         "type": "object"
       }
     },
-    "question_annul": {
-      "operation": "question.annul",
+    "question_ambiguous": {
+      "operation": "question.ambiguous",
       "outcome_states": [
         "success",
         "planned"
@@ -2819,47 +4883,27 @@
       },
       "tool_schema": {
         "$defs": {
-          "annul": {
-            "additionalProperties": false,
-            "properties": {
-              "reason": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "recorded_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "sources": {
-                "items": {
-                  "$ref": "#/$defs/evidenceSourceInput"
-                },
-                "type": "array"
-              }
-            },
-            "required": [
-              "reason"
-            ],
-            "type": "object"
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
           },
-          "evidenceSourceInput": {
+          "resolutionSource": {
             "additionalProperties": false,
             "properties": {
-              "content_sha256": {
-                "$ref": "#/$defs/hex32"
+              "content_digest": {
+                "$ref": "#/$defs/sha256"
               },
               "published_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "publisher": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "retrieved_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "title": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
@@ -2873,15 +4917,49 @@
             ],
             "type": "object"
           },
-          "hex32": {
-            "pattern": "^[0-9a-f]{64}$",
-            "type": "string"
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
           },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
+          },
+          "unresolved-resolution": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/resolutionSource"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2914,7 +4992,7 @@
           },
           "sources": {
             "items": {
-              "$ref": "#/$defs/evidenceSourceInput"
+              "$ref": "#/$defs/resolutionSource"
             },
             "type": "array"
           }
@@ -2939,47 +5017,27 @@
       },
       "tool_schema": {
         "$defs": {
-          "dispute": {
-            "additionalProperties": false,
-            "properties": {
-              "reason": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "recorded_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "sources": {
-                "items": {
-                  "$ref": "#/$defs/evidenceSourceInput"
-                },
-                "type": "array"
-              }
-            },
-            "required": [
-              "reason"
-            ],
-            "type": "object"
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
           },
-          "evidenceSourceInput": {
+          "resolutionSource": {
             "additionalProperties": false,
             "properties": {
-              "content_sha256": {
-                "$ref": "#/$defs/hex32"
+              "content_digest": {
+                "$ref": "#/$defs/sha256"
               },
               "published_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "publisher": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "retrieved_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "title": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
@@ -2993,15 +5051,49 @@
             ],
             "type": "object"
           },
-          "hex32": {
-            "pattern": "^[0-9a-f]{64}$",
-            "type": "string"
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
           },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
+          },
+          "unresolved-resolution": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/resolutionSource"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3034,7 +5126,7 @@
           },
           "sources": {
             "items": {
-              "$ref": "#/$defs/evidenceSourceInput"
+              "$ref": "#/$defs/resolutionSource"
             },
             "type": "array"
           }
@@ -3072,6 +5164,91 @@
         "type": "object"
       }
     },
+    "question_not_applicable": {
+      "operation": "question.not_applicable",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "not-applicable": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "relationship_id": {
+                "$ref": "#/$defs/slug"
+              }
+            },
+            "required": [
+              "relationship_id",
+              "reason"
+            ],
+            "type": "object"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "relationship_id": {
+            "$ref": "#/$defs/slug"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "question",
+          "reason",
+          "relationship_id"
+        ],
+        "type": "object"
+      }
+    },
     "question_resolve": {
       "operation": "question.resolve",
       "outcome_states": [
@@ -3083,25 +5260,62 @@
       },
       "tool_schema": {
         "$defs": {
-          "evidenceSourceInput": {
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "resolutionInput": {
             "additionalProperties": false,
             "properties": {
-              "content_sha256": {
-                "$ref": "#/$defs/hex32"
+              "notes": {
+                "minLength": 0,
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/scalarValue"
+              },
+              "outcome_known_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "question_revision_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/resolutionSource"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "question_revision_id",
+              "outcome",
+              "outcome_known_at",
+              "sources"
+            ],
+            "type": "object"
+          },
+          "resolutionSource": {
+            "additionalProperties": false,
+            "properties": {
+              "content_digest": {
+                "$ref": "#/$defs/sha256"
               },
               "published_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "publisher": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "retrieved_at": {
                 "$ref": "#/$defs/timestamp"
               },
               "title": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/nonEmptyString"
               },
               "url": {
                 "format": "uri",
@@ -3115,51 +5329,41 @@
             ],
             "type": "object"
           },
-          "hex32": {
-            "pattern": "^[0-9a-f]{64}$",
-            "type": "string"
+          "scalarValue": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
           },
-          "resolution": {
+          "sha256": {
             "additionalProperties": false,
             "properties": {
-              "notes": {
-                "minLength": 0,
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
                 "type": "string"
-              },
-              "outcome": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                ]
-              },
-              "outcome_known_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "recorded_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "sources": {
-                "items": {
-                  "$ref": "#/$defs/evidenceSourceInput"
-                },
-                "minItems": 1,
-                "type": "array"
               }
             },
             "required": [
-              "outcome",
-              "outcome_known_at",
-              "sources"
+              "algorithm",
+              "value"
             ],
             "type": "object"
           },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
           "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
             "format": "date-time",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
@@ -3186,15 +5390,7 @@
             "type": "string"
           },
           "outcome": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "minLength": 1,
-                "type": "string"
-              }
-            ]
+            "$ref": "#/$defs/scalarValue"
           },
           "outcome_known_at": {
             "$ref": "#/$defs/timestamp"
@@ -3204,12 +5400,15 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "question_revision_id": {
+            "$ref": "#/$defs/slug"
+          },
           "recorded_at": {
             "$ref": "#/$defs/timestamp"
           },
           "sources": {
             "items": {
-              "$ref": "#/$defs/evidenceSourceInput"
+              "$ref": "#/$defs/resolutionSource"
             },
             "minItems": 1,
             "type": "array"
@@ -3221,7 +5420,648 @@
           "outcome",
           "outcome_known_at",
           "question",
+          "question_revision_id",
           "sources"
+        ],
+        "type": "object"
+      }
+    },
+    "question_revise": {
+      "operation": "question.revise",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "allowedValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "allowed_values"
+              },
+              "values": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "artifactSnapshot": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "media_type": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "artifact_path",
+              "media_type",
+              "digest"
+            ],
+            "type": "object"
+          },
+          "bin": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "label": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "lower": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "lower_inclusive": {
+                "type": "boolean"
+              },
+              "upper": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "upper_inclusive": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "lower",
+              "upper",
+              "lower_inclusive",
+              "upper_inclusive"
+            ],
+            "type": "object"
+          },
+          "binSet": {
+            "additionalProperties": false,
+            "properties": {
+              "bins": {
+                "items": {
+                  "$ref": "#/$defs/bin"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "bins"
+            ],
+            "type": "object"
+          },
+          "binaryDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "binary"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "bound": {
+            "additionalProperties": false,
+            "properties": {
+              "inclusive": {
+                "type": "boolean"
+              },
+              "value": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "inclusive"
+            ],
+            "type": "object"
+          },
+          "bounds": {
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "lower": {
+                "$ref": "#/$defs/bound"
+              },
+              "upper": {
+                "$ref": "#/$defs/bound"
+              }
+            },
+            "type": "object"
+          },
+          "categoricalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "categorical"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "continuousValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "continuous"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "dateDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "date"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "datetimeDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "kind": {
+                "const": "datetime"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "domain": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/binaryDomain"
+              },
+              {
+                "$ref": "#/$defs/categoricalDomain"
+              },
+              {
+                "$ref": "#/$defs/ordinalDomain"
+              },
+              {
+                "$ref": "#/$defs/numericDomain"
+              },
+              {
+                "$ref": "#/$defs/dateDomain"
+              },
+              {
+                "$ref": "#/$defs/datetimeDomain"
+              }
+            ]
+          },
+          "importer": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "version": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          },
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "numericDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "bin_sets": {
+                "items": {
+                  "$ref": "#/$defs/binSet"
+                },
+                "type": "array"
+              },
+              "bounds": {
+                "$ref": "#/$defs/bounds"
+              },
+              "elicitation_scale": {
+                "enum": [
+                  "linear",
+                  "log"
+                ]
+              },
+              "kind": {
+                "const": "numeric"
+              },
+              "unit": {
+                "$ref": "#/$defs/unit"
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/continuousValues"
+                  },
+                  {
+                    "$ref": "#/$defs/stepValues"
+                  },
+                  {
+                    "$ref": "#/$defs/allowedValues"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          "option": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "label": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "type": "object"
+          },
+          "optionSet": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/option"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "options"
+            ],
+            "type": "object"
+          },
+          "ordinalDomain": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "ordinal"
+              },
+              "option_set": {
+                "$ref": "#/$defs/optionSet"
+              }
+            },
+            "required": [
+              "kind",
+              "option_set"
+            ],
+            "type": "object"
+          },
+          "outcomeSpace": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "binary",
+                  "categorical",
+                  "ordinal",
+                  "numeric",
+                  "date",
+                  "datetime"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": false,
+            "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+            "properties": {
+              "importer": {
+                "$ref": "#/$defs/importer"
+              },
+              "platform": {
+                "$ref": "#/$defs/slug"
+              },
+              "remote_object_id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "remote_object_version": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "snapshot": {
+                "$ref": "#/$defs/artifactSnapshot"
+              },
+              "source_created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "source_updated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "remote_object_id",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "question-revision": {
+            "$ref": "#/$defs/revisionInput"
+          },
+          "relativePath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+            "type": "string"
+          },
+          "revisionInput": {
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "effective_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "expected_resolution_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "forecasting_opens_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "outcome_space": {
+                "$ref": "#/$defs/outcomeSpace"
+              },
+              "provenance": {
+                "$ref": "#/$defs/provenance"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "resolution_criteria": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "resolution_criteria",
+              "expected_resolution_at",
+              "outcome_space",
+              "domain"
+            ],
+            "type": "object"
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "stepValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "step"
+              },
+              "origin": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "step": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "step"
+            ],
+            "type": "object"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          },
+          "unit": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "symbol": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "ucum_code": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "$ref": "#/$defs/domain"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "effective_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "expected_resolution_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecasting_opens_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "id": {
+            "$ref": "#/$defs/slug"
+          },
+          "outcome_space": {
+            "$ref": "#/$defs/outcomeSpace"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "resolution_criteria": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "expected_resolution_at",
+          "file",
+          "id",
+          "outcome_space",
+          "question",
+          "resolution_criteria",
+          "title"
         ],
         "type": "object"
       }
@@ -3268,48 +6108,10 @@
       },
       "tool_schema": {
         "$defs": {
-          "forecastWindowPatchInput": {
-            "additionalProperties": false,
-            "properties": {
-              "opens_at": {
-                "$ref": "#/$defs/timestamp"
-              }
-            },
-            "required": [
-              "opens_at"
-            ],
-            "type": "object"
-          },
-          "platformRef": {
-            "additionalProperties": false,
-            "properties": {
-              "platform": {
-                "$ref": "#/$defs/slug"
-              },
-              "question_id": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "url": {
-                "format": "uri",
-                "type": "string"
-              }
-            },
-            "required": [
-              "platform"
-            ],
-            "type": "object"
-          },
           "question-patch": {
             "additionalProperties": false,
             "minProperties": 1,
             "properties": {
-              "expected_resolution_at": {
-                "$ref": "#/$defs/timestamp"
-              },
-              "forecast_window": {
-                "$ref": "#/$defs/forecastWindowPatchInput"
-              },
               "notes": {
                 "anyOf": [
                   {
@@ -3320,23 +6122,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "platform_refs": {
-                "anyOf": [
-                  {
-                    "items": {
-                      "$ref": "#/$defs/platformRef"
-                    },
-                    "type": "array"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "resolution_criteria": {
-                "minLength": 1,
-                "type": "string"
               },
               "status": {
                 "enum": [
@@ -3357,10 +6142,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "title": {
-                "minLength": 1,
-                "type": "string"
               }
             },
             "type": "object"
@@ -3369,12 +6150,6 @@
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-            "type": "string"
-          },
-          "timestamp": {
-            "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
-            "format": "date-time",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
             "type": "string"
           }
         },
@@ -3385,16 +6160,10 @@
             "description": "Validate and return a plan without persistent or network effects",
             "type": "boolean"
           },
-          "expected_resolution_at": {
-            "$ref": "#/$defs/timestamp"
-          },
           "file": {
             "description": "Ledger reference as root-name:relative/path",
             "minLength": 1,
             "type": "string"
-          },
-          "forecast_window": {
-            "$ref": "#/$defs/forecastWindowPatchInput"
           },
           "notes": {
             "anyOf": [
@@ -3407,26 +6176,9 @@
               }
             ]
           },
-          "platform_refs": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/$defs/platformRef"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
-            "type": "string"
-          },
-          "resolution_criteria": {
-            "minLength": 1,
             "type": "string"
           },
           "status": {
@@ -3448,15 +6200,369 @@
                 "type": "null"
               }
             ]
-          },
-          "title": {
-            "minLength": 1,
-            "type": "string"
           }
         },
         "required": [
           "file",
           "question"
+        ],
+        "type": "object"
+      }
+    },
+    "question_void": {
+      "operation": "question.void",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "nonEmptyString": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "resolutionSource": {
+            "additionalProperties": false,
+            "properties": {
+              "content_digest": {
+                "$ref": "#/$defs/sha256"
+              },
+              "published_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "publisher": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "retrieved_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "title": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "url",
+              "retrieved_at"
+            ],
+            "type": "object"
+          },
+          "sha256": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "sha-256"
+              },
+              "value": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "type": "string"
+          },
+          "unresolved-resolution": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "recorded_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/resolutionSource"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "recorded_at": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/resolutionSource"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "question",
+          "reason"
+        ],
+        "type": "object"
+      }
+    },
+    "relationship_add": {
+      "operation": "relationship.add",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$defs": {
+          "conditionalRelationship": {
+            "additionalProperties": false,
+            "properties": {
+              "child_question_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "kind": {
+                "const": "conditional"
+              },
+              "parent_outcome": {
+                "$ref": "#/$defs/scalarValue"
+              },
+              "parent_question_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "parent_question_revision_id": {
+                "$ref": "#/$defs/slug"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "parent_question_id",
+              "parent_question_revision_id",
+              "parent_outcome",
+              "child_question_id"
+            ],
+            "type": "object"
+          },
+          "groupMembership": {
+            "additionalProperties": false,
+            "properties": {
+              "group_id": {
+                "$ref": "#/$defs/slug"
+              },
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "kind": {
+                "const": "group_membership"
+              },
+              "question_id": {
+                "$ref": "#/$defs/slug"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "group_id",
+              "question_id"
+            ],
+            "type": "object"
+          },
+          "relationship": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/groupMembership"
+              },
+              {
+                "$ref": "#/$defs/conditionalRelationship"
+              }
+            ]
+          },
+          "relationshipInput": {
+            "additionalProperties": false,
+            "properties": {
+              "relationship": {
+                "$ref": "#/$defs/relationship"
+              }
+            },
+            "required": [
+              "relationship"
+            ],
+            "type": "object"
+          },
+          "scalarValue": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "slug": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/$defs/relationship"
+          }
+        },
+        "required": [
+          "file",
+          "relationship"
+        ],
+        "type": "object"
+      }
+    },
+    "relationship_list": {
+      "operation": "relationship.list",
+      "outcome_states": [
+        "success"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      }
+    },
+    "relationship_remove": {
+      "operation": "relationship.remove",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "relationship_id": {
+            "description": "Stable relationship ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "relationship_id"
+        ],
+        "type": "object"
+      }
+    },
+    "relationship_show": {
+      "operation": "relationship.show",
+      "outcome_states": [
+        "success"
+      ],
+      "result_schema": {
+        "$ref": "result.schema.json"
+      },
+      "tool_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "relationship_id": {
+            "description": "Stable relationship ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "relationship_id"
         ],
         "type": "object"
       }

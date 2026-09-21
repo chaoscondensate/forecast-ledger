@@ -21,8 +21,10 @@ type toolInput struct {
 	File                   string          `json:"file,omitempty"`
 	Platform               string          `json:"platform,omitempty"`
 	Question               string          `json:"question,omitempty"`
+	QuestionRevision       string          `json:"question_revision_id,omitempty"`
 	Forecast               string          `json:"forecast,omitempty"`
-	Type                   string          `json:"type,omitempty"`
+	Group                  string          `json:"group,omitempty"`
+	Relationship           string          `json:"relationship_id,omitempty"`
 	Request                json.RawMessage `json:"-"`
 	SecretInputFile        string          `json:"secret_input_file,omitempty"`
 	InitialSecretInputFile string          `json:"initial_secret_input_file,omitempty"`
@@ -234,14 +236,29 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 		result, err := service.CommitQuestionUpdateFile(ctx, file, ledger.Slug(input.Question), value)
 		return result, err
+	case service.OperationQuestionRevise:
+		var value service.RevisionInput
+		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaQuestionRevision, &value); err != nil {
+			return nil, err
+		}
+		if input.DryRun {
+			result, err := service.PlanQuestionReviseFile(ctx, file, ledger.Slug(input.Question), value, now)
+			return result, err
+		}
+		result, err := service.CommitQuestionReviseFile(ctx, file, ledger.Slug(input.Question), value, now)
+		return result, err
 	case service.OperationQuestionList:
 		id, items, err := service.LoadQuestionList(ctx, file, nil)
 		return map[string]any{"ledger_id": id, "questions": items}, err
 	case service.OperationQuestionShow:
 		id, result, err := service.LoadQuestionShow(ctx, file, nil, ledger.Slug(input.Question))
 		return map[string]any{"ledger_id": id, "question": result}, err
-	case service.OperationQuestionResolve, service.OperationQuestionAnnul, service.OperationQuestionDispute:
+	case service.OperationQuestionResolve, service.OperationQuestionAmbiguous, service.OperationQuestionVoid, service.OperationQuestionDispute, service.OperationQuestionNotApplicable:
 		return dispatchQuestionTerminal(ctx, def.Name, file, ledger.Slug(input.Question), input.Request, now, input.DryRun)
+	case service.OperationGroupAdd, service.OperationGroupUpdate, service.OperationGroupList, service.OperationGroupShow, service.OperationGroupRemove:
+		return dispatchGroup(ctx, def.Name, file, ledger.Slug(input.Group), input.Request, input.DryRun)
+	case service.OperationRelationshipAdd, service.OperationRelationshipList, service.OperationRelationshipShow, service.OperationRelationshipRemove:
+		return dispatchRelationship(ctx, def.Name, file, ledger.Slug(input.Relationship), input.Request, input.DryRun)
 	case service.OperationForecastAdd:
 		var value service.ForecastCreateInput
 		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaForecastCreate, &value); err != nil {
@@ -266,6 +283,23 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		return s.dispatchForecastSeal(ctx, file, input, now)
 	case service.OperationForecastReveal:
 		return s.dispatchForecastReveal(ctx, file, input, now)
+	case service.OperationForecastWithdraw, service.OperationForecastExpire, service.OperationForecastReaffirm:
+		var value service.LifecycleInput
+		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaLifecycle, &value); err != nil {
+			return nil, err
+		}
+		eventType := ledger.LifecycleWithdrawn
+		if def.Name == service.OperationForecastExpire {
+			eventType = ledger.LifecycleExpired
+		} else if def.Name == service.OperationForecastReaffirm {
+			eventType = ledger.LifecycleReaffirmed
+		}
+		if input.DryRun {
+			result, err := service.PlanForecastLifecycleFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), eventType, value, now)
+			return result, err
+		}
+		result, err := service.CommitForecastLifecycleFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), eventType, value, now)
+		return result, err
 	case service.OperationForecastKeyHintUpdate:
 		if input.DryRun {
 			result, err := service.PlanForecastKeyHintUpdateFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), input.KeyHint)
@@ -457,7 +491,7 @@ func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input too
 	if value.InitialForecast != nil && value.InitialForecast.ForecastedAt == "" {
 		value.InitialForecast.ForecastedAt = now
 	}
-	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(input.Question), Type: ledger.QuestionType(input.Type), Input: value}
+	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(input.Question), Input: value}
 	shape, err := service.ClassifyQuestionAddInput(value)
 	if err != nil {
 		return nil, err
@@ -509,28 +543,93 @@ func dispatchQuestionTerminal(ctx context.Context, operation service.OperationNa
 		}
 		result, err := service.CommitQuestionResolveFile(ctx, file, id, value, now)
 		return result, err
-	case service.OperationQuestionAnnul:
-		var value service.AnnulInput
-		if err := decodeDirectRequest(ctx, raw, service.InputSchemaAnnul, &value); err != nil {
+	case service.OperationQuestionAmbiguous, service.OperationQuestionVoid, service.OperationQuestionDispute:
+		var value service.UnresolvedResolutionInput
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaUnresolvedResolution, &value); err != nil {
 			return nil, err
 		}
+		status := ledger.ResolutionDisputed
+		if operation == service.OperationQuestionAmbiguous {
+			status = ledger.ResolutionAmbiguous
+		} else if operation == service.OperationQuestionVoid {
+			status = ledger.ResolutionVoid
+		}
 		if dryRun {
-			result, err := service.PlanQuestionAnnulFile(ctx, file, id, value, now)
+			result, err := service.PlanQuestionUnresolvedFile(ctx, file, id, status, value, now)
 			return result, err
 		}
-		result, err := service.CommitQuestionAnnulFile(ctx, file, id, value, now)
+		result, err := service.CommitQuestionUnresolvedFile(ctx, file, id, status, value, now)
 		return result, err
 	default:
-		var value service.DisputeInput
-		if err := decodeDirectRequest(ctx, raw, service.InputSchemaDispute, &value); err != nil {
+		var value service.NotApplicableInput
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaNotApplicable, &value); err != nil {
 			return nil, err
 		}
 		if dryRun {
-			result, err := service.PlanQuestionDisputeFile(ctx, file, id, value, now)
+			result, err := service.PlanQuestionNotApplicableFile(ctx, file, id, value, now)
 			return result, err
 		}
-		result, err := service.CommitQuestionDisputeFile(ctx, file, id, value, now)
+		result, err := service.CommitQuestionNotApplicableFile(ctx, file, id, value, now)
 		return result, err
+	}
+}
+
+func dispatchGroup(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, error) {
+	switch operation {
+	case service.OperationGroupAdd:
+		var value service.GroupCreateInput
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaGroupCreate, &value); err != nil {
+			return nil, err
+		}
+		if dryRun {
+			return service.PlanGroupAddFile(ctx, file, id, value)
+		}
+		return service.CommitGroupAddFile(ctx, file, id, value)
+	case service.OperationGroupUpdate:
+		var value service.GroupPatchInput
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaGroupPatch, &value); err != nil {
+			return nil, err
+		}
+		if dryRun {
+			return service.PlanGroupUpdateFile(ctx, file, id, value)
+		}
+		return service.CommitGroupUpdateFile(ctx, file, id, value)
+	case service.OperationGroupList:
+		ledgerID, values, err := service.LoadGroupList(ctx, file, nil)
+		return map[string]any{"ledger_id": ledgerID, "groups": values}, err
+	case service.OperationGroupShow:
+		ledgerID, value, err := service.LoadGroupShow(ctx, file, nil, id)
+		return map[string]any{"ledger_id": ledgerID, "group": value}, err
+	default:
+		if dryRun {
+			return service.PlanGroupRemoveFile(ctx, file, id)
+		}
+		return service.CommitGroupRemoveFile(ctx, file, id)
+	}
+}
+
+func dispatchRelationship(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, error) {
+	switch operation {
+	case service.OperationRelationshipAdd:
+		var value service.RelationshipInput
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaRelationship, &value); err != nil {
+			return nil, err
+		}
+		if dryRun {
+			return service.PlanRelationshipAddFile(ctx, file, value)
+		}
+		return service.CommitRelationshipAddFile(ctx, file, value)
+	case service.OperationRelationshipList:
+		ledgerID, values, err := service.LoadRelationshipList(ctx, file, nil)
+		return map[string]any{"ledger_id": ledgerID, "relationships": values}, err
+	case service.OperationRelationshipShow:
+		ledgerID, value, err := service.LoadRelationshipShow(ctx, file, nil, id)
+		return map[string]any{"ledger_id": ledgerID, "relationship": value}, err
+	default:
+		if dryRun {
+			return service.PlanRelationshipRemoveFile(ctx, file, id)
+		}
+		return service.CommitRelationshipRemoveFile(ctx, file, id)
 	}
 }
 
@@ -542,7 +641,7 @@ func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input to
 	if err := s.decodeProtected(ctx, input.SecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
 		return nil, err
 	}
-	value := service.SealedForecastInput{Value: private.Value, Rationale: private.Rationale, KeyFactors: private.KeyFactors, Comment: private.Comment}
+	value := service.SealedForecastInput{QuestionRevisionID: ledger.Slug(input.QuestionRevision), Representations: private.Representations, Rationale: private.Rationale, KeyFactors: private.KeyFactors, Comment: private.Comment}
 	if input.ForecastedAt != "" {
 		value.ForecastedAt = ledger.Timestamp(input.ForecastedAt)
 	} else if value.ForecastedAt == "" {
@@ -646,7 +745,7 @@ func mergeInitialForecastPrivate(target *service.InitialForecastInput, private s
 	if target == nil {
 		return
 	}
-	target.Value = private.Value
+	target.Representations = append([]ledger.ForecastRepresentation(nil), private.Representations...)
 	target.Rationale = &private.Rationale
 	target.KeyFactors = &private.KeyFactors
 	target.Comment = &private.Comment

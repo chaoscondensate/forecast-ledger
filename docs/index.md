@@ -26,7 +26,7 @@ before relying on a workflow.
   implementation and executable checks are available.
 - [How-to guides](how-to/index.md) — solve one operational task.
 - [Reference](reference/index.md) — inspect exact interfaces, formats, versions,
-  and compatibility.
+  and contract details.
 - [Explanation](explanation/index.md) — understand the contract, architecture,
   evidence model, and project context.
 - [Security](security/index.md) — review threats, key custody, trust sources,

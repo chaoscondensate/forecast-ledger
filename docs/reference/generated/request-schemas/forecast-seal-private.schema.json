@@ -1,133 +1,169 @@
 {
   "$defs": {
-    "binaryValue": {
+    "binSetRef": {
       "additionalProperties": false,
       "properties": {
-        "kind": {
-          "const": "binary"
+        "id": {
+          "$ref": "#/$defs/slug"
         },
-        "probability_bp": {
-          "description": "Probability of YES in basis points.",
-          "maximum": 10000,
-          "minimum": 0,
+        "version": {
+          "minimum": 1,
           "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "binnedPmfEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "bin_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "bin_id",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "binnedPmfRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "bin_set_ref": {
+          "$ref": "#/$defs/binSetRef"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/binnedPmfEntry"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "kind": {
+          "const": "binned_pmf"
+        },
+        "left_tail_probability": {
+          "$ref": "#/$defs/probability"
+        },
+        "right_tail_probability": {
+          "$ref": "#/$defs/probability"
         }
       },
       "required": [
         "kind",
-        "probability_bp"
+        "bin_set_ref",
+        "entries",
+        "left_tail_probability",
+        "right_tail_probability"
       ],
       "type": "object"
     },
-    "choiceProbability": {
+    "cdfPoint": {
       "additionalProperties": false,
       "properties": {
-        "option_id": {
-          "$ref": "#/$defs/slug"
-        },
-        "probability_bp": {
-          "maximum": 10000,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "option_id",
-        "probability_bp"
-      ],
-      "type": "object"
-    },
-    "date": {
-      "format": "date",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "type": "string"
-    },
-    "dateInterval": {
-      "additionalProperties": false,
-      "properties": {
-        "credibility_bp": {
-          "maximum": 10000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "lower": {
-          "$ref": "#/$defs/date"
-        },
-        "upper": {
-          "$ref": "#/$defs/date"
-        }
-      },
-      "required": [
-        "lower",
-        "upper",
-        "credibility_bp"
-      ],
-      "type": "object"
-    },
-    "dateQuantile": {
-      "additionalProperties": false,
-      "properties": {
-        "probability_bp": {
-          "maximum": 9999,
-          "minimum": 1,
-          "type": "integer"
+        "probability": {
+          "$ref": "#/$defs/probability"
         },
         "value": {
-          "$ref": "#/$defs/date"
+          "$ref": "#/$defs/scalarValue"
         }
       },
       "required": [
-        "probability_bp",
-        "value"
+        "value",
+        "probability"
       ],
       "type": "object"
     },
-    "dateValue": {
+    "cdfRepresentation": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "point"
-          ]
-        },
-        {
-          "required": [
-            "interval"
-          ]
-        },
-        {
-          "required": [
-            "quantiles"
-          ]
-        }
-      ],
       "properties": {
-        "interval": {
-          "$ref": "#/$defs/dateInterval"
+        "interpolation": {
+          "enum": [
+            "step_right",
+            "linear"
+          ]
         },
         "kind": {
-          "const": "date"
+          "const": "cdf"
         },
-        "point": {
-          "$ref": "#/$defs/date"
+        "left_tail_probability": {
+          "$ref": "#/$defs/probability"
         },
-        "quantiles": {
+        "points": {
           "items": {
-            "$ref": "#/$defs/dateQuantile"
+            "$ref": "#/$defs/cdfPoint"
           },
           "minItems": 1,
           "type": "array"
+        },
+        "right_tail_probability": {
+          "$ref": "#/$defs/probability"
         }
       },
       "required": [
-        "kind"
+        "kind",
+        "interpolation",
+        "points",
+        "left_tail_probability",
+        "right_tail_probability"
       ],
       "type": "object"
     },
-    "decimal": {
-      "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
-      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-      "type": "string"
+    "credibleInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/openProbability"
+        },
+        "interval_kind": {
+          "enum": [
+            "equal_tailed",
+            "central",
+            "highest_density",
+            "author_selected"
+          ]
+        },
+        "lower": {
+          "$ref": "#/$defs/scalarValue"
+        },
+        "upper": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "coverage",
+        "interval_kind",
+        "lower",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "credibleIntervalsRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/credibleInterval"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "kind": {
+          "const": "credible_intervals"
+        }
+      },
+      "required": [
+        "kind",
+        "intervals"
+      ],
+      "type": "object"
     },
     "forecast-seal-private": {
       "additionalProperties": false,
@@ -147,135 +183,214 @@
           "minLength": 0,
           "type": "string"
         },
-        "value": {
-          "$ref": "#/$defs/forecastValue"
-        }
-      },
-      "required": [
-        "value",
-        "rationale",
-        "key_factors",
-        "comment"
-      ],
-      "type": "object"
-    },
-    "forecastValue": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/binaryValue"
-        },
-        {
-          "$ref": "#/$defs/multipleChoiceValue"
-        },
-        {
-          "$ref": "#/$defs/numericValue"
-        },
-        {
-          "$ref": "#/$defs/dateValue"
-        }
-      ]
-    },
-    "multipleChoiceValue": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "const": "multiple_choice"
-        },
-        "probabilities": {
+        "representations": {
           "items": {
-            "$ref": "#/$defs/choiceProbability"
-          },
-          "minItems": 2,
-          "type": "array"
-        }
-      },
-      "required": [
-        "kind",
-        "probabilities"
-      ],
-      "type": "object"
-    },
-    "numericInterval": {
-      "additionalProperties": false,
-      "properties": {
-        "credibility_bp": {
-          "maximum": 10000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "lower": {
-          "$ref": "#/$defs/decimal"
-        },
-        "upper": {
-          "$ref": "#/$defs/decimal"
-        }
-      },
-      "required": [
-        "lower",
-        "upper",
-        "credibility_bp"
-      ],
-      "type": "object"
-    },
-    "numericQuantile": {
-      "additionalProperties": false,
-      "properties": {
-        "probability_bp": {
-          "maximum": 9999,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "value": {
-          "$ref": "#/$defs/decimal"
-        }
-      },
-      "required": [
-        "probability_bp",
-        "value"
-      ],
-      "type": "object"
-    },
-    "numericValue": {
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "point"
-          ]
-        },
-        {
-          "required": [
-            "interval"
-          ]
-        },
-        {
-          "required": [
-            "quantiles"
-          ]
-        }
-      ],
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/numericInterval"
-        },
-        "kind": {
-          "const": "numeric"
-        },
-        "point": {
-          "$ref": "#/$defs/decimal"
-        },
-        "quantiles": {
-          "items": {
-            "$ref": "#/$defs/numericQuantile"
+            "$ref": "#/$defs/forecastRepresentation"
           },
           "minItems": 1,
           "type": "array"
         }
       },
       "required": [
-        "kind"
+        "representations",
+        "rationale",
+        "key_factors",
+        "comment"
       ],
       "type": "object"
+    },
+    "forecastRepresentation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/probabilityRepresentation"
+        },
+        {
+          "$ref": "#/$defs/pmfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/binnedPmfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/quantilesRepresentation"
+        },
+        {
+          "$ref": "#/$defs/cdfRepresentation"
+        },
+        {
+          "$ref": "#/$defs/pointRepresentation"
+        },
+        {
+          "$ref": "#/$defs/credibleIntervalsRepresentation"
+        }
+      ]
+    },
+    "openProbability": {
+      "description": "An exact canonical decimal probability strictly between 0 and 1.",
+      "pattern": "^0\\.[0-9]{0,17}[1-9]$",
+      "type": "string"
+    },
+    "optionSetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "pmfEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "option_id",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "pmfRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/pmfEntry"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "kind": {
+          "const": "pmf"
+        },
+        "option_set_ref": {
+          "$ref": "#/$defs/optionSetRef"
+        }
+      },
+      "required": [
+        "kind",
+        "option_set_ref",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "pointRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "point"
+        },
+        "statistic": {
+          "enum": [
+            "mean",
+            "median",
+            "mode",
+            "best_estimate"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "kind",
+        "statistic",
+        "value"
+      ],
+      "type": "object"
+    },
+    "probability": {
+      "description": "An exact canonical decimal probability in [0,1], with at most 18 fractional digits.",
+      "pattern": "^(?:0|1|0\\.[0-9]{0,17}[1-9])$",
+      "type": "string"
+    },
+    "probabilityRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "probability"
+        },
+        "outcome": {
+          "const": true
+        },
+        "probability": {
+          "$ref": "#/$defs/probability"
+        }
+      },
+      "required": [
+        "kind",
+        "outcome",
+        "probability"
+      ],
+      "type": "object"
+    },
+    "quantilePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/openProbability"
+        },
+        "value": {
+          "$ref": "#/$defs/scalarValue"
+        }
+      },
+      "required": [
+        "level",
+        "value"
+      ],
+      "type": "object"
+    },
+    "quantilesRepresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "enum": [
+            "none",
+            "linear",
+            "step_lower",
+            "step_upper"
+          ]
+        },
+        "kind": {
+          "const": "quantiles"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/quantilePoint"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "interpolation",
+        "points"
+      ],
+      "type": "object"
+    },
+    "scalarValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
     },
     "slug": {
       "maxLength": 128,
@@ -284,7 +399,7 @@
       "type": "string"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/forecast-seal-private/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/forecast-seal-private/v2",
   "$ref": "#/$defs/forecast-seal-private",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

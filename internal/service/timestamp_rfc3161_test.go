@@ -444,7 +444,7 @@ func TestRFC3161StampRejectsInFlightLedgerChangeAndTargetCollision(t *testing.T)
 }
 
 func TestEmptyPublicationPackageReturnsNoEvidence(t *testing.T) {
-	raw, err := fs.ReadFile(contractschema.Conformance(), "empty-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "empty-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,9 +463,96 @@ func TestEmptyPublicationPackageReturnsNoEvidence(t *testing.T) {
 	}
 }
 
+func TestPublicationMatrixSealedRevealedInactiveAndMultiRepresentation(t *testing.T) {
+	for _, reveal := range []bool{false, true} {
+		name := "sealed"
+		if reveal {
+			name = "revealed"
+		}
+		t.Run(name+"-failed-evidence", func(t *testing.T) {
+			build := testSealedInitialBuild(t)
+			model := build.Ledger
+			if reveal {
+				revealed, err := BuildForecastReveal(model, "q-one", "f-one", build.KeyFile, "2026-02-01T00:00:00Z")
+				if err != nil {
+					t.Fatal(err)
+				}
+				model = revealed.Ledger
+			}
+			artifact, err := BuildForecastTarget(model, "q-one", "f-one")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := TargetMetadataFor(artifact)
+			model.Questions[0].Forecasts[0].Integrity = ledger.Integrity{Failed: &ledger.FailedIntegrity{
+				Status: ledger.IntegrityFailed, FailureReason: "timestamp verification failed", Target: &target,
+			}}
+			directory := t.TempDir()
+			ledgerPath := filepath.Join(directory, "ledger.json")
+			writeLedgerModel(t, ledgerPath, model)
+			targetPath := filepath.Join(directory, filepath.FromSlash(string(artifact.RelativePath)))
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(targetPath, artifact.Bytes, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			result := buildAndVerifyPublication(t, ledgerPath)
+			if result.Overall != VerificationFail || result.FailureCode != app.CodeVerification {
+				t.Fatalf("%s package verification = %#v", name, result)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name        string
+		model       func(*testing.T) *ledger.Ledger
+		wantOverall VerificationOverall
+		wantCode    app.ErrorCode
+	}{
+		{name: "inactive", wantOverall: VerificationNoEvidence, wantCode: app.CodeIncomplete, model: func(t *testing.T) *ledger.Ledger {
+			mutation, err := BuildForecastLifecycle(testPublicInitialLedger(t), "q-one", "f-one", ledger.LifecycleWithdrawn, LifecycleInput{ID: "event-one", EffectiveAt: "2026-02-01T00:00:00Z"}, "2026-02-01T00:01:00Z")
+			if err != nil {
+				t.Fatal(err)
+			}
+			return mutation.Ledger
+		}},
+		{name: "multi-representation", wantOverall: VerificationPass, model: func(t *testing.T) *ledger.Ledger {
+			_, model := rootUpdateFixture(t, "individual-ledger.json")
+			if representations := model.Questions[2].Forecasts[0].Representations; representations == nil || len(*representations) < 2 {
+				t.Fatal("fixture is not multi-representation")
+			}
+			return model
+		}},
+	} {
+		t.Run(test.name+"-offline-verify", func(t *testing.T) {
+			directory := t.TempDir()
+			ledgerPath := filepath.Join(directory, "ledger.json")
+			writeLedgerModel(t, ledgerPath, test.model(t))
+			result := buildAndVerifyPublication(t, ledgerPath)
+			if result.Overall != test.wantOverall || result.FailureCode != test.wantCode {
+				t.Fatalf("%s package verification = overall %q code %q", test.name, result.Overall, result.FailureCode)
+			}
+		})
+	}
+}
+
+func buildAndVerifyPublication(t *testing.T, ledgerPath string) PublicationVerifyResult {
+	t.Helper()
+	packageRoot := filepath.Join(filepath.Dir(ledgerPath), "package")
+	if _, err := CommitPublicationBuild(t.Context(), ledgerPath, packageRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	result, err := VerifyPublicationPackage(t.Context(), filepath.Join(packageRoot, "ledger", filepath.Base(ledgerPath)), filepath.Join(packageRoot, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
 func timestampLedgerFixture(t *testing.T) (string, string) {
 	t.Helper()
-	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,40 +4,91 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 )
 
-func TestPinnedContractDigests(t *testing.T) {
+func TestPinnedV2ReleaseIdentity(t *testing.T) {
 	t.Parallel()
 
-	assertDigest(t, "forecast-ledger.schema.json", Contract(), SchemaSHA256)
-	assertDigest(t, "LICENSE", License(), "7084b3fb14e3a306691af23e58ab0ccfa336b202853740f5e1ea0ebab39cacf2")
-
-	fixtures := map[string]string{
-		"empty-ledger.json":               "d7718493a5dcdb4d6af8ce398e103788adc9c43739916eb82475af0ab0617426",
-		"forecast-seal-v1.json":           "59f3996b22e135d5c2d1a6977c2e5dfa025d3f2ececd226b6fb4096ddc7272f5",
-		"individual-ledger.json":          "77cb761c714e36a31347e1d8630c99a0c73cf2ae3425438faef5a060e436828c",
-		"invalid-cases.json":              "d0e4b8036bf9119bb402687b753740ea8dcbd2d8dbef49b7673b7745add2cfee",
-		"question-without-forecasts.yaml": "7b53e9db6cdd669562b94136ed5a7a882d27d8b43bfc752de6e37894a9aeee5a",
-		"team-ledger.yaml":                "ed00a6bfc47711727bc9d40c1c40fb0e5a0efa08a94cf6d1b8912ecfeca65386",
-	}
-	for name, expected := range fixtures {
-		data, err := fs.ReadFile(Conformance(), name)
-		if err != nil {
-			t.Fatalf("read embedded fixture %s: %v", name, err)
-		}
-		assertDigest(t, name, data, expected)
-	}
-
-	if ReleaseArchiveSHA256 != "3b6b9f274a67d2714edaa308f9aad51b218dbf24ed95de1a1340292ad1df1f2a" {
-		t.Fatalf("unexpected release archive digest %q", ReleaseArchiveSHA256)
-	}
-	if Version != "1.3.0" || Commit != "32218f682b3a650f41153e98817473bf429973a7" || AnnotatedTagObject != "d3d1f06a7f27501b1419eaf78fc4a48e51de9ee3" {
+	if Version != "2.0.0" || Commit != "1d3b186a15136bc5aff38647cb59fbef475dbe55" || AnnotatedTagObject != "7b4a9e85e0df9350750828a57b03ff729f704ee4" {
 		t.Fatalf("unexpected upstream identity %q %q %q", Version, Commit, AnnotatedTagObject)
 	}
-	if ReleaseChecksumsSHA256 != "6042508976246ddc62974ad3054dca9885525024d4bb543572b75b23c60ac284" {
+	if ReleaseArchiveSHA256 != "1d56cbe4f6cbd1fccb046a99add2ff4f88c709904d027669039ba4139664f47e" {
+		t.Fatalf("unexpected release archive digest %q", ReleaseArchiveSHA256)
+	}
+	if ReleaseChecksumsSHA256 != "77d093fbdb393dc9c1e3bdae053724e5ecdccd2e211f6f6c08c7678e78b178dc" {
 		t.Fatalf("unexpected release checksums digest %q", ReleaseChecksumsSHA256)
 	}
+	if ForecastSealProtocol != "forecast-seal/v2" || ForecastTargetProfile != "forecast-envelope/v2" {
+		t.Fatalf("unexpected active cryptographic profiles %q %q", ForecastSealProtocol, ForecastTargetProfile)
+	}
+}
+
+func TestEveryRetainedV2UpstreamFileDigest(t *testing.T) {
+	t.Parallel()
+
+	expected := map[string]string{
+		"LICENSE":            "7084b3fb14e3a306691af23e58ab0ccfa336b202853740f5e1ea0ebab39cacf2",
+		"docs/data-model.md": "a2501928944685c9f43307d33bd314f3e046f480c609cefa1981242da7830d9b",
+		"docs/forecast-verification-workflows.md":                 "417a2ddaadc54ca5fc019283c33455cd6df909879e2c3c4f4361506eb4b7ca1c",
+		"examples/valid/empty-ledger.json":                        "a0d59a71176aeaa7c3ea8dd1ead78a842343b9bcfdea8551ecaeac362e98484d",
+		"examples/valid/individual-ledger.json":                   "9d2a69b06085dae161b2772fdec27ee71dc78141e99c8d0fda55c0ffe10f4744",
+		"examples/valid/question-without-forecasts.yaml":          "f67b9e622d8d1b2acaa1e2bd0eb33b847d636229d5c4e7041160c3b3b7875d6b",
+		"examples/valid/team-ledger.yaml":                         "1e2b88f0e3ce9492a65179307d439523a75b728d247c0363f9615b29c67cf1d9",
+		"schema/forecast-ledger.schema.json":                      SchemaSHA256,
+		"tests/conformance/valid/relationships-and-datetime.json": "16f1ce02176ca01a90525abceaa23db73b5bcbc305d5185a861e0560d31459b3",
+		"tests/invalid-cases.json":                                "fe7a68952565ab1ed7d22fe3a9e330216b01f3ccda2068e2f2c5fdda6bf81c1a",
+		"tests/vectors/forecast-seal-v2.json":                     "7cd814473f3e84617660e704f1aea8dc48e4b4a32cc86b93fd46c1649a4728d5",
+	}
+	sourceRecord, err := fs.ReadFile(Conformance(), "SOURCE.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, digest := range expected {
+		entry := "| `" + name + "` | `" + digest + "` |"
+		if !strings.Contains(string(sourceRecord), entry) {
+			t.Errorf("SOURCE.md does not record %s", entry)
+		}
+	}
+
+	actualNames := make([]string, 0, len(expected))
+	err = fs.WalkDir(Conformance(), ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || path == "SOURCE.md" {
+			return nil
+		}
+		expectedDigest, ok := expected[path]
+		if !ok {
+			return fmt.Errorf("retained upstream file %q has no pinned digest", path)
+		}
+		data, err := fs.ReadFile(Conformance(), path)
+		if err != nil {
+			return err
+		}
+		assertDigest(t, path, data, expectedDigest)
+		actualNames = append(actualNames, path)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(actualNames)
+	expectedNames := make([]string, 0, len(expected))
+	for name := range expected {
+		expectedNames = append(expectedNames, name)
+	}
+	sort.Strings(expectedNames)
+	if !reflect.DeepEqual(actualNames, expectedNames) {
+		t.Fatalf("retained file set mismatch\ngot:  %v\nwant: %v", actualNames, expectedNames)
+	}
+
+	assertDigest(t, "active contract", Contract(), SchemaSHA256)
+	assertDigest(t, "active license", License(), expected["LICENSE"])
 }
 
 func assertDigest(t *testing.T, name string, data []byte, expected string) {

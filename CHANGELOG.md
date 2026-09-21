@@ -3,6 +3,21 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## 0.9.0 - 2026-09-21
+
+### Changed
+
+- **Breaking:** replace the pre-v2 runtime contract with the exact v2.0.0
+  schema. No migration or compatibility bundle is provided because there were
+  no active users to migrate; non-v2 files are rejected before side effects.
+- Add immutable question revisions, six domain kinds, versioned option and bin
+  sets, groups, typed relationships, terminal v2 resolution states, and
+  forecast activity events.
+- Replace v1 basis-point values with exact-decimal probability, PMF,
+  binned-PMF, quantile, CDF, point, and credible-interval representations.
+- Upgrade sealed forecasts, canonical targets, RFC 3161 fixtures, MCP tools,
+  generated contracts, and publication metadata to their v2 bindings.
+
 ## 0.8.0 - 2026-08-31
 
 ### Changed

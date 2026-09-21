@@ -50,6 +50,6 @@ the project maintainer and defaults to the project maintainer until delegated.
 | Project identity includes the broader context | `README.md`, `docs/explanation/project-background.md` | Required URL, authority, and prohibited-commercial-status checks (11.2) | Documentation owner | Repository authority and website context remain explicit (11.6) |
 | Presentation is accessible and evidence-based | Style and visual guides, generated assets, all maintained pages | Markdown, alt-text, text-equivalent, contrast, and badge checks (2.6, 9.5, 11.2) | Documentation owner | Essential content works without external assets (12.4–12.5) |
 | Documentation is continuously verified | CI workflows and `docs/development/documentation-checks.md` | Fast docs checks, bounded external links, scenarios, and native jobs (11.1–11.5) | Documentation and interface owners | Complete documentation release gate (11.6) |
-| Documentation is versioned and maintained | Page metadata, compatibility page, changelog, correction policy | Metadata, review-date, version, and migration checks (2.5–2.6, 10.4–10.5) | Documentation owner | Version/support labels and release baseline are current (11.6, 12.6) |
+| Documentation is versioned and maintained | Page metadata, changelog, correction policy | Metadata, review-date, and version checks (2.5–2.6, 10.4–10.5) | Documentation owner | Version/support labels and release baseline are current (11.6, 12.6) |
 
 [Development documentation](index.md) · [Documentation index](../index.md)

@@ -106,15 +106,15 @@ before the command, not after it.
 
 - State the product version or range a page covers when behavior can differ.
 - State the schema version, exact commit, and digest on generated interface
-  reference and compatibility pages.
+  reference pages.
 - Label unreleased behavior **Development**, not Stable.
 - Label a component **Experimental** next to the first use on every workflow
   page where its additional risk matters.
 - A deprecation notice names the deprecated behavior, replacement, first
   deprecated release, planned removal release when known, and a concrete
-  migration action.
-- Removed behavior remains in migration and changelog history for supported
-  releases; do not silently delete guidance users may have relied on.
+  replacement action.
+- Removed behavior remains in changelog history for supported releases; do not
+  silently delete guidance users may have relied on.
 
 ## Evidence claims
 

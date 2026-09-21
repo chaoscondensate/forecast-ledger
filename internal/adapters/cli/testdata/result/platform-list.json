@@ -1,1 +1,0 @@
-{"ok":true,"code":"platform.list","message":"Platforms were read","data":{"ledger_id":"alex-example-forecasts","platforms":[{"id":"local","kind":"self_hosted","name":"Local ledger","reference_count":1},{"id":"metaculus","kind":"scoring_platform","name":"Metaculus","reference_count":1}]}}

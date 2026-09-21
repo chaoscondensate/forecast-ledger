@@ -4,49 +4,163 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/validation"
 )
+
+func TestPublishedV2UnionShapesHaveJSONAndYAMLParity(t *testing.T) {
+	models := []*ledger.Ledger{}
+	_, individual := rootUpdateFixture(t, "individual-ledger.json")
+	models = append(models, individual)
+	relationshipBytes, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/relationships-and-datetime.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := document.ParseJSON(bytes.NewReader(relationshipBytes), document.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relationships, err := validation.DecodeLedger(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models = append(models, relationships)
+
+	domains := map[ledger.OutcomeKind]bool{}
+	representations := map[ledger.RepresentationKind]bool{}
+	relationshipKinds := map[ledger.RelationshipKind]bool{}
+	resolutionStatuses := map[ledger.ResolutionStatus]bool{}
+	var sawBins, sawProvenance, sawLifecycle bool
+	for index, model := range models {
+		t.Run(fmt.Sprintf("fixture-%d", index), func(t *testing.T) {
+			jsonPath, yamlPath := newFormatParityLedgers(t, model)
+			assertFormatParityLedgers(t, jsonPath, yamlPath)
+		})
+		for _, question := range model.Questions {
+			for _, revision := range question.Revisions {
+				domains[revision.OutcomeSpace.Kind] = true
+				sawProvenance = sawProvenance || revision.Provenance != nil
+				if revision.Domain.Numeric != nil {
+					sawBins = sawBins || revision.Domain.Numeric.BinSets != nil
+				}
+				if revision.Domain.Date != nil {
+					sawBins = sawBins || revision.Domain.Date.BinSets != nil
+				}
+				if revision.Domain.Datetime != nil {
+					sawBins = sawBins || revision.Domain.Datetime.BinSets != nil
+				}
+			}
+			for _, forecast := range question.Forecasts {
+				sawProvenance = sawProvenance || forecast.Provenance != nil
+				sawLifecycle = sawLifecycle || forecast.LifecycleEvents != nil
+				if forecast.Representations != nil {
+					for _, representation := range *forecast.Representations {
+						representations[representationKind(representation)] = true
+					}
+				}
+			}
+			if question.Resolution != nil {
+				switch {
+				case question.Resolution.Resolved != nil:
+					resolutionStatuses[question.Resolution.Resolved.Status] = true
+				case question.Resolution.Unresolved != nil:
+					resolutionStatuses[question.Resolution.Unresolved.Status] = true
+				case question.Resolution.NotApplicable != nil:
+					resolutionStatuses[question.Resolution.NotApplicable.Status] = true
+				}
+			}
+		}
+		if model.Relationships != nil {
+			for _, relationship := range *model.Relationships {
+				if relationship.GroupMembership != nil {
+					relationshipKinds[relationship.GroupMembership.Kind] = true
+				}
+				if relationship.Conditional != nil {
+					relationshipKinds[relationship.Conditional.Kind] = true
+				}
+			}
+		}
+	}
+	assertEnumCoverage(t, domains, []ledger.OutcomeKind{ledger.OutcomeBinary, ledger.OutcomeCategorical, ledger.OutcomeOrdinal, ledger.OutcomeNumeric, ledger.OutcomeDate, ledger.OutcomeDatetime})
+	assertEnumCoverage(t, representations, []ledger.RepresentationKind{ledger.RepresentationProbability, ledger.RepresentationPMF, ledger.RepresentationBinnedPMF, ledger.RepresentationQuantiles, ledger.RepresentationCDF, ledger.RepresentationPoint, ledger.RepresentationCredibleIntervals})
+	assertEnumCoverage(t, relationshipKinds, []ledger.RelationshipKind{ledger.RelationshipGroupMembership, ledger.RelationshipConditional})
+	if !sawBins || !sawProvenance || !sawLifecycle || !resolutionStatuses[ledger.ResolutionResolved] || !resolutionStatuses[ledger.ResolutionNotApplicable] {
+		t.Fatalf("fixture coverage incomplete: bins=%v provenance=%v lifecycle=%v resolutions=%v", sawBins, sawProvenance, sawLifecycle, resolutionStatuses)
+	}
+}
+
+func TestUnresolvedResolutionBranchesHaveJSONAndYAMLParity(t *testing.T) {
+	for _, status := range []ledger.ResolutionStatus{ledger.ResolutionAmbiguous, ledger.ResolutionVoid} {
+		t.Run(string(status), func(t *testing.T) {
+			jsonPath, yamlPath := newFormatParityLedgers(t, testPublicInitialLedger(t))
+			for _, path := range []string{jsonPath, yamlPath} {
+				if _, err := CommitQuestionUpdateFile(context.Background(), path, "q-one", QuestionPatchInput{Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := CommitQuestionUnresolvedFile(context.Background(), path, "q-one", status, UnresolvedResolutionInput{Reason: "The outcome cannot be determined."}, "2027-01-01T00:00:00Z"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			assertFormatParityLedgers(t, jsonPath, yamlPath)
+		})
+	}
+}
+
+func assertEnumCoverage[T ~string](t *testing.T, got map[T]bool, want []T) {
+	t.Helper()
+	missing := []string{}
+	for _, value := range want {
+		if !got[value] {
+			missing = append(missing, string(value))
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Fatalf("missing union branches: %s", strings.Join(missing, ", "))
+	}
+}
 
 func TestQuestionReplacementLifecycleHasJSONAndYAMLParity(t *testing.T) {
 	jsonPath, yamlPath := formatParityLedgers(t)
 	questionID := ledger.Slug("q-election-coalition")
-	questionRef, platformURL := "updated-question", "https://example.test/questions/updated"
-	update := QuestionPatchInput{
-		Title:                Optional[string]{Set: true, Value: "Updated coalition question"},
-		ExpectedResolutionAt: Optional[ledger.Timestamp]{Set: true, Value: "2026-10-20T12:00:00+01:00"},
-		PlatformRefs: Optional[[]ledger.PlatformRef]{Set: true, Value: []ledger.PlatformRef{
-			{Platform: "local"},
-			{Platform: "metaculus", QuestionID: &questionRef, URL: &platformURL},
-		}},
-		Tags:   Optional[[]ledger.Slug]{Set: true, Value: []ledger.Slug{"reviewed", "coalition"}},
-		Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed},
+	_, fixture := rootUpdateFixture(t, "individual-ledger.json")
+	base := fixture.Questions[1].Revisions[1]
+	revision := RevisionInput{
+		ID: "qr-election-coalition-3", EffectiveAt: "2026-08-21T08:00:00+01:00", RecordedAt: timestampPointer("2026-08-21T08:02:00+01:00"),
+		Title: "Updated coalition question", ResolutionCriteria: base.ResolutionCriteria,
+		ExpectedResolutionAt: "2026-10-20T12:00:00+01:00", OutcomeSpace: base.OutcomeSpace, Domain: base.Domain,
 	}
-	var updateResults []QuestionFileResult
 	for _, path := range []string{jsonPath, yamlPath} {
-		result, err := CommitQuestionUpdateFile(context.Background(), path, questionID, update)
-		if err != nil {
+		if _, err := CommitQuestionReviseFile(context.Background(), path, questionID, revision, "2026-08-21T08:02:00+01:00"); err != nil {
+			if applicationErr, ok := err.(*app.Error); ok {
+				t.Fatalf("question revise %s: %v", filepath.Ext(path), applicationErr.Cause)
+			}
+			t.Fatalf("question revise %s: %#v", filepath.Ext(path), err)
+		}
+		update := QuestionPatchInput{Tags: Optional[[]ledger.Slug]{Set: true, Value: []ledger.Slug{"reviewed", "coalition"}}, Status: Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}}
+		if _, err := CommitQuestionUpdateFile(context.Background(), path, questionID, update); err != nil {
 			t.Fatalf("question update %s: %v", filepath.Ext(path), err)
 		}
-		updateResults = append(updateResults, result)
-	}
-	if !reflect.DeepEqual(updateResults[0].ChangedPointers, updateResults[1].ChangedPointers) || updateResults[0].Status != updateResults[1].Status {
-		t.Fatalf("question update results differ: JSON=%#v YAML=%#v", updateResults[0], updateResults[1])
 	}
 	assertFormatParityLedgers(t, jsonPath, yamlPath)
 
 	outcome := "centre-left"
 	resolution := ResolutionInput{
-		Outcome:        ResolutionOutcome{Text: &outcome},
-		OutcomeKnownAt: "2026-10-15T12:00:00+01:00",
-		RecordedAt:     timestampPointer("2026-10-15T12:05:00+01:00"),
+		QuestionRevisionID: "qr-election-coalition-3", Outcome: ledger.ScalarValue{String: &outcome},
+		OutcomeKnownAt: "2026-10-15T12:00:00+01:00", RecordedAt: timestampPointer("2026-10-15T12:05:00+01:00"),
 		Sources: []EvidenceSourceInput{{
 			Title: "Official appointment", URL: "https://example.test/result", RetrievedAt: "2026-10-15T12:04:00+01:00",
 		}},
@@ -58,18 +172,10 @@ func TestQuestionReplacementLifecycleHasJSONAndYAMLParity(t *testing.T) {
 	}
 	assertFormatParityLedgers(t, jsonPath, yamlPath)
 
-	dispute := DisputeInput{Reason: "The appointment is under review.", RecordedAt: timestampPointer("2026-10-16T00:00:00+01:00")}
+	dispute := UnresolvedResolutionInput{Reason: "The appointment is under review.", RecordedAt: timestampPointer("2026-10-16T00:00:00+01:00")}
 	for _, path := range []string{jsonPath, yamlPath} {
-		if _, err := CommitQuestionDisputeFile(context.Background(), path, questionID, dispute, "2026-10-16T00:00:00+01:00"); err != nil {
+		if _, err := CommitQuestionUnresolvedFile(context.Background(), path, questionID, ledger.ResolutionDisputed, dispute, "2026-10-16T00:00:00+01:00"); err != nil {
 			t.Fatalf("question dispute %s: %v", filepath.Ext(path), err)
-		}
-	}
-	assertFormatParityLedgers(t, jsonPath, yamlPath)
-
-	annul := AnnulInput{Reason: "The event definition became invalid.", RecordedAt: timestampPointer("2026-10-17T00:00:00+01:00")}
-	for _, path := range []string{jsonPath, yamlPath} {
-		if _, err := CommitQuestionAnnulFile(context.Background(), path, questionID, annul, "2026-10-17T00:00:00+01:00"); err != nil {
-			t.Fatalf("question annul %s: %v", filepath.Ext(path), err)
 		}
 	}
 	assertFormatParityLedgers(t, jsonPath, yamlPath)
@@ -87,7 +193,7 @@ func TestRootAndPlatformReplacementsHaveJSONAndYAMLParity(t *testing.T) {
 		}},
 	}
 	platformUpdate := PlatformPatchInput{
-		Name: Optional[string]{Set: true, Value: "Updated local platform"},
+		Name: Optional[string]{Set: true, Value: "Updated Metaculus platform"},
 		Kind: Optional[ledger.PlatformKind]{Set: true, Value: ledger.PlatformInternal},
 		Account: Optional[PlatformAccountPatchInput]{Set: true, Value: PlatformAccountPatchInput{
 			Username: Optional[string]{Set: true, Value: "parity-user"},
@@ -97,7 +203,7 @@ func TestRootAndPlatformReplacementsHaveJSONAndYAMLParity(t *testing.T) {
 		if _, err := CommitRootMetadataFileUpdate(context.Background(), path, rootUpdate); err != nil {
 			t.Fatalf("root update %s: %v", filepath.Ext(path), err)
 		}
-		if _, err := CommitPlatformUpdateFile(context.Background(), path, "local", platformUpdate); err != nil {
+		if _, err := CommitPlatformUpdateFile(context.Background(), path, "metaculus", platformUpdate); err != nil {
 			t.Fatalf("platform update %s: %v", filepath.Ext(path), err)
 		}
 	}
@@ -133,7 +239,10 @@ func TestForecastRevealReplacementHasJSONAndYAMLParity(t *testing.T) {
 		result, revealErr := CommitForecastRevealFile(context.Background(), path, keyPath, "q-one", "f-one", "2026-02-01T00:00:00Z")
 		publicResult := fmt.Sprintf("%#v %v", result, revealErr)
 		if revealErr != nil || !result.Changed {
-			t.Fatalf("reveal %s: %s", filepath.Ext(path), publicResult)
+			if applicationErr, ok := revealErr.(*app.Error); ok {
+				t.Fatalf("reveal %s: %s (%v)", filepath.Ext(path), publicResult, applicationErr.Cause)
+			}
+			t.Fatalf("reveal %s: %s (%#v)", filepath.Ext(path), publicResult, revealErr)
 		}
 		for _, forbidden := range []string{rationale, comment, factors[0], keyPath, filepath.Dir(path)} {
 			if strings.Contains(publicResult, forbidden) {

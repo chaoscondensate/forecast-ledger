@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "artifactSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "artifact_path",
+        "media_type",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "importer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "lifecycle": {
+      "additionalProperties": false,
+      "properties": {
+        "effective_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "effective_at"
+      ],
+      "type": "object"
+    },
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "description": "Platform timestamps are source claims. A snapshot digest makes imported bytes independently checkable.",
+      "properties": {
+        "importer": {
+          "$ref": "#/$defs/importer"
+        },
+        "platform": {
+          "$ref": "#/$defs/slug"
+        },
+        "remote_object_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "remote_object_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "retrieved_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/artifactSnapshot"
+        },
+        "source_created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "source_updated_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "remote_object_id",
+        "retrieved_at"
+      ],
+      "type": "object"
+    },
+    "relativePath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._/-]*$",
+      "type": "string"
+    },
+    "sha256": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha-256"
+        },
+        "value": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "type": "object"
+    },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "type": "string"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/lifecycle/v2",
+  "$ref": "#/$defs/lifecycle",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

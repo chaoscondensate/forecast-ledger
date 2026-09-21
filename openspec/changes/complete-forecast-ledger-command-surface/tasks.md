@@ -7,6 +7,13 @@
 > record completed historical work. `make-authoring-direct-readable` owns the
 > current v1.3.0 direct-authoring behavior and takes precedence.
 
+> v2 cutover note (2026-09-21): `adopt-forecast-ledger-v2` now owns all current
+> schema, authoring, target, seal, resolution, fixture, and example shapes.
+> Completed v1 items below remain historical evidence only. Every unfinished
+> test or release task must exercise the v2 surface and must not restore
+> `multiple_choice`, basis points, `question annul`, `forecast-envelope/v1`, or
+> production `forecast-seal/v1` behavior.
+
 ## 1. Shared operation contracts and change ownership
 
 - [x] 1.1 Add `internal/service` request, result, warning, side-effect, recovery, root/mode/network-profile, and operation interfaces without creating a storage-to-service import cycle.

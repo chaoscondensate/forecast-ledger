@@ -43,7 +43,7 @@ evidence-package/
   manifest.json
 ```
 
-The canonical `forecast-ledger-publication/v2` manifest pins schema v1.3.0 and
+The canonical `forecast-ledger-publication/v2` manifest pins schema v2.0.0 and
 records each allowlisted path, role, size, and SHA-256 digest.
 
 Verify on another machine with no network option:

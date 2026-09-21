@@ -16,7 +16,7 @@ import (
 func TestLedgerTransactionRunsCompleteProspectiveValidation(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "ledger.json")
-	original, err := fs.ReadFile(ledgerschema.Conformance(), "individual-ledger.json")
+	original, err := fs.ReadFile(ledgerschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {
 		t.Fatal(err)
 	}

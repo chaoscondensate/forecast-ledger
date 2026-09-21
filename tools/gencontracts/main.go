@@ -69,7 +69,7 @@ func toolRequestSchema(definition service.OperationDefinition) map[string]any {
 		"file": map[string]any{"type": "string", "minLength": 1, "description": fileDescription},
 	}
 	required := []string{"file"}
-	addSelector(properties, &required, definition.Selection)
+	addSelector(properties, &required, definition)
 	result := map[string]any{}
 	if definition.RequestSchema != "" && definition.RequestMode != service.RequestSecret {
 		request := directRequestSchema(definition.RequestSchema)
@@ -113,11 +113,11 @@ func toolRequestSchema(definition service.OperationDefinition) map[string]any {
 	return result
 }
 
-func addSelector(properties map[string]any, required *[]string, selection service.SelectionKind) {
+func addSelector(properties map[string]any, required *[]string, definition service.OperationDefinition) {
 	identifier := func(description string) map[string]any {
 		return map[string]any{"type": "string", "pattern": `^[a-z0-9][a-z0-9._-]{0,127}$`, "description": description}
 	}
-	switch selection {
+	switch definition.Selection {
 	case service.SelectionPlatform:
 		properties["platform"] = identifier("Stable platform ID")
 		*required = append(*required, "platform")
@@ -132,6 +132,14 @@ func addSelector(properties map[string]any, required *[]string, selection servic
 		properties["question"] = identifier("Stable question ID")
 		properties["forecast"] = identifier("Stable forecast ID")
 		properties["all"] = map[string]any{"type": "boolean"}
+	case service.SelectionGroup:
+		properties["group"] = identifier("Stable group ID")
+		*required = append(*required, "group")
+	case service.SelectionRelationship:
+		if definition.Name != service.OperationRelationshipAdd {
+			properties["relationship_id"] = identifier("Stable relationship ID")
+			*required = append(*required, "relationship_id")
+		}
 	}
 }
 

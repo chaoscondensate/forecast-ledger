@@ -8,6 +8,11 @@
 > generic public `--input`, MCP `input`, and public `input_file` clause in this
 > active change. Purpose-named protected secret channels are retained.
 
+> v2 cutover: `adopt-forecast-ledger-v2` supersedes the v1.2/v1.3 data,
+> command, target, seal, resolution, fixture, and example shapes described
+> here. This proposal records historical scope; unfinished gates apply to the
+> current v2 implementation.
+
 The repository currently exposes only validation, status, version, and completion while the command surface that creates, maintains, seals, timestamps, verifies, packages, and serves forecast ledgers remains unavailable. The complete product needs one reviewable contract that defines every command's inputs, business rules, side effects, outputs, failure modes, and CLI/MCP parity before implementation resumes.
 
 ## What Changes

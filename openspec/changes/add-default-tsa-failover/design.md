@@ -1,3 +1,8 @@
+> v2 cutover note (2026-09-21): `adopt-forecast-ledger-v2` supersedes the
+> historical v1 target examples in this design. The provider and transport
+> design is unchanged, but its current message imprint is over the exact v2
+> `forecast-envelope/v2` target.
+
 ## Context
 
 See `proposal.md` for motivation and

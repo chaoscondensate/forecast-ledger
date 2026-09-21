@@ -53,7 +53,7 @@ func TestFreeTSAESSV1SHA512FixtureVerifiesLocally(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if metadata.HashAlgorithm != HashAlgorithm || metadata.PolicyOID != "1.2.3.4.1" || metadata.SerialNumber != "123740559" || metadata.GenTime.Format(time.RFC3339) != "2026-08-30T17:19:53Z" {
+	if metadata.HashAlgorithm != HashAlgorithm || metadata.PolicyOID != "1.2.3.4.1" || metadata.SerialNumber != "139111566" || metadata.GenTime.Format(time.RFC3339) != "2026-09-21T15:24:45Z" {
 		t.Fatalf("metadata = %#v", metadata)
 	}
 	if metadata.SignerFingerprint != "32e841a95cc1164101ffde41298ef2fc75c1c4372ef095e88a6bbd47dfb191fc" || metadata.CABundleSHA256 != "2151b61137ffa86bf664691ba67e7da0b19f98c758e3d228d5d8ebf27e044438" {

@@ -13,14 +13,36 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/dlclark/regexp2"
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 	jsonschemakind "github.com/santhosh-tekuri/jsonschema/v6/kind"
 )
 
 var inputValidators sync.Map
+
+type inputECMARegexp regexp2.Regexp
+
+func (regexp *inputECMARegexp) MatchString(value string) bool {
+	matched, err := (*regexp2.Regexp)(regexp).MatchString(value)
+	return err == nil && matched
+}
+
+func (regexp *inputECMARegexp) String() string {
+	return (*regexp2.Regexp)(regexp).String()
+}
+
+func compileInputECMARegexp(pattern string) (jsonschema.Regexp, error) {
+	compiled, err := regexp2.Compile(pattern, regexp2.ECMAScript)
+	if err != nil {
+		return nil, err
+	}
+	compiled.MatchTimeout = 100 * time.Millisecond
+	return (*inputECMARegexp)(compiled), nil
+}
 
 // DecodeOperationInput parses, validates, and decodes one closed operation
 // input. Source may be a JSON/YAML path or "-" for the supplied stdin reader.
@@ -137,6 +159,7 @@ func compiledInputValidator(name InputSchemaName) (*jsonschema.Schema, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
 	compiler.AssertFormat()
+	compiler.UseRegexpEngine(compileInputECMARegexp)
 	if err := compiler.AddResource("operation-input-schema.json", documentValue); err != nil {
 		return nil, fmt.Errorf("register operation input schema: %w", err)
 	}

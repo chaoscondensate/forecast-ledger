@@ -188,6 +188,18 @@ func CommitQuestionUpdateFile(ctx context.Context, path string, id ledger.Slug, 
 	return commitQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) { return BuildQuestionUpdate(model, id, input) })
 }
 
+func PlanQuestionReviseFile(ctx context.Context, path string, id ledger.Slug, input RevisionInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+	return planQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
+		return BuildQuestionRevise(model, id, input, observedAt)
+	})
+}
+
+func CommitQuestionReviseFile(ctx context.Context, path string, id ledger.Slug, input RevisionInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+	return commitQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
+		return BuildQuestionRevise(model, id, input, observedAt)
+	})
+}
+
 func PlanQuestionResolveFile(ctx context.Context, path string, id ledger.Slug, input ResolutionInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return planQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
 		return BuildQuestionResolve(model, id, input, observedAt)
@@ -200,27 +212,27 @@ func CommitQuestionResolveFile(ctx context.Context, path string, id ledger.Slug,
 	})
 }
 
-func PlanQuestionAnnulFile(ctx context.Context, path string, id ledger.Slug, input AnnulInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+func PlanQuestionUnresolvedFile(ctx context.Context, path string, id ledger.Slug, status ledger.ResolutionStatus, input UnresolvedResolutionInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return planQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
-		return BuildQuestionAnnul(model, id, input, observedAt)
+		return BuildQuestionUnresolved(model, id, status, input, observedAt)
 	})
 }
 
-func CommitQuestionAnnulFile(ctx context.Context, path string, id ledger.Slug, input AnnulInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+func CommitQuestionUnresolvedFile(ctx context.Context, path string, id ledger.Slug, status ledger.ResolutionStatus, input UnresolvedResolutionInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return commitQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
-		return BuildQuestionAnnul(model, id, input, observedAt)
+		return BuildQuestionUnresolved(model, id, status, input, observedAt)
 	})
 }
 
-func PlanQuestionDisputeFile(ctx context.Context, path string, id ledger.Slug, input DisputeInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+func PlanQuestionNotApplicableFile(ctx context.Context, path string, id ledger.Slug, input NotApplicableInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return planQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
-		return BuildQuestionDispute(model, id, input, observedAt)
+		return BuildQuestionNotApplicable(model, id, input, observedAt)
 	})
 }
 
-func CommitQuestionDisputeFile(ctx context.Context, path string, id ledger.Slug, input DisputeInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+func CommitQuestionNotApplicableFile(ctx context.Context, path string, id ledger.Slug, input NotApplicableInput, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return commitQuestionMutation(ctx, path, id, func(model *ledger.Ledger) (QuestionMutation, error) {
-		return BuildQuestionDispute(model, id, input, observedAt)
+		return BuildQuestionNotApplicable(model, id, input, observedAt)
 	})
 }
 
@@ -296,13 +308,16 @@ func buildQuestionFileResult(parsed *document.Document, model *ledger.Ledger, id
 		if question.Resolution.Resolved != nil {
 			value := question.Resolution.Resolved.RecordedAt
 			result.RecordedAt = &value
-		} else if question.Resolution.NonResolved != nil {
-			value := question.Resolution.NonResolved.RecordedAt
+		} else if question.Resolution.Unresolved != nil {
+			value := question.Resolution.Unresolved.RecordedAt
+			result.RecordedAt = &value
+		} else if question.Resolution.NotApplicable != nil {
+			value := question.Resolution.NotApplicable.RecordedAt
 			result.RecordedAt = &value
 		}
 	}
-	if mutation.PriorStatus == ledger.QuestionDisputed || mutation.PriorStatus == ledger.QuestionResolved || mutation.PriorStatus == ledger.QuestionAnnulled {
-		result.Warnings = append(result.Warnings, Warning{Code: "resolution_history_external", Message: "Forecast Ledger v1 stores only the current resolution object; use external file history if prior resolution records must be retained."})
+	if mutation.PriorStatus == ledger.QuestionDisputed || mutation.PriorStatus == ledger.QuestionResolved || mutation.PriorStatus == ledger.QuestionAmbiguous || mutation.PriorStatus == ledger.QuestionVoid || mutation.PriorStatus == ledger.QuestionNotApplicable {
+		result.Warnings = append(result.Warnings, Warning{Code: "resolution_history_external", Message: "Forecast Ledger v2 stores only the current resolution object; use external file history if prior resolution records must be retained."})
 	}
 	return result, nil
 }

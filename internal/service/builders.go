@@ -292,6 +292,14 @@ func cloneString(value *string) *string {
 	return &copy
 }
 
+func cloneTimestamp(value *ledger.Timestamp) *ledger.Timestamp {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	return &copyValue
+}
+
 func cloneContact(value *ledger.Contact) *ledger.Contact {
 	if value == nil {
 		return nil

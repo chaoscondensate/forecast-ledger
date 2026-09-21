@@ -26,15 +26,19 @@ only ledger bytes and cannot resolve sibling target or timestamp paths.
 | `platform add|update` | `--file --platform` plus authoring flags | Add or patch one platform. Add requires `--name` and `--kind`. |
 | `platform list|show` | `--file`; show also `--platform` | Read sorted/redacted platform data. |
 | `platform remove` | `--file --platform --yes` | Remove only an unreferenced platform. |
-| `question add` | `--file --question --type` plus type-specific flags; conditional protected `--initial-secret-input` and `--key-file` | Add one typed question with an optional first forecast. |
-| `question update` | `--file --question` plus set/clear flags | Patch allowed unfrozen fields. |
+| `group add|update|list|show|remove` | `--file` and stable group selector where applicable | Manage question groups; referenced groups cannot be removed. |
+| `relationship add|list|show|remove` | `--file` and stable relationship selector | Manage group-membership and conditional relationships. |
+| `question add` | `--file --question --revision-id --outcome-kind` plus domain flags; conditional protected `--initial-secret-input` and `--key-file` | Add one question and its first immutable revision, with an optional first forecast. |
+| `question revise` | `--file --question --revision-id` plus a complete domain | Append a complete immutable question revision. |
+| `question update` | `--file --question` plus tags, notes, or nonterminal status | Patch only question-level metadata. |
 | `question list|show` | `--file`; show also `--question` | Read sorted/redacted question data. |
-| `question resolve|annul|dispute` | `--file --question`, lifecycle/source flags, and `--yes` | Replace the v1 current resolution state while retaining forecasts. |
-| `forecast add` | `--file --question --forecast` and type-specific value flags; optional time defaults to now | Append a public forecast revision. |
+| `question resolve|ambiguous|void|dispute|not-applicable` | `--file --question`, state-specific fields, and `--yes` | Record one typed v2 terminal state while retaining revisions and forecasts. |
+| `forecast add` | `--file --question --forecast --question-revision` and one or more representation families | Append a public forecast bound to one immutable revision. |
 | `forecast list|show` | `--file --question`; show also `--forecast` | Read append-only/redacted history. |
-| `forecast seal` | `--file --question --forecast --secret-input --key-file`; optional public time metadata | Append ciphertext after protected key creation while keeping private values out of argv. |
+| `forecast seal` | `--file --question --forecast --question-revision --secret-input --key-file`; optional public time metadata | Append ciphertext after protected key creation while keeping private representations out of argv. |
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
+| `forecast withdraw|expire|reaffirm` | `--file --question --forecast --event --effective-at` | Append a forecast activity event. |
 | `target build|check` | `--file` plus `--all` or question+forecast | Create or compare canonical target bytes. |
 | `timestamp stamp` | `--file --question --forecast`; optional `--tsa-provider`, custom `--tsa-url`+`--ca-bundle`, or `--offline` | Request and locally verify RFC 3161 evidence; omission selects `auto` (currently FreeTSA). |
 | `timestamp status|verify` | `--file --question --forecast` | Inspect or locally verify retained RFC 3161 evidence. |
@@ -124,10 +128,9 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-Schema compatibility is exact. A ledger other than v1.3.0 produces an explicit
+The supported schema is exact. A ledger other than v2.0.0 produces an explicit
 warning on stderr, returns `unsupported_schema_version`/exit 3, and stops before
-any file, key, artifact, or network side effect. No migration command is
-provided during this preview cutover.
+any file, key, artifact, or network side effect.
 
 Exact direct request schemas and operation policies are generated under
 [generated interface reference](generated/index.md). Candidate-binary

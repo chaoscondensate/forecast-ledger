@@ -1,0 +1,38 @@
+{
+  "$defs": {
+    "not-applicable": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "relationship_id": {
+          "$ref": "#/$defs/slug"
+        }
+      },
+      "required": [
+        "relationship_id",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "type": "string"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/not-applicable/v2",
+  "$ref": "#/$defs/not-applicable",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

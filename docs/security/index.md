@@ -28,6 +28,12 @@ ledger protects its forecast bundle only while the key
 and private input remain separate. Reveal is irreversible publication of the
 private fields and requires explicit approval.
 
+The v2 seal and target bind the forecast to one exact question revision. Keep
+the protected `forecast-key/v2` file with the matching question, revision, and
+forecast IDs; a key from another record must fail. The target contains the full
+bound revision, so changing wording or domain requires a new revision and a new
+forecast rather than editing old evidence.
+
 Ordinary public ledger values supplied through CLI flags are visible in process
 listings, shell history, terminal logs, and job metadata. Do not place a private
 forecast value, rationale, key factor, working comment, raw key, salt, or
@@ -36,6 +42,12 @@ those private fields only through protected `--secret-input` and writes keys
 only to protected `--key-file` destinations. Sealed initial forecasts use
 `--initial-secret-input` for the same reason. Generic public side-loaded
 request documents are not supported.
+
+Optional provenance snapshots are public evidence artifacts. Their paths are
+confined relative to the ledger and their SHA-256 digests are checked locally;
+the CLI does not follow a provenance source URL during normal validation. Do
+not place credentials or private source material in snapshots intended for a
+ledger or publication package.
 
 `timestamp stamp` sends the SHA-256 digest of the canonical target, a random
 nonce, and request timing to the selected RFC 3161 authority. Omission selects

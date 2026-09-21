@@ -115,7 +115,7 @@ func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		return nil, app.NewError(app.CodeInternal, "ledger schema validation could not run", err)
 	}
 	if len(schemaIssues) > 0 {
-		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v1", nil), map[string]any{"issues": ledgerSchemaDiagnostics(parsed, schemaIssues)})
+		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v2", nil), map[string]any{"issues": ledgerSchemaDiagnostics(parsed, schemaIssues)})
 	}
 	model, err := validation.DecodeLedger(parsed)
 	if err != nil {

@@ -1,7 +1,7 @@
 # FreeTSA RFC 3161 interoperability fixture
 
 These byte-exact files contain no private forecast data. They were retrieved on
-2026-08-30 from the qualified `https://freetsa.org/tsr` profile with OpenSSL
+2026-09-21 from the qualified `https://freetsa.org/tsr` profile with OpenSSL
 3.6.0:
 
 ```sh
@@ -25,9 +25,9 @@ ECDSA-with-SHA-512 signature.
 
 | File | SHA-256 |
 | --- | --- |
-| `target.txt` | `b360d603065bfcc064392cf364f1cc599650ff6e924a244427eca40e76e8f3bb` |
-| `request.tsq` | `ac3584ff6ad33516e6c301129eef5035d0f667af9951dce1fbbc25375e29144a` |
-| `response.tsr` | `60a77a574f6140e6f2270d0db490eb733fcd57653dc3f7eae0ce0c1e69fc589a` |
+| `target.txt` | `e232db4b3ef9609976f34a6abc70a56faf39e6811f6f5d2a17655afc039aa391` |
+| `request.tsq` | `4c9d7150bcbbf1be186c393517a7f0f84e0d569e34101839f8059ea185d5a25b` |
+| `response.tsr` | `1f86cb9efdbf1ab088a0f50484448efd80dc2210392f7136ae15f420a2a37004` |
 | `tsa.pem` | `8bfb0305bb64e2571ca507552ef3245cb1c2fee8728e0ff8689225081ea13467` |
 
 The exact root bundle is

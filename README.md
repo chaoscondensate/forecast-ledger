@@ -18,8 +18,8 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.8.0` implements the complete
-> CLI and MCP command surface: authoring, sealed forecasts, canonical
+> **Status: Preview and unaudited.** Current main implements the Forecast
+> Ledger v2 CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental RFC 3161 timestamp evidence, layered verification, and
 > portable publication packages. RFC 3161 support remains experimental until
 > the tracked native-platform and independent-review gates are complete. The project has no recorded independent
@@ -118,7 +118,7 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v1.3.0 contract permits zero questions and questions
+The embedded Forecast Ledger v2.0.0 contract permits zero questions and questions
 with zero forecasts. All ordinary non-secret authoring is available only through
 flags or direct MCP properties. Protected private forecast bundles use the
 purpose-named `--secret-input` or `--initial-secret-input` channels and never
@@ -147,18 +147,20 @@ forecast-ledger platform add \
   --url https://www.metaculus.com/
 ```
 
-Typed questions can be added before their first forecast, updated within the v1
-evidence rules, listed, shown, resolved, annulled, or disputed; see
+Typed questions can be added before their first forecast, revised without
+rewriting earlier wording, listed, shown, resolved, marked ambiguous or void,
+or disputed; see
 [Manage questions and resolutions](docs/how-to/manage-questions.md).
 
 ```sh
 forecast-ledger question add \
   --file ledger.yaml \
   --question q-launch \
-  --type binary \
+  --revision-id qr-launch-1 \
   --title "Will the launch happen?" \
   --resolution-criteria "Resolve from the operator's public launch record." \
-  --expected-resolution-at "15 Jan 2027"
+  --expected-resolution-at "15 Jan 2027" \
+  --outcome-kind binary
 ```
 
 Append the first public forecast, or a later revision without modifying an
@@ -169,8 +171,9 @@ forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-001 \
-  --value-kind binary \
-  --probability-bp 6500 \
+  --question-revision qr-launch-1 \
+  --probability 0.65 \
+  --probability-outcome \
   --rationale "Evidence moved slightly in favor."
 ```
 
@@ -185,6 +188,7 @@ forecast-ledger forecast seal \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002 \
+  --question-revision qr-launch-1 \
   --forecasted-at 2026-09-01T10:00:00+01:00 \
   --secret-input private-forecast.yaml \
   --key-file f-launch-002.key
@@ -339,10 +343,10 @@ a smaller surface, so check that binary's help and `version --json` output.
 
 The current source supports:
 
-- source-preserving platform, question, and forecast authoring after JSON/YAML initialization;
-- platforms, typed questions, public forecasts, and append-only revisions;
-- binary, multiple-choice, numeric, and date forecast values;
-- sealed forecasts using the published `forecast-seal/v1` profile;
+- source-preserving platform, group, relationship, question, and forecast authoring after JSON/YAML initialization;
+- immutable question revisions across binary, categorical, ordinal, numeric, date, and datetime domains;
+- probability, PMF, binned-PMF, quantile, CDF, point, and credible-interval forecast representations;
+- sealed forecasts using the published `forecast-seal/v2` profile;
 - reveal verification without discarding the original commitment evidence;
 - canonical target generation and RFC 3161 request/response evidence;
 - layered local verification and portable evidence packages;

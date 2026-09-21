@@ -2,6 +2,7 @@
   "$defs": {
     "contact": {
       "additionalProperties": false,
+      "minProperties": 1,
       "properties": {
         "email": {
           "format": "email",
@@ -75,8 +76,7 @@
           "$ref": "#/$defs/slug"
         },
         "name": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "profiles": {
           "items": {
@@ -85,8 +85,7 @@
           "type": "array"
         },
         "role": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         }
       },
       "required": [
@@ -95,20 +94,22 @@
       ],
       "type": "object"
     },
+    "nonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
     "profile": {
       "additionalProperties": false,
       "properties": {
         "service": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         },
         "url": {
           "format": "uri",
           "type": "string"
         },
         "username": {
-          "minLength": 1,
-          "type": "string"
+          "$ref": "#/$defs/nonEmptyString"
         }
       },
       "required": [
@@ -160,7 +161,7 @@
       "type": "string"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/root-metadata-patch/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/root-metadata-patch/v2",
   "$ref": "#/$defs/root-metadata-patch",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

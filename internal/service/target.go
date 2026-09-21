@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ForecastEnvelopeSchema = "forecast-envelope/v1"
+	ForecastEnvelopeSchema = "forecast-envelope/v2"
 	TargetCanonicalization = "RFC8785"
 )
 
@@ -33,24 +33,33 @@ type targetCommitment struct {
 	Encryption     ledger.Encryption `json:"encryption"`
 }
 
+// targetForecast is an explicit projection. Integrity, key_hint, revealed_at,
+// and revealed_key cannot accidentally enter the timestamp claim.
 type targetForecast struct {
-	ID                   ledger.Slug               `json:"id"`
-	ForecastedAt         ledger.Timestamp          `json:"forecasted_at"`
-	RecordedAt           ledger.Timestamp          `json:"recorded_at"`
-	Visibility           ledger.ForecastVisibility `json:"visibility"`
-	PublicNote           *string                   `json:"public_note,omitempty"`
-	SupersedesForecastID *ledger.Slug              `json:"supersedes_forecast_id,omitempty"`
-	Value                *ledger.ForecastValue     `json:"value,omitempty"`
-	Rationale            *string                   `json:"rationale,omitempty"`
-	KeyFactors           *[]string                 `json:"key_factors,omitempty"`
-	Comment              *string                   `json:"comment,omitempty"`
-	Commitment           *targetCommitment         `json:"commitment,omitempty"`
+	ID                   ledger.Slug                      `json:"id"`
+	QuestionRevisionID   ledger.Slug                      `json:"question_revision_id"`
+	ForecastedAt         ledger.Timestamp                 `json:"forecasted_at"`
+	RecordedAt           ledger.Timestamp                 `json:"recorded_at"`
+	Visibility           ledger.ForecastVisibility        `json:"visibility"`
+	Representations      *[]ledger.ForecastRepresentation `json:"representations,omitempty"`
+	Rationale            *string                          `json:"rationale,omitempty"`
+	KeyFactors           *[]string                        `json:"key_factors,omitempty"`
+	Comment              *string                          `json:"comment,omitempty"`
+	PublicNote           *string                          `json:"public_note,omitempty"`
+	SupersedesForecastID *ledger.Slug                     `json:"supersedes_forecast_id,omitempty"`
+	Provenance           *ledger.Provenance               `json:"provenance,omitempty"`
+	LifecycleEvents      *[]ledger.LifecycleEvent         `json:"lifecycle_events,omitempty"`
+	Commitment           *targetCommitment                `json:"commitment,omitempty"`
 }
 
+type targetQuestion struct {
+	ID       ledger.Slug             `json:"id"`
+	Revision ledger.QuestionRevision `json:"revision"`
+}
 type forecastEnvelope struct {
-	Schema     string         `json:"schema"`
-	QuestionID ledger.Slug    `json:"question_id"`
-	Forecast   targetForecast `json:"forecast"`
+	Schema   string         `json:"schema"`
+	Question targetQuestion `json:"question"`
+	Forecast targetForecast `json:"forecast"`
 }
 
 func BuildForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.Slug) (TargetArtifact, error) {
@@ -62,9 +71,9 @@ func BuildForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.Slu
 		return TargetArtifact{}, err
 	}
 	var forecast *ledger.Forecast
-	for index := range question.Forecasts {
-		if question.Forecasts[index].ID == forecastID {
-			forecast = &question.Forecasts[index]
+	for i := range question.Forecasts {
+		if question.Forecasts[i].ID == forecastID {
+			forecast = &question.Forecasts[i]
 			break
 		}
 	}
@@ -96,7 +105,7 @@ func BuildAllForecastTargets(model *ledger.Ledger) ([]TargetArtifact, error) {
 	if model == nil {
 		return nil, app.NewError(app.CodeInternal, "ledger is nil", nil)
 	}
-	result := make([]TargetArtifact, 0)
+	result := []TargetArtifact{}
 	for _, question := range model.Questions {
 		for _, forecast := range question.Forecasts {
 			artifact, err := BuildForecastTarget(model, question.ID, forecast.ID)
@@ -107,8 +116,8 @@ func BuildAllForecastTargets(model *ledger.Ledger) ([]TargetArtifact, error) {
 		}
 	}
 	paths := make([]string, len(result))
-	for index := range result {
-		paths[index] = string(result[index].RelativePath)
+	for i := range result {
+		paths[i] = string(result[i].RelativePath)
 	}
 	if err := storage.DetectPortablePathCollisions(paths); err != nil {
 		return nil, err
@@ -117,38 +126,36 @@ func BuildAllForecastTargets(model *ledger.Ledger) ([]TargetArtifact, error) {
 }
 
 func buildForecastEnvelope(question ledger.Question, forecast ledger.Forecast) (forecastEnvelope, error) {
-	targetForecast := targetForecast{
-		ID: forecast.ID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt,
-		Visibility: forecast.Visibility, PublicNote: cloneString(forecast.PublicNote), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID),
+	var revision *ledger.QuestionRevision
+	for i := range question.Revisions {
+		if question.Revisions[i].ID == forecast.QuestionRevisionID {
+			revision = &question.Revisions[i]
+			break
+		}
 	}
+	if revision == nil {
+		return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "forecast references a missing question revision", nil)
+	}
+	target := targetForecast{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, PublicNote: cloneString(forecast.PublicNote), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), Provenance: forecast.Provenance, LifecycleEvents: forecast.LifecycleEvents}
 	switch forecast.Visibility {
 	case ledger.VisibilityPublic:
-		targetForecast.Value = cloneForecastValue(forecast.Value)
-		targetForecast.Rationale = cloneString(forecast.Rationale)
-		targetForecast.KeyFactors = cloneStrings(forecast.KeyFactors)
-		targetForecast.Comment = cloneString(forecast.Comment)
-	case ledger.VisibilitySealed:
-		if forecast.Commitment == nil || forecast.Commitment.Sealed == nil {
-			return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "sealed forecast has no sealed commitment", nil)
+		target.Representations = cloneRepresentations(forecast.Representations)
+		target.Rationale = cloneString(forecast.Rationale)
+		target.KeyFactors = cloneStrings(forecast.KeyFactors)
+		target.Comment = cloneString(forecast.Comment)
+	case ledger.VisibilitySealed, ledger.VisibilityRevealed:
+		target.Visibility = ledger.VisibilitySealed
+		sealed, _, err := originalSealedCommitment(forecast)
+		if err != nil {
+			return forecastEnvelope{}, err
 		}
-		sealed := forecast.Commitment.Sealed
-		targetForecast.Commitment = &targetCommitment{Scheme: sealed.Scheme, CommitmentHash: sealed.CommitmentHash, Encryption: sealed.Encryption}
-	case ledger.VisibilityRevealed:
-		if forecast.Commitment == nil || forecast.Commitment.Revealed == nil {
-			return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "revealed forecast has no revealed commitment", nil)
-		}
-		revealed := forecast.Commitment.Revealed
-		targetForecast.Visibility = ledger.VisibilitySealed
-		targetForecast.Commitment = &targetCommitment{Scheme: revealed.Scheme, CommitmentHash: revealed.CommitmentHash, Encryption: revealed.Encryption}
+		target.Commitment = &targetCommitment{Scheme: sealed.Scheme, CommitmentHash: sealed.CommitmentHash, Encryption: sealed.Encryption}
 	default:
 		return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "forecast visibility is not supported for targets", nil)
 	}
-	return forecastEnvelope{Schema: ForecastEnvelopeSchema, QuestionID: question.ID, Forecast: targetForecast}, nil
+	return forecastEnvelope{Schema: ForecastEnvelopeSchema, Question: targetQuestion{ID: question.ID, Revision: *revision}, Forecast: target}, nil
 }
 
 func TargetMetadataFor(artifact TargetArtifact) ledger.ForecastTarget {
-	return ledger.ForecastTarget{
-		Scope: ForecastEnvelopeSchema, Canonicalization: TargetCanonicalization, ArtifactPath: artifact.RelativePath,
-		Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)},
-	}
+	return ledger.ForecastTarget{Scope: ForecastEnvelopeSchema, Canonicalization: TargetCanonicalization, ArtifactPath: artifact.RelativePath, Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}}
 }

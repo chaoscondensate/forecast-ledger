@@ -20,7 +20,7 @@ result.
 - [Run the MCP server](../how-to/run-mcp.md).
 - [Review the short installation summary](../../README.md#install).
 - [Validate or inspect an existing ledger](../../README.md#quick-start).
-- [Review the implementation and compatibility baseline](../development/documentation-baseline.md).
+- [Review the implementation baseline](../development/documentation-baseline.md).
 
 The current source implements the advertised command surface. Timestamp support
 uses RFC 3161 and defaults to the built-in FreeTSA profile with retained trust;

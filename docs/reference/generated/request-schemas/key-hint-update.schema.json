@@ -14,7 +14,7 @@
       "type": "object"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/key-hint-update/v1",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/key-hint-update/v2",
   "$ref": "#/$defs/key-hint-update",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

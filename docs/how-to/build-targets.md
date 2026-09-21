@@ -62,11 +62,11 @@ but missing, unreadable, unsafe, or mismatched target remains an error.
 never-built rows. Plain rows use question ID, forecast ID, state, reason codes,
 path, expected SHA-256, actual SHA-256 when available, and optional guidance.
 
-The `forecast-envelope/v1` target contains the ledger ID, selected question
-meaning and timing fields, and the selected public forecast or original sealed
-commitment. It excludes forecaster identity, question status and resolution,
-platforms, tags, notes, integrity state, key hint, revealed key, and unrelated
-records. A revealed forecast continues to use its original sealed target.
+The `forecast-envelope/v2` target contains the ledger ID, the full bound
+question revision, and the selected public forecast statement or original
+sealed commitment. It excludes mutable integrity state, key hint, revealed key,
+question resolution, and unrelated records. A revealed forecast continues to
+use its original sealed target.
 
 A target proves no authorship or time by itself. It is only deterministic input
 for later evidence operations.

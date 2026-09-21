@@ -1,3 +1,8 @@
+> v2 cutover note (2026-09-21): `adopt-forecast-ledger-v2` supplies the current
+> schema and command facts for every deliverable in this proposal. Examples and
+> generated references must use v2 unless they are explicitly migration or
+> historical material.
+
 ## Why
 
 The CLI handles cryptographic evidence and forecasting records, so documentation is part of its safety and trust boundary rather than optional project polish. A new user, operator, contributor, security researcher, or MCP integrator should be able to understand the product, reach a successful workflow, verify its limitations, and find the right participation channel without reading the source or guessing project policy.
