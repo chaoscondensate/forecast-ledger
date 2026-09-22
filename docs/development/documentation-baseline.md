@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-21
+reviewed: 2026-09-22
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-09-21
+Reviewed: 2026-09-22
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -96,12 +96,12 @@ or upgrade to `v0.6.1`.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `2.0.0` |
-| Schema commit | `1d3b186a15136bc5aff38647cb59fbef475dbe55` |
-| Annotated tag object | `7b4a9e85e0df9350750828a57b03ff729f704ee4` |
-| Release archive SHA-256 | `1d56cbe4f6cbd1fccb046a99add2ff4f88c709904d027669039ba4139664f47e` |
-| `SHA256SUMS` SHA-256 | `77d093fbdb393dc9c1e3bdae053724e5ecdccd2e211f6f6c08c7678e78b178dc` |
-| Embedded schema SHA-256 | `efd87b7432f7cb017fbedaba217e4cd1d3bff06133457927fb786a249a040b21` |
+| Forecast Ledger schema | `2.0.1` |
+| Schema commit | `55b1431d379128e1d75b9c30a3874398cea9ff0f` |
+| Annotated tag object | `ac69f718de92f2c087b44b1b02d325ba37945db6` |
+| Release archive SHA-256 | `bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41` |
+| `SHA256SUMS` SHA-256 | `fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6` |
+| Embedded schema SHA-256 | `5ceeeca7b2b3e46884c116aeb4f20998daf619569c0191728f574c245a4a595b` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
@@ -110,6 +110,8 @@ Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
 never a floating tag. Documents with any other schema version receive an
 `unsupported_schema_version` warning and are rejected before side effects.
+There is no v2.0.0 runtime contract, converter, or compatibility reader;
+historical v2.0.0 evidence remains interpretable from its exact upstream tag.
 
 ### Platforms and release artifacts
 
@@ -119,7 +121,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.9.0` contains those six archives and eight native Linux packages:
+Release `v0.9.1` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -247,11 +249,11 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**.
-  `v0.9.0` is published through the explicit release workflow; stable `0.x`
+  `v0.9.1` is published through the explicit release workflow; stable `0.x`
   packaging does not imply feature completeness, independent audit, or formal
   verification.
 - No independent security or cryptographic audit is recorded. A pinned
-  `go tool govulncheck ./...` completed on 2026-09-21 with no reachable
+  `go tool govulncheck ./...` completed on 2026-09-22 with no reachable
   vulnerability and three required-module advisories in code this project does
   not call. That bounded result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check

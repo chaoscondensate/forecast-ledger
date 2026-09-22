@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-30
+reviewed: 2026-09-22
 owner: security
 generated: false
 security-critical: true
@@ -43,7 +43,7 @@ evidence-package/
   manifest.json
 ```
 
-The canonical `forecast-ledger-publication/v2` manifest pins schema v2.0.0 and
+The canonical `forecast-ledger-publication/v2` manifest pins schema v2.0.1 and
 records each allowlisted path, role, size, and SHA-256 digest.
 
 Verify on another machine with no network option:

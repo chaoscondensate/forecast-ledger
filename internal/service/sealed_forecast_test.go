@@ -3,6 +3,9 @@ package service
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +13,28 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/forecastcrypto"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
+
+func TestForecastRevealMissingKeyNamesKeyAndDoesNotMutateLedger(t *testing.T) {
+	built := testSealedInitialBuild(t)
+	directory := t.TempDir()
+	path := filepath.Join(directory, "ledger.yaml")
+	if _, err := CommitNewLedger(path, built.Ledger); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(directory, "missing.key")
+	_, err = PlanForecastRevealFile(t.Context(), path, missing, "q-one", "f-one", "2026-02-01T00:00:00Z")
+	if app.ErrorCodeOf(err) != app.CodeNotFound || !strings.Contains(err.Error(), "key file does not exist") || strings.Contains(err.Error(), "ledger file does not exist") || strings.Contains(err.Error(), missing) {
+		t.Fatalf("missing key error = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("missing key changed ledger: %v", err)
+	}
+}
 
 func TestForecastSealRevealAndKeyHintPreserveTargetBytes(t *testing.T) {
 	root, err := BuildLedgerRoot(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "me", ForecasterName: "Me"}, fixedTestClock{value: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)})

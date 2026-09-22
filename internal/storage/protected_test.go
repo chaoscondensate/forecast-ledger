@@ -5,10 +5,18 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
+
+func TestReadProtectedFileMissingPurposeLabel(t *testing.T) {
+	_, err := ReadProtectedFile(filepath.Join(t.TempDir(), "missing.key"), 4096, "key file")
+	if app.ErrorCodeOf(err) != app.CodeNotFound || !strings.Contains(err.Error(), "key file does not exist") || strings.Contains(err.Error(), "ledger file") {
+		t.Fatalf("missing key error = %v", err)
+	}
+}
 
 func TestCreateProtectedFileIsExclusiveAndOwnerOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "forecast.key")

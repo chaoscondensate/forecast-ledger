@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"errors"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -122,6 +123,19 @@ func pathsOverlap(left, right string) bool {
 }
 
 func (r *RootSet) Resolve(class service.RootClass, reference string, mustExist bool) (string, error) {
+	label := "artifact"
+	switch class {
+	case service.RootLedger:
+		label = "ledger file"
+	case service.RootOutput:
+		label = "output file"
+	case service.RootSecret:
+		label = "protected file"
+	}
+	return r.ResolveLabeled(class, reference, mustExist, label)
+}
+
+func (r *RootSet) ResolveLabeled(class service.RootClass, reference string, mustExist bool, label string) (string, error) {
 	if r == nil {
 		return "", app.NewError(app.CodeInternal, "MCP roots are not configured", nil)
 	}
@@ -133,9 +147,14 @@ func (r *RootSet) Resolve(class service.RootClass, reference string, mustExist b
 	if resolver == nil {
 		return "", app.WithDetails(app.NewError(app.CodeNotFound, "requested root is not configured", nil), map[string]any{"root": name, "class": class, "flag": rootFlag(class), "route": routeID(class, name)})
 	}
-	resolved, err := resolver.Resolve(relative, mustExist)
+	resolved, err := resolver.ResolveLabeled(relative, mustExist, label)
 	if err != nil {
-		return "", app.WithDetails(app.NewError(app.ErrorCodeOf(err), "path reference is not allowed for the configured root", err), map[string]any{"root": name, "class": class, "flag": rootFlag(class), "route": routeID(class, name)})
+		message := "path reference is not allowed for the configured root"
+		var applicationErr *app.Error
+		if mustExist && errors.As(err, &applicationErr) && applicationErr.Code == app.CodeNotFound {
+			message = applicationErr.Message
+		}
+		return "", app.WithDetails(app.NewError(app.ErrorCodeOf(err), message, err), map[string]any{"root": name, "class": class, "flag": rootFlag(class), "route": routeID(class, name)})
 	}
 	return resolved, nil
 }

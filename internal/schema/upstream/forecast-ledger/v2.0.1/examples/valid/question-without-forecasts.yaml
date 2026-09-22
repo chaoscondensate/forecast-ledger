@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../schema/forecast-ledger.schema.json
 $schema: ../../schema/forecast-ledger.schema.json
-schema_version: 2.0.0
+schema_version: 2.0.1
 ledger_id: example-question-backlog
 title: Forecast Question Backlog
 description: A ledger containing a question that has not received a forecast yet.

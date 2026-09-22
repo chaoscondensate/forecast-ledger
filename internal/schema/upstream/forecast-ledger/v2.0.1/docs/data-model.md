@@ -22,7 +22,7 @@ or cross-record lookup.
 
 | Field | Required | Purpose |
 | --- | --- | --- |
-| `schema_version` | yes | Exact contract version; v2 requires `2.0.0`. |
+| `schema_version` | yes | Exact contract version; this release requires `2.0.1`. |
 | `ledger_id` | yes | Stable ID for this forecasting track record. |
 | `created_at` | yes | Ledger creation claim. |
 | `default_timezone` | yes | IANA timezone for authoring tools. |
@@ -226,6 +226,12 @@ active.
 Events are ordered by both effective and recording time. They do not overwrite
 the original forecast or replace a new forecast update. A changed belief is a
 new forecast with `supersedes_forecast_id`.
+
+Lifecycle events are activity metadata outside the immutable
+`forecast-envelope/v2` timestamp target. Appending `withdrawn`, `expired`, or
+`reaffirmed` changes the derived active state but not the recorded belief,
+canonical target bytes, target SHA-256, or previously obtained RFC 3161
+evidence.
 
 ## Platform provenance
 

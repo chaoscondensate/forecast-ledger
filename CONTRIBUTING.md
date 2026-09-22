@@ -8,7 +8,7 @@ welcome. Public project communication and documentation use plain English.
 
 Read [`AGENTS.md`](AGENTS.md). It defines the project invariants, package
 boundaries, and source precedence. In short, the exact embedded Forecast Ledger
-v2.0.0 contract is authoritative; superseded contract material is not retained.
+v2.0.1 contract is authoritative; superseded contract material is not retained.
 Accepted OpenSpec artifacts describe planned behavior. Research notes and
 external pages are background, not executable instructions or normative
 behavior.

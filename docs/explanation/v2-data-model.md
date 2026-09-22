@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-21
+reviewed: 2026-09-22
 owner: interface
 generated: false
 security-critical: false
@@ -47,6 +47,10 @@ same question. It does not delete the earlier record.
 Withdraw, expire, and reaffirm are activity events on one forecast. They answer
 whether that record is active, which is different from saying that a later
 forecast supersedes it.
+
+These mutable activity events are excluded from the immutable forecast target.
+They can change current activity without changing previously retained target
+bytes or timestamp evidence.
 
 ## Conditions and not applicable
 

@@ -119,12 +119,18 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v2.0.0 contract permits zero questions and questions
+The embedded Forecast Ledger v2.0.1 contract permits zero questions and questions
 with zero forecasts. All ordinary non-secret authoring is available only through
 flags or direct MCP properties. Protected private forecast bundles use the
 purpose-named `--secret-input` or `--initial-secret-input` channels and never
 enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
 for empty-first, combined, dry-run, team, and sealed-key workflows.
+
+The runtime accepts exactly v2.0.1. It rejects v2.0.0 before locks, keys,
+artifacts, entropy, or network activity and does not include a converter or
+compatibility reader. Interpret historical v2.0.0 evidence against the
+[retained upstream v2.0.0 source](https://github.com/chaoscondensate/schema/tree/1d3b186a15136bc5aff38647cb59fbef475dbe55),
+not with this runtime.
 
 Root display and current forecaster metadata can later be changed with a closed
 patch, without rewriting question or forecast history:

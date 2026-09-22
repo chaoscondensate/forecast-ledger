@@ -128,9 +128,12 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-The supported schema is exact. A ledger other than v2.0.0 produces an explicit
-warning on stderr, returns `unsupported_schema_version`/exit 3, and stops before
-any file, key, artifact, or network side effect.
+The supported schema is exact. A ledger other than v2.0.1, including v2.0.0,
+produces an explicit warning on stderr, returns
+`unsupported_schema_version`/exit 3, and stops before locks, files, keys,
+artifacts, entropy, or network side effects. The runtime has no converter or
+compatibility reader. Interpret historical v2.0.0 evidence against the
+[exact retained upstream source](https://github.com/chaoscondensate/schema/tree/1d3b186a15136bc5aff38647cb59fbef475dbe55).
 
 Exact direct request schemas and operation policies are generated under
 [generated interface reference](generated/index.md). Candidate-binary

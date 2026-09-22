@@ -106,6 +106,10 @@ integrity:
 `integrity` is excluded from the target, so adding this block does not create a
 recursive hash.
 
+`lifecycle_events` is also excluded. Appending a withdrawal, expiry, or
+reaffirmation changes derived activity state but does not require rebuilding or
+retimestamping the recorded belief.
+
 ### 5. Request one or more RFC 3161 timestamps
 
 For each TSA:
@@ -265,7 +269,8 @@ Platform timestamps remain provenance claims even when transported over TLS.
 Append `withdrawn` or `expired` only while the forecast is active. Append
 `reaffirmed` only while inactive. Keep effective and recording timestamps
 non-decreasing. A lifecycle event changes whether a forecast is active; it does
-not change the recorded belief.
+not change the recorded belief and is outside the immutable timestamp target.
+The original target and RFC 3161 evidence remain valid after the event.
 
 ## G. Resolve a question
 

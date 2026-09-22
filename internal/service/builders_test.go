@@ -19,7 +19,7 @@ func TestBuildLedgerRootCapturesOneClockAndBuildsValidIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%#v", err)
 	}
-	if root.SchemaVersion != "2.0.0" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
+	if root.SchemaVersion != "2.0.1" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
 		t.Fatalf("root = %#v", root)
 	}
 	if root.Questions == nil || len(root.Questions) != 0 || root.Publication != nil {

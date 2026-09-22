@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	"github.com/chaoscondensate/forecast-ledger/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 type fixedCLIClock struct{ value time.Time }
@@ -92,6 +94,68 @@ func TestCLIForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
 	}
 	if count := strings.Count(string(raw), `"2026-08-30T18:00:00+01:00"`); count < 2 {
 		t.Fatalf("forecast defaults did not share the fixed ledger-timezone observation:\n%s", raw)
+	}
+}
+
+func TestCLIQuestionRevisionDefaultsAdvanceOnSameClockTick(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.yaml")
+	effects := service.ProductionEffects()
+	effects.Clock = fixedCLIClock{value: time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)}
+	commands := [][]string{
+		{"forecast-ledger", "init", "--file", path, "--ledger-id", "revision-clock", "--timezone", "Europe/London", "--forecaster-id", "owner", "--forecaster-name", "Owner"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-clock", "--revision-id", "qr-one", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "2030-08-10T23:59:59+01:00", "--outcome-kind", "binary"},
+		{"forecast-ledger", "question", "revise", "--file", path, "--question", "q-clock", "--revision-id", "qr-two", "--title", "Revised question", "--resolution-criteria", "Public result", "--expected-resolution-at", "2030-08-10T23:59:59+01:00", "--outcome-kind", "binary"},
+	}
+	for _, arguments := range commands {
+		code, _, stderr := runCLIWithEffects(effects, arguments...)
+		if code != 0 {
+			t.Fatalf("%v failed with %d: %s", arguments[1:3], code, stderr)
+		}
+	}
+	loaded, err := service.LoadAndValidateLedger(t.Context(), path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revisions := loaded.Model.Questions[0].Revisions
+	if len(revisions) != 2 || revisions[0].EffectiveAt != "2026-08-30T18:00:00+01:00" || revisions[1].EffectiveAt != "2026-08-30T18:00:00.000000001+01:00" || revisions[1].RecordedAt != revisions[1].EffectiveAt {
+		t.Fatalf("CLI revision defaults = %#v", revisions)
+	}
+}
+
+func TestCLIDefaultRevealAndTerminalTimesUseLedgerTimezone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.yaml")
+	keyPath := filepath.Join(filepath.Dir(path), "forecast.key")
+	secretPath := filepath.Join(filepath.Dir(path), "private.yaml")
+	if err := storage.CreateProtectedFile(secretPath, []byte("representations:\n  - kind: probability\n    outcome: true\n    probability: \"0.7\"\nrationale: private rationale\nkey_factors:\n  - factor\ncomment: private comment\n")); err != nil {
+		t.Fatal(err)
+	}
+	effects := service.ProductionEffects()
+	effects.Clock = fixedCLIClock{value: time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)}
+	commands := [][]string{
+		{"forecast-ledger", "init", "--file", path, "--ledger-id", "timezone", "--timezone", "Europe/London", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--created-at", "2026-01-01T00:00:00Z"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-one", "--revision-id", "qr-one", "--effective-at", "2026-01-01T00:00:00Z", "--revision-recorded-at", "2026-01-01T00:00:01Z", "--title", "Question", "--resolution-criteria", "Public result", "--expected-resolution-at", "2030-01-01T00:00:00Z", "--outcome-kind", "binary"},
+		{"forecast-ledger", "forecast", "seal", "--file", path, "--question", "q-one", "--forecast", "f-one", "--question-revision", "qr-one", "--forecasted-at", "2026-02-01T00:00:00Z", "--recorded-at", "2026-02-01T00:00:01Z", "--secret-input", secretPath, "--key-file", keyPath},
+		{"forecast-ledger", "forecast", "reveal", "--file", path, "--question", "q-one", "--forecast", "f-one", "--key-file", keyPath, "--yes"},
+		{"forecast-ledger", "question", "update", "--file", path, "--question", "q-one", "--status", "closed"},
+		{"forecast-ledger", "question", "void", "--file", path, "--question", "q-one", "--reason", "No public outcome", "--yes"},
+	}
+	for _, arguments := range commands {
+		code, _, stderr := runCLIWithEffects(effects, arguments...)
+		if code != 0 {
+			t.Fatalf("%v failed with %d: %s", arguments[1:3], code, stderr)
+		}
+	}
+	loaded, err := service.LoadAndValidateLedger(t.Context(), path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forecast := loaded.Model.Questions[0].Forecasts[0]
+	if forecast.Commitment == nil || forecast.Commitment.Revealed == nil || forecast.Commitment.Revealed.RevealedAt != ledger.Timestamp("2026-08-30T18:00:00+01:00") {
+		t.Fatalf("CLI revealed_at = %#v", forecast.Commitment)
+	}
+	resolution := loaded.Model.Questions[0].Resolution
+	if resolution == nil || resolution.Unresolved == nil || resolution.Unresolved.RecordedAt != "2026-08-30T18:00:00+01:00" {
+		t.Fatalf("CLI terminal recorded_at = %#v", resolution)
 	}
 }
 

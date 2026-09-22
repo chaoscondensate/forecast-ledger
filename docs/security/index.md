@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-21
+reviewed: 2026-09-22
 owner: security
 generated: false
 security-critical: true
@@ -37,6 +37,11 @@ the protected `forecast-key/v2` file with the matching question, revision, and
 forecast IDs; a key from another record must fail. The target contains the full
 bound revision, so changing wording or domain requires a new revision and a new
 forecast rather than editing old evidence.
+
+Lifecycle events are deliberately outside the immutable target. Withdrawal,
+expiry, and reaffirmation change the derived active state without invalidating
+the original target or its timestamp. Consumers must check both evidence
+validity and current activity instead of treating either as the other.
 
 Ordinary public ledger values supplied through CLI flags are visible in process
 listings, shell history, terminal logs, and job metadata. Do not place a private

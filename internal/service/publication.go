@@ -258,14 +258,14 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	if manifest.LedgerSchema.Version != ledgerschema.Version || manifest.LedgerSchema.Commit != ledgerschema.Commit || manifest.LedgerSchema.SHA256 != ledgerschema.SchemaSHA256 {
 		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "publication manifest schema pin does not match this binary", nil)
 	}
-	expectedLedger, err := resolver.Resolve(manifest.LedgerPath, true)
+	expectedLedger, err := resolver.ResolveLabeled(manifest.LedgerPath, true, "packaged ledger")
 	if err != nil || expectedLedger != resolvedLedger {
 		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "selected package ledger does not match manifest ledger_path", err)
 	}
 	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Evidence: []ForecastVerification{}, Limitations: append([]string(nil), verificationLimitations...)}
 	listed := map[string]struct{}{"manifest.json": {}}
 	for _, entry := range manifest.Entries {
-		absolute, err := resolver.Resolve(entry.Path, true)
+		absolute, err := resolver.ResolveLabeled(entry.Path, true, "package entry")
 		if err != nil {
 			return result, app.NewError(app.CodeVerification, "a listed package entry is missing or unsafe", err)
 		}
@@ -402,7 +402,7 @@ func readConfinedArtifact(root, relative string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	absolute, err := resolver.Resolve(relative, true)
+	absolute, err := resolver.ResolveLabeled(relative, true, "package entry")
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
@@ -130,6 +131,11 @@ func BuildQuestionRevise(model *ledger.Ledger, id ledger.Slug, input RevisionInp
 	if !isNonterminalStatus(question.Status) {
 		return QuestionMutation{}, app.NewError(app.CodeConflict, "a terminal question cannot be revised", nil)
 	}
+	last := question.Revisions[len(question.Revisions)-1]
+	input, err = deriveRevisionDefaults(input, observedAt, last)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
 	revision, err := buildRevision(input, observedAt)
 	if err != nil {
 		return QuestionMutation{}, err
@@ -139,7 +145,6 @@ func BuildQuestionRevise(model *ledger.Ledger, id ledger.Slug, input RevisionInp
 			return QuestionMutation{}, app.NewError(app.CodeConflict, "question revision ID already exists", nil)
 		}
 	}
-	last := question.Revisions[len(question.Revisions)-1]
 	if err := ValidateChronology(last.EffectiveAt, "previous.effective_at", revision.EffectiveAt, "effective_at", false); err != nil {
 		return QuestionMutation{}, err
 	}
@@ -163,6 +168,66 @@ func BuildQuestionRevise(model *ledger.Ledger, id ledger.Slug, input RevisionInp
 	return QuestionMutation{Ledger: prospective, PriorStatus: question.Status, Patches: []document.PatchOperation{
 		{Kind: document.PatchAdd, Pointer: base + "/revisions/-", Value: value}, replacePatch(base+"/current_revision_id", revision.ID),
 	}}, nil
+}
+
+// deriveRevisionDefaults repairs only omitted revision timestamps. Explicit
+// values keep their caller-supplied semantics and are validated unchanged by
+// the normal chronology checks.
+func deriveRevisionDefaults(input RevisionInput, observedAt ledger.Timestamp, previous ledger.QuestionRevision) (RevisionInput, error) {
+	var observed time.Time
+	parseObserved := func() error {
+		if !observed.IsZero() {
+			return nil
+		}
+		parsed, err := ParseTimestamp(observedAt, "operation_clock")
+		if err != nil {
+			return err
+		}
+		observed = parsed
+		return nil
+	}
+
+	if input.EffectiveAt == "" {
+		if err := parseObserved(); err != nil {
+			return RevisionInput{}, err
+		}
+		priorEffective, err := ParseTimestamp(previous.EffectiveAt, "previous.effective_at")
+		if err != nil {
+			return RevisionInput{}, err
+		}
+		effective := observed
+		if !effective.After(priorEffective) {
+			effective = priorEffective.Add(time.Nanosecond)
+			if effective.Year() > 9999 {
+				return RevisionInput{}, invalidField("effective_at", "effective_at cannot be advanced beyond the supported RFC 3339 range")
+			}
+		}
+		input.EffectiveAt = ledger.Timestamp(effective.Format(time.RFC3339Nano))
+	}
+
+	if input.RecordedAt == nil {
+		if err := parseObserved(); err != nil {
+			return RevisionInput{}, err
+		}
+		effective, err := ParseTimestamp(input.EffectiveAt, "effective_at")
+		if err != nil {
+			return RevisionInput{}, err
+		}
+		priorRecorded, err := ParseTimestamp(previous.RecordedAt, "previous.recorded_at")
+		if err != nil {
+			return RevisionInput{}, err
+		}
+		recorded := observed
+		if effective.After(recorded) {
+			recorded = effective
+		}
+		if priorRecorded.After(recorded) {
+			recorded = priorRecorded
+		}
+		value := ledger.Timestamp(recorded.Format(time.RFC3339Nano))
+		input.RecordedAt = &value
+	}
+	return input, nil
 }
 
 func ListQuestions(model *ledger.Ledger) ([]QuestionSummary, error) {

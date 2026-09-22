@@ -21,11 +21,25 @@ var ErrUnsafePath = errors.New("path is not safe")
 // ledgers must be regular files and may not themselves be symlinks or reparse
 // points. Ancestor symlinks are canonicalized before an artifact root is made.
 func ResolveLedgerPath(input string, mustExist bool) (string, error) {
+	return resolveFilePath(input, mustExist, "ledger file")
+}
+
+// ResolveExistingFilePath resolves an explicitly supplied existing regular
+// file and uses a bounded, non-secret purpose label in safe diagnostics.
+func ResolveExistingFilePath(input, label string) (string, error) {
+	return resolveFilePath(input, true, filePurpose(label))
+}
+
+func resolveFilePath(input string, mustExist bool, label string) (string, error) {
+	label = filePurpose(label)
 	if strings.TrimSpace(input) == "" {
-		return "", app.NewError(app.CodeUsage, "--file is required", ErrUnsafePath)
+		if label == "ledger file" {
+			return "", app.NewError(app.CodeUsage, "--file is required", ErrUnsafePath)
+		}
+		return "", app.NewError(app.CodeUsage, label+" path is required", ErrUnsafePath)
 	}
 	if strings.IndexByte(input, 0) >= 0 {
-		return "", unsafePathError("ledger path contains a NUL byte")
+		return "", unsafePathError(label + " path contains a NUL byte")
 	}
 	if isWindowsDevicePath(input) || hasWindowsReservedComponent(input) {
 		return "", unsafePathError("Windows device paths and reserved device names are not allowed")
@@ -35,37 +49,51 @@ func ResolveLedgerPath(input string, mustExist bool) (string, error) {
 	}
 	abs, err := filepath.Abs(input)
 	if err != nil {
-		return "", app.NewError(app.CodeUsage, "ledger path is not valid", err)
+		return "", app.NewError(app.CodeUsage, label+" path is not valid", err)
 	}
 	abs = filepath.Clean(abs)
 	info, statErr := os.Lstat(abs)
 	if statErr == nil {
 		if isLinkOrReparse(info) {
-			return "", unsafePathError("ledger path must not be a symlink or junction")
+			return "", unsafePathError(label + " path must not be a symlink or junction")
 		}
 		if !info.Mode().IsRegular() {
-			return "", unsafePathError("ledger path must be a regular file")
+			return "", unsafePathError(label + " path must be a regular file")
 		}
 		resolved, err := filepath.EvalSymlinks(abs)
 		if err != nil {
-			return "", app.NewError(app.CodeIO, "ledger path cannot be resolved", err)
+			return "", app.NewError(app.CodeIO, label+" path cannot be resolved", err)
 		}
 		return filepath.Clean(resolved), nil
 	}
 	if !errors.Is(statErr, fs.ErrNotExist) {
-		return "", app.NewError(app.CodeIO, "ledger path cannot be inspected", statErr)
+		return "", app.NewError(app.CodeIO, label+" path cannot be inspected", statErr)
 	}
 	if mustExist {
-		return "", app.NewError(app.CodeNotFound, "ledger file does not exist", statErr)
+		return "", app.NewError(app.CodeNotFound, label+" does not exist", statErr)
 	}
 	parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "", app.NewError(app.CodeNotFound, "ledger parent directory does not exist", err)
+			return "", app.NewError(app.CodeNotFound, label+" parent directory does not exist", err)
 		}
-		return "", app.NewError(app.CodeIO, "ledger parent directory cannot be resolved", err)
+		return "", app.NewError(app.CodeIO, label+" parent directory cannot be resolved", err)
 	}
 	return filepath.Join(parent, filepath.Base(abs)), nil
+}
+
+func filePurpose(label string) string {
+	label = strings.TrimSpace(label)
+	if label == "" || len(label) > 64 {
+		return "file"
+	}
+	for _, character := range label {
+		if character == ' ' || character == '-' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' {
+			continue
+		}
+		return "file"
+	}
+	return label
 }
 
 // ResolveNewFilePath resolves an explicit destination whose parent already
@@ -149,6 +177,13 @@ func (r *PathResolver) Root() string { return r.root }
 // Resolve confines a schema relativePath under Root and rejects existing
 // symlinks, junctions, and other reparse points in every descendant component.
 func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) {
+	return r.ResolveLabeled(relative, mustExist, "artifact")
+}
+
+// ResolveLabeled applies Resolve's confinement checks and uses label only for
+// safe diagnostics about the requested artifact purpose.
+func (r *PathResolver) ResolveLabeled(relative string, mustExist bool, label string) (string, error) {
+	label = filePurpose(label)
 	if r == nil || r.root == "" || r.rootInfo == nil {
 		return "", app.NewError(app.CodeInternal, "path resolver is not initialized", nil)
 	}
@@ -167,7 +202,7 @@ func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) 
 	if err != nil || !contained {
 		return "", unsafePathError("path escapes the allowed root")
 	}
-	if err := rejectDescendantLinks(r.root, candidate, mustExist); err != nil {
+	if err := rejectDescendantLinks(r.root, candidate, mustExist, label); err != nil {
 		return "", err
 	}
 	return candidate, nil
@@ -261,7 +296,7 @@ func pathContained(root, candidate string) (bool, error) {
 	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative), nil
 }
 
-func rejectDescendantLinks(root, candidate string, mustExist bool) error {
+func rejectDescendantLinks(root, candidate string, mustExist bool, label string) error {
 	relative, err := filepath.Rel(root, candidate)
 	if err != nil {
 		return unsafePathError("path cannot be made relative to its root")
@@ -281,7 +316,7 @@ func rejectDescendantLinks(root, candidate string, mustExist bool) error {
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				if mustExist || index < len(parts)-1 {
-					return app.NewError(app.CodeNotFound, "path component does not exist", err)
+					return app.NewError(app.CodeNotFound, label+" does not exist", err)
 				}
 				return nil
 			}

@@ -73,6 +73,11 @@ func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, f
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
+	// Admission must happen before the advisory lock is created. In particular,
+	// a superseded schema cannot cause lock or artifact side effects.
+	if _, err := LoadAndValidateLedger(ctx, resolvedLedger, nil); err != nil {
+		return TargetOperationResult{}, err
+	}
 	lock, err := storage.AcquireLedgerLock(ctx, resolvedLedger, 0)
 	if err != nil {
 		return TargetOperationResult{}, err
@@ -239,7 +244,7 @@ func InspectTargets(ctx context.Context, path string, all bool, questionID, fore
 			result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeIO)
 			continue
 		}
-		absolute, err := resolver.Resolve(string(artifact.RelativePath), true)
+		absolute, err := resolver.ResolveLabeled(string(artifact.RelativePath), true, "target file")
 		if err != nil {
 			result.Targets[index] = failedTargetResult(row, "content.target_path_unsafe", err)
 			result.FailureCode = strongerTargetFailure(result.FailureCode, app.ErrorCodeOf(err))

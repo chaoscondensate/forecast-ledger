@@ -129,11 +129,11 @@ func TestEveryVisibleLeafHasActionAdmissionAndExample(t *testing.T) {
 	}
 }
 
-func TestV13AdmissionFailsBeforeTimestampSideEffects(t *testing.T) {
+func TestV200AdmissionFailsBeforeTimestampSideEffects(t *testing.T) {
 	directory := t.TempDir()
-	legacy := []byte(`{"schema_version":"1.3.0"}`)
-	path := filepath.Join(directory, "legacy.json")
-	if err := os.WriteFile(path, legacy, 0o600); err != nil {
+	old := []byte(`{"schema_version":"2.0.0","questions":[{"id":"q","forecasts":[{"id":"f","lifecycle_events":[{"id":"withdrawn","type":"withdrawn"}],"integrity":{"status":"verified","target":{"artifact_path":"proofs/targets/f.json"}}}]}]}`)
+	path := filepath.Join(directory, "old.json")
+	if err := os.WriteFile(path, old, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "--json", "timestamp", "stamp", "--file", path, "--question", "q", "--forecast", "f", "--tsa-url", "https://tsa.example.test", "--ca-bundle", "tsa.pem")
@@ -144,7 +144,7 @@ func TestV13AdmissionFailsBeforeTimestampSideEffects(t *testing.T) {
 		t.Fatalf("admission created artifacts: %v", err)
 	}
 	after, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(after, legacy) {
+	if err != nil || !bytes.Equal(after, old) {
 		t.Fatalf("admission changed ledger: %v", err)
 	}
 }
@@ -159,7 +159,7 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 		t.Fatalf("validate code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "status", "--file", path)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.0"`) {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.1"`) {
 		t.Fatalf("status code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.3.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
@@ -169,14 +169,14 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 	for _, args := range [][]string{{"forecast-ledger", "--json", "version"}, {"forecast-ledger", "version", "--json"}} {
 		code, stdout, stderr = runCLI(args...)
 		var got buildinfo.Info
-		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.0.0" {
+		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.0.1" {
 			t.Fatalf("version %v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
 	}
 }
 
 func TestCLIValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
-	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.0")
+	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1")
 	for _, relative := range []string{
 		"examples/valid/empty-ledger.json",
 		"examples/valid/individual-ledger.json",

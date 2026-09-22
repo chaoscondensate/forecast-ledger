@@ -1,8 +1,8 @@
 # Verify ledger evidence
 
 <!-- doc-metadata
-coverage: v0.9.0
-reviewed: 2026-09-21
+coverage: v0.9.1
+reviewed: 2026-09-22
 owner: security
 generated: false
 security-critical: true
@@ -41,6 +41,12 @@ fails only when all entries were completely checked and failed. A missing or
 pending entry keeps the layer pending or not checked. If the outcome is known,
 at least one verified `gen_time` must be earlier than `outcome_known_at`.
 `verified_at`, filesystem time, Git time, and package time are not substitutes.
+
+Withdraw, expire, and reaffirm events affect the forecast's derived active
+state, not its immutable `forecast-envelope/v2` target. Existing target and
+timestamp verification can therefore still pass after lifecycle activity; the
+report presents current activity separately and does not call an inactive
+forecast active merely because its evidence passes.
 
 The aggregate precedence is fail, not checked, pending, no evidence, then pass.
 `pass` requires at least one applicable evidence layer. An empty ledger or a

@@ -102,6 +102,109 @@ func TestPublishedV2UnionShapesHaveJSONAndYAMLParity(t *testing.T) {
 	}
 }
 
+func TestRelationshipAddNormalizesUnionShapeForWholeCollectionAndAppend(t *testing.T) {
+	_, individual := rootUpdateFixture(t, "individual-ledger.json")
+	conditionalBytes, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/relationships-and-datetime.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := document.ParseJSON(bytes.NewReader(conditionalBytes), document.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conditionalModel, err := validation.DecodeLedger(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	low := "low"
+	tests := []struct {
+		name         string
+		model        *ledger.Ledger
+		relationship ledger.Relationship
+		shape        string
+	}{
+		{name: "group-membership absent", model: func() *ledger.Ledger { cloned, _ := cloneLedger(individual); cloned.Relationships = nil; return cloned }(), relationship: ledger.Relationship{GroupMembership: &ledger.GroupMembership{ID: "membership-coalition", Kind: ledger.RelationshipGroupMembership, GroupID: "macro-2026", QuestionID: "q-election-coalition"}}, shape: "- id: membership-coalition\nkind: group_membership\ngroup_id: macro-2026\nquestion_id: q-election-coalition"},
+		{name: "group-membership append", model: individual, relationship: ledger.Relationship{GroupMembership: &ledger.GroupMembership{ID: "membership-coalition", Kind: ledger.RelationshipGroupMembership, GroupID: "macro-2026", QuestionID: "q-election-coalition"}}, shape: "- id: membership-coalition\nkind: group_membership\ngroup_id: macro-2026\nquestion_id: q-election-coalition"},
+		{name: "conditional absent", model: func() *ledger.Ledger {
+			cloned, _ := cloneLedger(conditionalModel)
+			cloned.Relationships = nil
+			cloned.Questions[1].Status = ledger.QuestionOpen
+			cloned.Questions[1].Resolution = nil
+			return cloned
+		}(), relationship: ledger.Relationship{Conditional: &ledger.ConditionalRelationship{ID: "condition-low-release", Kind: ledger.RelationshipConditional, ParentQuestionID: "q-demand-level", ParentQuestionRevisionID: "qr-demand-level-1", ParentOutcome: ledger.ScalarValue{String: &low}, ChildQuestionID: "q-release-moment"}}, shape: "- id: condition-low-release\nkind: conditional\nparent_question_id: q-demand-level\nparent_question_revision_id: qr-demand-level-1\nparent_outcome: low\nchild_question_id: q-release-moment"},
+		{name: "conditional append", model: conditionalModel, relationship: ledger.Relationship{Conditional: &ledger.ConditionalRelationship{ID: "condition-low-release", Kind: ledger.RelationshipConditional, ParentQuestionID: "q-demand-level", ParentQuestionRevisionID: "qr-demand-level-1", ParentOutcome: ledger.ScalarValue{String: &low}, ChildQuestionID: "q-release-moment"}}, shape: "- id: condition-low-release\nkind: conditional\nparent_question_id: q-demand-level\nparent_question_revision_id: qr-demand-level-1\nparent_outcome: low\nchild_question_id: q-release-moment"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			jsonPath, yamlPath := newFormatParityLedgers(t, test.model)
+			yamlBefore, err := os.ReadFile(yamlPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			yamlBefore = append([]byte("# unrelated source comment\n"), yamlBefore...)
+			if err := os.WriteFile(yamlPath, yamlBefore, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{jsonPath, yamlPath} {
+				before, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				planned, err := PlanRelationshipAddFile(t.Context(), path, RelationshipInput{Relationship: test.relationship})
+				if err != nil || !planned.Changed || len(planned.ChangedPointers) != 1 {
+					t.Fatalf("plan %s = %#v, %v", filepath.Ext(path), planned, err)
+				}
+				afterPlan, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(before, afterPlan) {
+					t.Fatalf("dry run changed %s: %v", filepath.Ext(path), err)
+				}
+				if _, err := CommitRelationshipAddFile(t.Context(), path, RelationshipInput{Relationship: test.relationship}); err != nil {
+					t.Fatalf("commit %s: %v", filepath.Ext(path), err)
+				}
+			}
+			yamlAfter, err := os.ReadFile(yamlPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := string(yamlAfter)
+			lines := strings.Split(text, "\n")
+			for index := range lines {
+				lines[index] = strings.TrimLeft(lines[index], " ")
+			}
+			ordered := strings.Join(lines, "\n")
+			if !strings.HasPrefix(text, "# unrelated source comment\n") || !strings.Contains(ordered, test.shape) {
+				t.Fatalf("YAML shape/source preservation mismatch:\n%s", text)
+			}
+			if strings.Contains(text, "group_membership:\n") || strings.Contains(text, "conditional:\n") {
+				t.Fatalf("YAML exposed union wrapper:\n%s", text)
+			}
+			assertFormatParityLedgers(t, jsonPath, yamlPath)
+		})
+	}
+}
+
+func TestInvalidRelationshipAddIsAtomic(t *testing.T) {
+	_, model := rootUpdateFixture(t, "individual-ledger.json")
+	jsonPath, yamlPath := newFormatParityLedgers(t, model)
+	invalid := RelationshipInput{Relationship: ledger.Relationship{GroupMembership: &ledger.GroupMembership{
+		ID: "missing-question", Kind: ledger.RelationshipGroupMembership, GroupID: "macro-2026", QuestionID: "q-does-not-exist",
+	}}}
+	for _, path := range []string{jsonPath, yamlPath} {
+		before, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := CommitRelationshipAddFile(t.Context(), path, invalid); err == nil {
+			t.Fatalf("invalid relationship was accepted for %s", filepath.Ext(path))
+		}
+		after, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("invalid relationship changed %s: %v", filepath.Ext(path), err)
+		}
+	}
+}
+
 func TestUnresolvedResolutionBranchesHaveJSONAndYAMLParity(t *testing.T) {
 	for _, status := range []ledger.ResolutionStatus{ledger.ResolutionAmbiguous, ledger.ResolutionVoid} {
 		t.Run(string(status), func(t *testing.T) {

@@ -3,6 +3,28 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## 0.9.1 - 2026-09-22
+
+### Changed
+
+- **Breaking:** replace the embedded Forecast Ledger v2.0.0 contract with the
+  exact v2.0.1 correction. The runtime accepts only v2.0.1 and provides no
+  converter or compatibility bundle; v2.0.0 is rejected before side effects.
+- Exclude mutable lifecycle events from public and sealed
+  `forecast-envelope/v2` targets, preserving retained targets and RFC 3161
+  evidence across withdrawal, expiry, and reaffirmation while reporting current
+  activity separately.
+
+### Fixed
+
+- Preserve flattened, ordered YAML relationship variants with JSON parity for
+  whole-collection creation, append, and dry-run paths.
+- Derive omitted question-revision times strictly after the prior revision,
+  including identical or regressing clock observations and fractional times.
+- Use the ledger timezone for omitted reveal and terminal-question operation
+  times, and identify missing protected reveal keys as key files without
+  exposing full paths.
+
 ## 0.9.0 - 2026-09-21
 
 ### Changed

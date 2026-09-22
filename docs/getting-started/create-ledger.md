@@ -1,8 +1,8 @@
 # Create a ledger
 
 <!-- doc-metadata
-coverage: v0.9.0
-reviewed: 2026-09-21
+coverage: v0.9.1
+reviewed: 2026-09-22
 owner: interface
 generated: false
 security-critical: true
@@ -11,7 +11,7 @@ next: ../how-to/index.md
 -->
 
 `forecast-ledger init` creates one new JSON or YAML ledger. It never overwrites
-an existing file and makes no network request. Forecast Ledger schema v2.0.0
+an existing file and makes no network request. Forecast Ledger schema v2.0.1
 allows an empty question list. Ordinary authoring uses flags only.
 
 Create an empty ledger first:

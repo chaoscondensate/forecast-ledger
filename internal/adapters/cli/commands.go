@@ -994,7 +994,10 @@ func questionTerminalAction(ctx context.Context, command *urfavecli.Command, bui
 			return app.NewError(app.CodeConflict, "question lifecycle change was not approved", nil)
 		}
 	}
-	observedAt := ledger.Timestamp(commandEffects(command).Clock.Now().Format(time.RFC3339))
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
 	result, err := execute(operationContext, id, observedAt, runtime.DryRun)
 	if err != nil {
 		return err
@@ -1212,6 +1215,13 @@ func forecastRevealAction(ctx context.Context, command *urfavecli.Command) error
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
+	timezone, err := mutationTimezone(operationContext, command)
+	if err != nil {
+		return err
+	}
+	if _, err := normalizeSetTimeWithMetadata(command, "revealed-at", timezone, dateOnlyRejected); err != nil {
+		return err
+	}
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	approved, err := runtime.Confirm(operationContext, fmt.Sprintf("Reveal forecast %s and publish its private fields and key?", forecastID))
 	if err != nil {
@@ -1222,7 +1232,10 @@ func forecastRevealAction(ctx context.Context, command *urfavecli.Command) error
 	}
 	revealedAt := ledger.Timestamp(command.String("revealed-at"))
 	if revealedAt == "" {
-		revealedAt = ledger.Timestamp(commandEffects(command).Clock.Now().Format(time.RFC3339))
+		revealedAt, err = formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+		if err != nil {
+			return err
+		}
 	}
 	var result service.ForecastFileResult
 	if runtime.DryRun {
@@ -1259,7 +1272,7 @@ func decodePrivateOperationInputForArgument(ctx context.Context, path string, st
 	if path == "-" {
 		return service.DecodeOperationInput(ctx, path, stdin, schema, destination)
 	}
-	data, err := storage.ReadProtectedFile(path, 8<<20)
+	data, err := storage.ReadProtectedFile(path, 8<<20, "protected "+argument+" file")
 	if err != nil {
 		return protectedArgumentError(err, argument)
 	}

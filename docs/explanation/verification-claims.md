@@ -1,8 +1,8 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: v0.9.0
-reviewed: 2026-09-21
+coverage: v0.9.1
+reviewed: 2026-09-22
 owner: security
 generated: false
 security-critical: true
@@ -10,8 +10,8 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: Forecast Ledger CLI release v0.9.0 (Preview).
-Last substantive review: 2026-09-21.
+Applies to: Forecast Ledger CLI release v0.9.1 (Preview).
+Last substantive review: 2026-09-22.
 Owner: security and interface owners
 
 This page defines the strongest conclusion the documentation may draw from a
@@ -43,6 +43,11 @@ Timestamp acquisition and timestamp verification are separate. Failure to
 obtain a TSA response means `not_checked`; it does not show that other retained
 evidence failed. Once acquired, the request, response, target, and retained CA
 bundle are sufficient for local verification.
+
+Forecast activity and evidence validity are also separate. Lifecycle events
+are not part of the immutable forecast target, so withdrawal, expiry, or
+reaffirmation does not rewrite or invalidate retained target and timestamp
+evidence. A report must state the derived active state separately.
 
 ## Approved terms
 

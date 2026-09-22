@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-21
+reviewed: 2026-09-22
 owner: interface
 generated: false
 security-critical: false
@@ -73,6 +73,9 @@ forecast-ledger forecast withdraw \
 `withdraw`, `expire`, and `reaffirm` append lifecycle events. Supersession and
 activity are separate: `supersedes_forecast_id` links forecast history, while
 lifecycle events say whether a particular record is currently active.
+Lifecycle events are outside the immutable forecast target. Appending one does
+not invalidate retained target bytes or timestamp evidence; verification
+reports evidence validity and the derived current activity state separately.
 
 List or inspect records locally:
 

@@ -160,7 +160,11 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		if def.Name == service.OperationPublicationVerify {
 			fileRoot = service.RootOutput
 		}
-		file, err = s.roots.Resolve(fileRoot, input.File, fileMustExist)
+		label := "ledger file"
+		if def.Name == service.OperationPublicationVerify {
+			label = "packaged ledger"
+		}
+		file, err = s.roots.ResolveLabeled(fileRoot, input.File, fileMustExist, label)
 		if err != nil {
 			return nil, err
 		}
@@ -343,7 +347,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		result, err := service.CommitPublicationBuild(ctx, file, output, input.DryRun)
 		return result, err
 	case service.OperationPublicationVerify:
-		manifest, err := s.roots.Resolve(service.RootOutput, input.Manifest, true)
+		manifest, err := s.roots.ResolveLabeled(service.RootOutput, input.Manifest, true, "publication manifest")
 		if err != nil {
 			return nil, err
 		}
@@ -671,7 +675,7 @@ func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input to
 }
 
 func (s *Server) dispatchForecastReveal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, error) {
-	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, true)
+	keyPath, err := s.roots.ResolveLabeled(service.RootSecret, input.KeyFile, true, "key file")
 	if err != nil {
 		return nil, err
 	}
@@ -691,11 +695,11 @@ func (s *Server) dispatchForecastReveal(ctx context.Context, file string, input 
 }
 
 func (s *Server) decodeProtected(ctx context.Context, reference string, schema service.InputSchemaName, destination any) error {
-	path, err := s.roots.Resolve(service.RootSecret, reference, true)
+	path, err := s.roots.ResolveLabeled(service.RootSecret, reference, true, "protected input file")
 	if err != nil {
 		return err
 	}
-	data, err := storage.ReadProtectedFile(path, 8<<20)
+	data, err := storage.ReadProtectedFile(path, 8<<20, "protected input file")
 	if err != nil {
 		return err
 	}

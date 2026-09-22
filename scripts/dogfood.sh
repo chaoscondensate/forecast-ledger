@@ -101,6 +101,18 @@ if grep -F "$private_canary" <<<"$sealed_output" >/dev/null; then
   exit 1
 fi
 
+set +e
+"$binary" --json forecast reveal --file "$ledger" --question q-one --forecast f-sealed-003 \
+  --key-file "$work/missing-reveal.key" --yes >"$work/missing-key.out" 2>"$work/missing-key.err"
+missing_key_exit=$?
+set -e
+if [[ $missing_key_exit -ne 4 ]] ||
+   ! grep -F '"message":"key file does not exist"' "$work/missing-key.err" >/dev/null ||
+   grep -F "$work" "$work/missing-key.err" >/dev/null; then
+  echo "missing reveal key diagnostic is incorrect or exposes an absolute path" >&2
+  exit 1
+fi
+
 "$binary" --json forecast reveal --file "$ledger" --question q-one --forecast f-sealed-003 --key-file "$key" --revealed-at 2026-04-02T00:00:00Z --yes >/dev/null
 "$binary" --plain forecast list --file "$ledger" --question q-one | grep -F 'f-sealed-003' >/dev/null
 "$binary" --plain question show --file "$ledger" --question q-one | grep -F 'Will it happen?' >/dev/null
@@ -119,6 +131,12 @@ if ! grep -F 'f-sealed-003' <<<"$all_unbuilt" >/dev/null || ! grep -F 'content.n
 fi
 
 "$binary" --json target build --file "$ledger" --question q-one --forecast f-one >/dev/null
+"$binary" --json target check --file "$ledger" --question q-one --forecast f-one >/dev/null
+"$binary" --json forecast withdraw --file "$ledger" --question q-one --forecast f-one \
+  --event e-one-withdraw --effective-at 2026-05-01T00:00:00Z --recorded-at 2026-05-01T00:01:00Z >/dev/null
+"$binary" --json target check --file "$ledger" --question q-one --forecast f-one >/dev/null
+"$binary" --json forecast reaffirm --file "$ledger" --question q-one --forecast f-one \
+  --event e-one-reaffirm --effective-at 2026-06-01T00:00:00Z --recorded-at 2026-06-01T00:01:00Z >/dev/null
 "$binary" --json target check --file "$ledger" --question q-one --forecast f-one >/dev/null
 "$binary" --json timestamp status --file "$ledger" --question q-one --forecast f-one | grep -F 'unanchored' >/dev/null
 
@@ -169,9 +187,40 @@ printf '%s\n' '{"representations":[{"kind":"probability","outcome":true,"probabi
 "$binary" --json forecast reveal --file "$yaml_ledger" --question q-yaml --forecast f-yaml-sealed \
   --key-file "$yaml_key" --revealed-at 2026-03-02T00:00:00Z --yes >/dev/null
 "$binary" --json question revise --file "$yaml_ledger" --question q-yaml \
-  --revision-id qr-yaml-2 --effective-at 2026-04-01T00:00:00Z --revision-recorded-at 2026-04-01T00:01:00Z \
+  --revision-id qr-yaml-2 --effective-at 2098-04-01T00:00:00Z --revision-recorded-at 2098-04-01T00:00:00Z \
   --title "Updated YAML replacement question" --resolution-criteria "Use the named result." \
-  --expected-resolution-at 2027-01-01T00:00:00Z --outcome-kind binary >/dev/null
+  --expected-resolution-at 2099-01-01T00:00:00Z --outcome-kind binary >/dev/null
+"$binary" --json question revise --file "$yaml_ledger" --question q-yaml \
+  --revision-id qr-yaml-3 --title "Monotonic YAML replacement question" \
+  --resolution-criteria "Use the named result." \
+  --expected-resolution-at 2099-01-01T00:00:00Z --outcome-kind binary >/dev/null
+if ! "$binary" --json question show --file "$yaml_ledger" --question q-yaml |
+  grep -F '2098-04-01T00:00:00.000000001Z' >/dev/null; then
+  echo "regressing operation clock did not produce a strict revision timestamp" >&2
+  exit 1
+fi
+"$binary" --json question add --file "$yaml_ledger" --question q-yaml-child --revision-id qr-yaml-child \
+  --title "Will the child event happen?" --resolution-criteria "Use the named result." \
+  --created-at 2026-01-01T00:00:00Z --effective-at 2026-01-01T00:00:00Z \
+  --revision-recorded-at 2026-01-01T00:00:00Z --expected-resolution-at 2027-01-01T00:00:00Z \
+  --outcome-kind binary >/dev/null
+"$binary" --json group add --file "$yaml_ledger" --group native-group --title "Native YAML questions" >/dev/null
+cp "$yaml_ledger" "$work/yaml-before-relationship"
+"$binary" --json relationship add --file "$yaml_ledger" --relationship native-membership \
+  --kind group_membership --group native-group --question q-yaml --dry-run >/dev/null
+if ! cmp -s "$yaml_ledger" "$work/yaml-before-relationship"; then
+  echo "relationship dry-run changed the YAML ledger" >&2
+  exit 1
+fi
+"$binary" --json relationship add --file "$yaml_ledger" --relationship native-membership \
+  --kind group_membership --group native-group --question q-yaml >/dev/null
+"$binary" --json relationship add --file "$yaml_ledger" --relationship native-condition \
+  --kind conditional --parent-question q-yaml --parent-revision qr-yaml-3 \
+  --parent-outcome-boolean --child-question q-yaml-child >/dev/null
+if grep -E '^[[:space:]]+(group_membership|conditional):' "$yaml_ledger" >/dev/null; then
+  echo "native YAML relationship emitted a union wrapper" >&2
+  exit 1
+fi
 "$binary" --json question update --file "$yaml_ledger" --question q-yaml --status closed --tag updated --tag native >/dev/null
 "$binary" --json question void --file "$yaml_ledger" --question q-yaml \
   --reason "Native YAML lifecycle complete." --recorded-at 2027-01-01T00:01:00Z --yes >/dev/null

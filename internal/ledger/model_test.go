@@ -31,7 +31,7 @@ func TestPublishedV2FixturesRoundTripThroughTypedModel(t *testing.T) {
 			if err := json.Unmarshal(source, &model); err != nil {
 				t.Fatalf("decode typed ledger: %v", err)
 			}
-			if model.SchemaVersion != "2.0.0" {
+			if model.SchemaVersion != "2.0.1" {
 				t.Fatalf("schema version = %q", model.SchemaVersion)
 			}
 			encoded, err := json.Marshal(model)
@@ -130,9 +130,9 @@ func TestOptionalCollectionsPreserveAbsentEmptyAndPopulatedStates(t *testing.T) 
 	t.Parallel()
 
 	for _, input := range []string{
-		`{"schema_version":"2.0.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"questions":[]}`,
-		`{"schema_version":"2.0.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"groups":[],"relationships":[],"questions":[]}`,
-		`{"schema_version":"2.0.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"team","kind":"team","name":"Team","members":[{"id":"a","name":"A"},{"id":"b","name":"B"}]},"platforms":{},"groups":[{"id":"g","title":"Group"}],"questions":[]}`,
+		`{"schema_version":"2.0.1","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"questions":[]}`,
+		`{"schema_version":"2.0.1","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"groups":[],"relationships":[],"questions":[]}`,
+		`{"schema_version":"2.0.1","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"team","kind":"team","name":"Team","members":[{"id":"a","name":"A"},{"id":"b","name":"B"}]},"platforms":{},"groups":[{"id":"g","title":"Group"}],"questions":[]}`,
 	} {
 		var model Ledger
 		if err := json.Unmarshal([]byte(input), &model); err != nil {
@@ -266,7 +266,7 @@ func TestScalarValuePreservesBooleanAndExactString(t *testing.T) {
 func TestRootObjectRejectsUnknownProperty(t *testing.T) {
 	t.Parallel()
 	var value Ledger
-	if err := json.Unmarshal([]byte(`{"schema_version":"2.0.0","unknown":true}`), &value); err == nil {
+	if err := json.Unmarshal([]byte(`{"schema_version":"2.0.1","unknown":true}`), &value); err == nil {
 		t.Fatal("ledger accepted an unknown property")
 	}
 }

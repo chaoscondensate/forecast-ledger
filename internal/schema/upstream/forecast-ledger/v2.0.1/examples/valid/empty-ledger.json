@@ -1,6 +1,6 @@
 {
   "$schema": "../../schema/forecast-ledger.schema.json",
-  "schema_version": "2.0.0",
+  "schema_version": "2.0.1",
   "ledger_id": "empty-example-ledger",
   "title": "Empty Forecast Ledger",
   "description": "A newly created ledger before any questions have been added.",

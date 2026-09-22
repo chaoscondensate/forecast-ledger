@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -177,7 +178,7 @@ func TestFlagOnlyV2WorkflowJSONAndYAML(t *testing.T) {
 		t.Run(extension, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "ledger"+extension)
 			code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "flags", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
-			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.0"`) {
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.1"`) {
 				t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 			code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-launch", "--revision-id", "qr-launch-1", "--effective-at", "2026-09-21T10:00:00Z", "--revision-recorded-at", "2026-09-21T10:01:00Z", "--title", "Will it launch?", "--resolution-criteria", "Resolve yes on launch.", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--outcome-kind", "binary")
@@ -202,6 +203,52 @@ func TestFlagOnlyV2WorkflowJSONAndYAML(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCLIRelationshipAddHasJSONYAMLParityAndDryRun(t *testing.T) {
+	models := make([]*ledger.Ledger, 0, 2)
+	for _, extension := range []string{".json", ".yaml"} {
+		t.Run(extension, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "ledger"+extension)
+			mustRunCLI(t, "init", "--file", path, "--ledger-id", "relationships", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--created-at", "2026-01-01T00:00:00Z")
+			mustRunCLI(t, "group", "add", "--file", path, "--group", "launch", "--title", "Launch questions")
+			mustRunCLI(t, "question", "add", "--file", path, "--question", "q-parent", "--created-at", "2026-01-01T00:00:00Z", "--revision-id", "qr-parent-1", "--effective-at", "2026-01-01T00:00:00Z", "--revision-recorded-at", "2026-01-01T00:00:01Z", "--title", "Which launch state?", "--resolution-criteria", "Use the public launch state.", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--outcome-kind", "categorical", "--option-set-id", "states", "--option-set-version", "1", "--option", "low,Low", "--option", "high,High")
+			mustRunCLI(t, "question", "add", "--file", path, "--question", "q-child", "--created-at", "2026-01-01T00:00:00Z", "--revision-id", "qr-child-1", "--effective-at", "2026-01-01T00:00:00Z", "--revision-recorded-at", "2026-01-01T00:00:01Z", "--title", "Will the child event happen?", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--outcome-kind", "binary")
+
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, stdout, stderr := runCLI("forecast-ledger", "--json", "relationship", "add", "--file", path, "--relationship", "member-child", "--kind", "group_membership", "--group", "launch", "--question", "q-child", "--dry-run")
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"relationship.add.planned"`) {
+				t.Fatalf("relationship dry-run code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			afterDryRun, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(before, afterDryRun) {
+				t.Fatalf("relationship dry-run changed %s: %v", extension, err)
+			}
+			mustRunCLI(t, "relationship", "add", "--file", path, "--relationship", "member-child", "--kind", "group_membership", "--group", "launch", "--question", "q-child")
+			mustRunCLI(t, "relationship", "add", "--file", path, "--relationship", "if-low", "--kind", "conditional", "--parent-question", "q-parent", "--parent-revision", "qr-parent-1", "--parent-outcome", "low", "--child-question", "q-child")
+			loaded, err := service.LoadAndValidateLedger(t.Context(), path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			models = append(models, loaded.Model)
+			if extension == ".yaml" {
+				stored, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := string(stored)
+				if strings.Contains(text, "group_membership:\n") || strings.Contains(text, "conditional:\n") || !strings.Contains(text, "kind: group_membership") || !strings.Contains(text, "kind: conditional") {
+					t.Fatalf("CLI relationship union shape is invalid:\n%s", text)
+				}
+			}
+		})
+	}
+	if len(models) != 2 || !reflect.DeepEqual(models[0], models[1]) {
+		t.Fatalf("CLI JSON/YAML relationship models differ:\nJSON: %#v\nYAML: %#v", models[0], models[1])
 	}
 }
 
@@ -312,7 +359,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := writeVersionInfo(&plain, info, presentation.ModePlain, false); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.0.0") {
+	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.0.1") {
 		t.Fatalf("plain version is stale:\n%s", plain.String())
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "version", "--json")
@@ -323,7 +370,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Schema.Version != "2.0.0" || decoded.Schema != info.Schema {
+	if decoded.Schema.Version != "2.0.1" || decoded.Schema != info.Schema {
 		t.Fatalf("version JSON = %#v", decoded)
 	}
 }

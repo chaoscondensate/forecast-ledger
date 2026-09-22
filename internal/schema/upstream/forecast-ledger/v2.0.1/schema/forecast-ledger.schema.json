@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.0.0/schema/forecast-ledger.schema.json",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.0.1/schema/forecast-ledger.schema.json",
   "title": "Forecast Ledger",
   "description": "A portable, machine-verifiable ledger for quantitative forecasts made by one individual or team forecasting identity.",
   "type": "object",
@@ -8,7 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string", "format": "uri-reference" },
-    "schema_version": { "const": "2.0.0" },
+    "schema_version": { "const": "2.0.1" },
     "ledger_id": { "$ref": "#/$defs/slug" },
     "title": { "$ref": "#/$defs/nonEmptyString" },
     "description": { "$ref": "#/$defs/nonEmptyString" },

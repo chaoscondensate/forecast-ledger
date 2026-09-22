@@ -235,7 +235,7 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 			return result, resolveErr
 		}
 		if selection.Mode == timestampSelectionCustom {
-			caAbsolute, resolveErr = resolver.Resolve(string(candidate.CABundlePath), true)
+			caAbsolute, resolveErr = resolver.ResolveLabeled(string(candidate.CABundlePath), true, "CA bundle")
 			if resolveErr != nil {
 				return result, app.NewError(app.CodeInvalidData, "timestamp CA bundle cannot be resolved inside the ledger root", resolveErr)
 			}
@@ -356,7 +356,7 @@ func CommitTimestampStamp(ctx context.Context, path string, questionID, forecast
 		entry := planned.Entries[index]
 		caBytes := candidate.CABundle
 		if selection.Mode == timestampSelectionCustom {
-			caAbsolute, resolveErr := resolver.Resolve(string(candidate.CABundlePath), true)
+			caAbsolute, resolveErr := resolver.ResolveLabeled(string(candidate.CABundlePath), true, "CA bundle")
 			if resolveErr != nil {
 				return planned, resolveErr
 			}
@@ -572,7 +572,7 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 	}
 	caAbsolute, err := resolver.ResolveForCreate(string(*entry.CABundlePath))
 	if !materializeCA {
-		caAbsolute, err = resolver.Resolve(string(*entry.CABundlePath), true)
+		caAbsolute, err = resolver.ResolveLabeled(string(*entry.CABundlePath), true, "CA bundle")
 	}
 	if err != nil {
 		return result, err
@@ -832,15 +832,15 @@ func verifyTimestampEntry(ctx context.Context, root string, target []byte, entry
 	if err != nil {
 		return rfc3161.Metadata{}, err
 	}
-	requestPath, err := resolver.Resolve(string(entry.RequestPath), true)
+	requestPath, err := resolver.ResolveLabeled(string(entry.RequestPath), true, "timestamp request")
 	if err != nil {
 		return rfc3161.Metadata{}, err
 	}
-	responsePath, err := resolver.Resolve(string(entry.ResponsePath), true)
+	responsePath, err := resolver.ResolveLabeled(string(entry.ResponsePath), true, "timestamp response")
 	if err != nil {
 		return rfc3161.Metadata{}, err
 	}
-	caPath, err := resolver.Resolve(string(*entry.CABundlePath), true)
+	caPath, err := resolver.ResolveLabeled(string(*entry.CABundlePath), true, "CA bundle")
 	if err != nil {
 		return rfc3161.Metadata{}, err
 	}

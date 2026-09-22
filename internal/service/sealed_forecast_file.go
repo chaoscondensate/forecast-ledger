@@ -136,7 +136,7 @@ func PlanForecastRevealFile(ctx context.Context, path, keyPath string, questionI
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
-	keyBytes, err := storage.ReadProtectedFile(keyPath, 4096)
+	keyBytes, err := storage.ReadProtectedFile(keyPath, 4096, "key file")
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
@@ -159,7 +159,7 @@ func CommitForecastRevealFile(ctx context.Context, path, keyPath string, questio
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
-	keyBytes, err := storage.ReadProtectedFile(keyPath, 4096)
+	keyBytes, err := storage.ReadProtectedFile(keyPath, 4096, "key file")
 	if err != nil {
 		return ForecastFileResult{}, err
 	}

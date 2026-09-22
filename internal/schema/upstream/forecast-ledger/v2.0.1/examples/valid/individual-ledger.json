@@ -1,6 +1,6 @@
 {
   "$schema": "../../schema/forecast-ledger.schema.json",
-  "schema_version": "2.0.0",
+  "schema_version": "2.0.1",
   "ledger_id": "alex-example-forecasts",
   "title": "Alex Example's Forecast Ledger",
   "description": "A v2 ledger demonstrating question revisions and exact forecast representations.",
@@ -62,7 +62,7 @@
             "remote_object_version": "2026-08-01T08:05:00Z",
             "url": "https://www.metaculus.com/questions/example-1001/",
             "retrieved_at": "2026-08-01T09:05:00+01:00",
-            "importer": { "name": "example-importer", "version": "2.0.0" }
+            "importer": { "name": "example-importer", "version": "2.0.1" }
           }
         }
       ],

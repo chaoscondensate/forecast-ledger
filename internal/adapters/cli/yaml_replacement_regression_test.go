@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,6 +52,23 @@ func TestYAMLReplacementDogfoodingMatrixMatchesJSONSuccess(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestCLIMissingRevealKeyNamesKeyFile(t *testing.T) {
+	path := newCLIReplacementLedger(t, ".yaml")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(filepath.Dir(path), "missing.key")
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "forecast", "reveal", "--file", path, "--question", "q-one", "--forecast", "f-public", "--key-file", missing, "--yes")
+	if code != 4 || stdout != "" || !strings.Contains(stderr, `"code":"not_found"`) || !strings.Contains(stderr, "key file does not exist") || strings.Contains(stderr, "ledger file does not exist") || strings.Contains(stderr, missing) {
+		t.Fatalf("missing key code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("missing key changed ledger: %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,6 +19,53 @@ import (
 	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
+
+func TestForecastTargetMatchesPublishedV201LifecycleVectors(t *testing.T) {
+	for _, name := range []string{
+		"forecast-envelope-v2-public-lifecycle.json",
+		"forecast-envelope-v2-sealed-lifecycle.json",
+	} {
+		t.Run(name, func(t *testing.T) {
+			data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/"+name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var vector struct {
+				QuestionID       ledger.Slug             `json:"question_id"`
+				QuestionRevision ledger.QuestionRevision `json:"question_revision"`
+				Forecast         ledger.Forecast         `json:"forecast"`
+				Expected         struct {
+					CanonicalEnvelope string `json:"canonical_envelope"`
+					SHA256            string `json:"sha256"`
+				} `json:"expected"`
+			}
+			if err := json.Unmarshal(data, &vector); err != nil {
+				t.Fatal(err)
+			}
+			forecasts := []ledger.Forecast{}
+			if vector.Forecast.SupersedesForecastID != nil {
+				forecasts = append(forecasts, ledger.Forecast{ID: *vector.Forecast.SupersedesForecastID, QuestionRevisionID: vector.QuestionRevision.ID})
+			}
+			forecasts = append(forecasts, vector.Forecast)
+			model := &ledger.Ledger{Questions: []ledger.Question{{
+				ID: vector.QuestionID, CurrentRevisionID: vector.QuestionRevision.ID,
+				Revisions: []ledger.QuestionRevision{vector.QuestionRevision}, Forecasts: forecasts,
+			}}}
+			withLifecycle, err := BuildForecastTarget(model, vector.QuestionID, vector.Forecast.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(withLifecycle.Bytes) != vector.Expected.CanonicalEnvelope || withLifecycle.SHA256 != vector.Expected.SHA256 {
+				t.Fatalf("published target mismatch\nbytes: %s\ndigest: %s", withLifecycle.Bytes, withLifecycle.SHA256)
+			}
+			model.Questions[0].Forecasts[len(model.Questions[0].Forecasts)-1].LifecycleEvents = nil
+			withoutLifecycle, err := BuildForecastTarget(model, vector.QuestionID, vector.Forecast.ID)
+			if err != nil || !bytes.Equal(withLifecycle.Bytes, withoutLifecycle.Bytes) || withLifecycle.SHA256 != withoutLifecycle.SHA256 {
+				t.Fatalf("lifecycle activity changed target: %v", err)
+			}
+		})
+	}
+}
 
 func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
 	type classification string
@@ -65,7 +113,7 @@ func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
 		"recorded_at": included, "visibility": included, "representations": included,
 		"rationale": included, "key_factors": included, "comment": included,
 		"public_note": included, "supersedes_forecast_id": included, "provenance": included,
-		"lifecycle_events": included, "commitment": included, "integrity": excluded,
+		"lifecycle_events": excluded, "commitment": included, "integrity": excluded,
 	})
 	assertClassified(t, ledger.SealedCommitment{}, map[string]classification{
 		"scheme": included, "commitment_hash": included, "encryption": included,
@@ -79,7 +127,7 @@ func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
 	projectionFields := jsonFieldNames(targetForecast{})
 	sort.Strings(projectionFields)
 	wantProjection := []string{
-		"comment", "commitment", "forecasted_at", "id", "key_factors", "lifecycle_events",
+		"comment", "commitment", "forecasted_at", "id", "key_factors",
 		"provenance", "public_note", "question_revision_id", "rationale", "recorded_at",
 		"representations", "supersedes_forecast_id", "visibility",
 	}
@@ -206,6 +254,14 @@ func TestRevealedTargetContinuesOriginalSealedBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expired, err := BuildForecastLifecycle(build.Ledger, "q-one", "f-one", ledger.LifecycleExpired, LifecycleInput{ID: "event-sealed-expired", EffectiveAt: "2026-01-15T00:00:00Z"}, "2026-01-15T00:00:01Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredTarget, err := BuildForecastTarget(expired.Ledger, "q-one", "f-one")
+	if err != nil || !bytes.Equal(sealedTarget.Bytes, expiredTarget.Bytes) {
+		t.Fatalf("sealed lifecycle changed target: %v", err)
+	}
 	revealed, err := BuildForecastReveal(build.Ledger, "q-one", "f-one", build.KeyFile, "2026-02-01T00:00:00Z")
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +269,26 @@ func TestRevealedTargetContinuesOriginalSealedBytes(t *testing.T) {
 	revealedTarget, err := BuildForecastTarget(revealed.Ledger, "q-one", "f-one")
 	if err != nil || !bytes.Equal(sealedTarget.Bytes, revealedTarget.Bytes) {
 		t.Fatalf("revealed target changed: %v\nsealed=%s\nrevealed=%s", err, sealedTarget.Bytes, revealedTarget.Bytes)
+	}
+	current := revealed.Ledger
+	for index, event := range []struct {
+		kind ledger.LifecycleEventType
+		id   ledger.Slug
+		at   ledger.Timestamp
+	}{
+		{ledger.LifecycleWithdrawn, "event-revealed-withdrawn", "2026-02-02T00:00:00Z"},
+		{ledger.LifecycleReaffirmed, "event-revealed-reaffirmed", "2026-02-03T00:00:00Z"},
+		{ledger.LifecycleExpired, "event-revealed-expired", "2026-02-04T00:00:00Z"},
+	} {
+		mutation, buildErr := BuildForecastLifecycle(current, "q-one", "f-one", event.kind, LifecycleInput{ID: event.id, EffectiveAt: event.at}, ledger.Timestamp(time.Date(2026, 2, 2+index, 0, 0, 1, 0, time.UTC).Format(time.RFC3339)))
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+		current = mutation.Ledger
+		after, targetErr := BuildForecastTarget(current, "q-one", "f-one")
+		if targetErr != nil || !bytes.Equal(revealedTarget.Bytes, after.Bytes) || revealedTarget.SHA256 != after.SHA256 {
+			t.Fatalf("revealed lifecycle %s changed target: %v", event.kind, targetErr)
+		}
 	}
 }
 

@@ -1,8 +1,8 @@
 # Build and check forecast targets
 
 <!-- doc-metadata
-coverage: v0.9.0
-reviewed: 2026-09-21
+coverage: v0.9.1
+reviewed: 2026-09-22
 owner: interface
 generated: false
 security-critical: true
@@ -62,11 +62,12 @@ but missing, unreadable, unsafe, or mismatched target remains an error.
 never-built rows. Plain rows use question ID, forecast ID, state, reason codes,
 path, expected SHA-256, actual SHA-256 when available, and optional guidance.
 
-The `forecast-envelope/v2` target contains the ledger ID, the full bound
-question revision, and the selected public forecast statement or original
-sealed commitment. It excludes mutable integrity state, key hint, revealed key,
-question resolution, and unrelated records. A revealed forecast continues to
-use its original sealed target.
+The `forecast-envelope/v2` target contains `schema`, a `question` object with
+`question.id` and the full bound revision, and the selected public forecast
+statement or original sealed commitment. It has no root ledger ID. It excludes
+lifecycle events, mutable integrity state, key hint, revealed key and reveal
+time, question resolution, and unrelated records. A revealed forecast
+continues to use its original sealed target.
 
 A target proves no authorship or time by itself. It is only deterministic input
 for later evidence operations.

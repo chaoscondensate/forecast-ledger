@@ -15,10 +15,10 @@ func TestRemovedLegacyPathsStayAbsent(t *testing.T) {
 	for _, relative := range []string{
 		"docs/how-to/migrate-v1.3-to-v2.md",
 		"internal/schema/legacy",
-		"internal/schema/upstream/forecast-ledger/v2.0.0/docs/compatibility-v1-v2.md",
-		"internal/schema/upstream/forecast-ledger/v2.0.0/tests/vectors/forecast-seal-v1.json",
-		"internal/schema/upstream/forecast-ledger/v2.0.0/tests/vectors/legacy-v1.3.0-sha256.json",
-		"internal/schema/upstream/forecast-ledger/v2.0.0/tools/verify_legacy.py",
+		"internal/schema/upstream/forecast-ledger/v2.0.1/docs/compatibility-v1-v2.md",
+		"internal/schema/upstream/forecast-ledger/v2.0.1/tests/vectors/forecast-seal-v1.json",
+		"internal/schema/upstream/forecast-ledger/v2.0.1/tests/vectors/legacy-v1.3.0-sha256.json",
+		"internal/schema/upstream/forecast-ledger/v2.0.1/tools/verify_legacy.py",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); !os.IsNotExist(err) {
 			t.Errorf("removed legacy path exists: %s (err=%v)", relative, err)

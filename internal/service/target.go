@@ -33,8 +33,9 @@ type targetCommitment struct {
 	Encryption     ledger.Encryption `json:"encryption"`
 }
 
-// targetForecast is an explicit projection. Integrity, key_hint, revealed_at,
-// and revealed_key cannot accidentally enter the timestamp claim.
+// targetForecast is an explicit projection. Lifecycle activity, integrity,
+// key_hint, revealed_at, and revealed_key cannot accidentally enter the
+// timestamp claim.
 type targetForecast struct {
 	ID                   ledger.Slug                      `json:"id"`
 	QuestionRevisionID   ledger.Slug                      `json:"question_revision_id"`
@@ -48,7 +49,6 @@ type targetForecast struct {
 	PublicNote           *string                          `json:"public_note,omitempty"`
 	SupersedesForecastID *ledger.Slug                     `json:"supersedes_forecast_id,omitempty"`
 	Provenance           *ledger.Provenance               `json:"provenance,omitempty"`
-	LifecycleEvents      *[]ledger.LifecycleEvent         `json:"lifecycle_events,omitempty"`
 	Commitment           *targetCommitment                `json:"commitment,omitempty"`
 }
 
@@ -136,7 +136,7 @@ func buildForecastEnvelope(question ledger.Question, forecast ledger.Forecast) (
 	if revision == nil {
 		return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "forecast references a missing question revision", nil)
 	}
-	target := targetForecast{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, PublicNote: cloneString(forecast.PublicNote), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), Provenance: forecast.Provenance, LifecycleEvents: forecast.LifecycleEvents}
+	target := targetForecast{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, PublicNote: cloneString(forecast.PublicNote), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), Provenance: forecast.Provenance}
 	switch forecast.Visibility {
 	case ledger.VisibilityPublic:
 		target.Representations = cloneRepresentations(forecast.Representations)

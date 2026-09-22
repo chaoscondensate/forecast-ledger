@@ -74,11 +74,39 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 		t.Fatalf("local verify = %#v, %v; requests=%d", verified, err, transport.requests)
 	}
 
+	for index, event := range []struct {
+		kind ledger.LifecycleEventType
+		id   ledger.Slug
+		at   time.Time
+	}{
+		{ledger.LifecycleWithdrawn, "event-evidence-withdrawn", time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)},
+		{ledger.LifecycleReaffirmed, "event-evidence-reaffirmed", time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)},
+		{ledger.LifecycleExpired, "event-evidence-expired", time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)},
+	} {
+		effective := ledger.Timestamp(event.at.Format(time.RFC3339))
+		recorded := ledger.Timestamp(event.at.Add(time.Duration(index+1) * time.Second).Format(time.RFC3339))
+		if _, err := CommitForecastLifecycleFile(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", event.kind, LifecycleInput{ID: event.id, EffectiveAt: effective}, recorded); err != nil {
+			t.Fatalf("append %s after timestamp: %v", event.kind, err)
+		}
+	}
+	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
+	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[0].State != LayerPass || report.Forecasts[0].Layers[1].State != LayerPass {
+		t.Fatalf("lifecycle evidence verification = %#v, %v", report, err)
+	}
+	loaded, err = LoadAndValidateLedger(t.Context(), ledgerPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := ShowForecast(loaded.Model, "q-election-coalition", "f-election-coalition-001")
+	if err != nil || view.Summary.Active {
+		t.Fatalf("expired forecast activity = %#v, %v", view.Summary, err)
+	}
+
 	timestamps := loaded.Model.Questions[1].Forecasts[0].Integrity.Verified.Timestamps
 	originalSerials := []string{*timestamps[0].SerialNumber, *timestamps[1].SerialNumber}
 	*timestamps[0].SerialNumber = originalSerials[0] + "0"
 	writeLedgerModel(t, ledgerPath, loaded.Model)
-	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
+	report, err = VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
 	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[1].State != LayerPass {
 		t.Fatalf("one-of-two timestamp verification = %#v, %v", report, err)
 	}

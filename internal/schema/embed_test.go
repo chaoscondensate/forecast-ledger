@@ -13,13 +13,13 @@ import (
 func TestPinnedV2ReleaseIdentity(t *testing.T) {
 	t.Parallel()
 
-	if Version != "2.0.0" || Commit != "1d3b186a15136bc5aff38647cb59fbef475dbe55" || AnnotatedTagObject != "7b4a9e85e0df9350750828a57b03ff729f704ee4" {
+	if Version != "2.0.1" || Commit != "55b1431d379128e1d75b9c30a3874398cea9ff0f" || AnnotatedTagObject != "ac69f718de92f2c087b44b1b02d325ba37945db6" {
 		t.Fatalf("unexpected upstream identity %q %q %q", Version, Commit, AnnotatedTagObject)
 	}
-	if ReleaseArchiveSHA256 != "1d56cbe4f6cbd1fccb046a99add2ff4f88c709904d027669039ba4139664f47e" {
+	if ReleaseArchiveSHA256 != "bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41" {
 		t.Fatalf("unexpected release archive digest %q", ReleaseArchiveSHA256)
 	}
-	if ReleaseChecksumsSHA256 != "77d093fbdb393dc9c1e3bdae053724e5ecdccd2e211f6f6c08c7678e78b178dc" {
+	if ReleaseChecksumsSHA256 != "fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6" {
 		t.Fatalf("unexpected release checksums digest %q", ReleaseChecksumsSHA256)
 	}
 	if ForecastSealProtocol != "forecast-seal/v2" || ForecastTargetProfile != "forecast-envelope/v2" {
@@ -32,16 +32,18 @@ func TestEveryRetainedV2UpstreamFileDigest(t *testing.T) {
 
 	expected := map[string]string{
 		"LICENSE":            "7084b3fb14e3a306691af23e58ab0ccfa336b202853740f5e1ea0ebab39cacf2",
-		"docs/data-model.md": "a2501928944685c9f43307d33bd314f3e046f480c609cefa1981242da7830d9b",
-		"docs/forecast-verification-workflows.md":                 "417a2ddaadc54ca5fc019283c33455cd6df909879e2c3c4f4361506eb4b7ca1c",
-		"examples/valid/empty-ledger.json":                        "a0d59a71176aeaa7c3ea8dd1ead78a842343b9bcfdea8551ecaeac362e98484d",
-		"examples/valid/individual-ledger.json":                   "9d2a69b06085dae161b2772fdec27ee71dc78141e99c8d0fda55c0ffe10f4744",
-		"examples/valid/question-without-forecasts.yaml":          "f67b9e622d8d1b2acaa1e2bd0eb33b847d636229d5c4e7041160c3b3b7875d6b",
-		"examples/valid/team-ledger.yaml":                         "1e2b88f0e3ce9492a65179307d439523a75b728d247c0363f9615b29c67cf1d9",
-		"schema/forecast-ledger.schema.json":                      SchemaSHA256,
-		"tests/conformance/valid/relationships-and-datetime.json": "16f1ce02176ca01a90525abceaa23db73b5bcbc305d5185a861e0560d31459b3",
-		"tests/invalid-cases.json":                                "fe7a68952565ab1ed7d22fe3a9e330216b01f3ccda2068e2f2c5fdda6bf81c1a",
-		"tests/vectors/forecast-seal-v2.json":                     "7cd814473f3e84617660e704f1aea8dc48e4b4a32cc86b93fd46c1649a4728d5",
+		"docs/data-model.md": "ad3f80da79ccae28453a06bcb135ecd69dde2f752f48eb8b7aadf10b292eb72a",
+		"docs/forecast-verification-workflows.md":                  "12735d2d33b21c22a62fb02ba919712d585aae122e7f9bf6fecb87c9dccacb30",
+		"examples/valid/empty-ledger.json":                         "2be6a175b7bb06c44b661b9133c8987554bfd061cb906aee4cf42f0091f82de2",
+		"examples/valid/individual-ledger.json":                    "0c3cc6588c4a8d14a0dcf5481b2983bfe5da79f51a8988e17de0fe7c7734bfc2",
+		"examples/valid/question-without-forecasts.yaml":           "b440e8ca967cdacef321dd5be9a47f3a1abcfdf92376e7cb29d3391b913ce7b3",
+		"examples/valid/team-ledger.yaml":                          "075d21d6a0353683c092ef8a76ae44abf0a2bc3bced18787d75c426185e3247a",
+		"schema/forecast-ledger.schema.json":                       SchemaSHA256,
+		"tests/conformance/valid/relationships-and-datetime.json":  "a3b1ba78c212eda277c0c08e76bc9703368b2cfe3031024dc1af8ac04f6bc056",
+		"tests/invalid-cases.json":                                 "fe7a68952565ab1ed7d22fe3a9e330216b01f3ccda2068e2f2c5fdda6bf81c1a",
+		"tests/vectors/forecast-envelope-v2-public-lifecycle.json": "03ad733808e3b0809af0d6a7d8e4e3f9d39906b79e3318fb9b2f95ad4d1cdc99",
+		"tests/vectors/forecast-envelope-v2-sealed-lifecycle.json": "3b03922755895fba91d2d19cbafa11ba5a232ca91b38f46bbc269688e8ee3b3d",
+		"tests/vectors/forecast-seal-v2.json":                      "7cd814473f3e84617660e704f1aea8dc48e4b4a32cc86b93fd46c1649a4728d5",
 	}
 	sourceRecord, err := fs.ReadFile(Conformance(), "SOURCE.md")
 	if err != nil {

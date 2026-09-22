@@ -200,10 +200,17 @@ func BuildRelationshipAdd(model *ledger.Ledger, input RelationshipInput) (Collec
 	if prospective.Relationships == nil {
 		values := []ledger.Relationship{input.Relationship}
 		prospective.Relationships = &values
-		patch = document.PatchOperation{Kind: document.PatchAdd, Pointer: "/relationships", Value: values}
+		value, err := jsonPatchValue(values)
+		if err != nil {
+			return CollectionMutation{}, err
+		}
+		patch = document.PatchOperation{Kind: document.PatchAdd, Pointer: "/relationships", Value: value}
 	} else {
 		*prospective.Relationships = append(*prospective.Relationships, input.Relationship)
-		value, _ := jsonPatchValue(input.Relationship)
+		value, err := jsonPatchValue(input.Relationship)
+		if err != nil {
+			return CollectionMutation{}, err
+		}
 		patch = document.PatchOperation{Kind: document.PatchAdd, Pointer: "/relationships/-", Value: value}
 	}
 	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
