@@ -76,7 +76,7 @@
 - [x] 8.3 Add bounded malformed JSON/YAML and schema-diagnostic fuzz seeds that exercise missing fields, unknown fields, nested representation errors, and secret redaction.
 - [x] 8.4 Add bounded malformed RFC 3161 and activity-target tests for request/target mismatch, signature/chain failure, retained trust mismatch, incomplete local evidence, and multiple checkpoint responses.
 - [x] 8.5 Verify published seal and lifecycle vectors independently, including exact canonical bytes and SHA-256 values, and keep live TSA canaries separate from normal checks.
-- [ ] 8.6 Exercise native filesystem permissions, locks, atomic replacement, artifact collisions, interruption recovery, and package portability for lifecycle evidence on macOS, Linux, and Windows.
+- [x] 8.6 Exercise native filesystem permissions, locks, atomic replacement, artifact collisions, interruption recovery, and package portability for lifecycle evidence on macOS, Linux, and Windows.
 
 ## 9. Update Public Documentation
 
@@ -91,5 +91,5 @@
 
 - [x] 10.1 Run `gofmt -w cmd internal`, `go mod verify`, focused package tests, `go test ./...`, `go vet ./...`, and `go tool govulncheck ./...` with the pinned toolchain.
 - [x] 10.2 Run strict OpenSpec validation, conformance fixtures, exact contract-pin checks, generated-file cleanliness, secret scanning, license/notice checks, package verification, and deterministic release tests.
-- [ ] 10.3 Run native macOS, Linux, and Windows workflows for CLI/MCP behavior, protected permissions, filesystem recovery, RFC 3161 fixtures, lifecycle evidence, packaging, SBOMs, and artifact names.
+- [x] 10.3 Run native macOS, Linux, and Windows workflows for CLI/MCP behavior, protected permissions, filesystem recovery, RFC 3161 fixtures, lifecycle evidence, packaging, SBOMs, and artifact names.
 - [ ] 10.4 Prepare the next breaking pre-1.0 release notes and compatibility warning, verify candidate archives and checksums from a clean checkout, and publish only after every retained contract identity and artifact digest agrees.
