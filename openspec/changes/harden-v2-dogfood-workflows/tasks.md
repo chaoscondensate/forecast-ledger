@@ -58,4 +58,4 @@
 - [x] 9.2 Run `gofmt -w cmd internal`, `go mod verify`, `go test ./...`, `go vet ./...`, `go tool govulncheck ./...`, and `go test ./internal/doccheck`; run targeted fuzz/property checks for structural patches, timestamps, and canonical targets.
 - [x] 9.3 Run the deterministic seal, target, RFC 3161, publication-package, YAML/JSON, and CLI/MCP parity suites with no live TSA dependency, and compare the Go target bytes to the published upstream vector.
 - [x] 9.4 Exercise protected-file handling, locks, safe replacement, path confinement, interruption recovery, and the corrected dogfooding workflows on native macOS, Linux, and Windows CI before publishing the next release.
-- [ ] 9.5 Review the final release artifacts and documentation against the built binary, record independent review status honestly, and confirm no v2.0.0 runtime contract, converter, or compatibility code remains.
+- [x] 9.5 Review the final release artifacts and documentation against the built binary, record independent review status honestly, and confirm no v2.0.0 runtime contract, converter, or compatibility code remains.
