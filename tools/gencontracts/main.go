@@ -212,8 +212,9 @@ func resultDefinitions() map[string]any {
 		"provider_id": map[string]any{"type": "string"}, "ordinal": map[string]any{"type": "integer", "minimum": 1, "maximum": 16},
 		"attempted": map[string]any{"type": "boolean"}, "reason_code": map[string]any{"type": "string"},
 	})
-	timestampData := closedRecord([]string{"question_id", "forecast_id", "state", "target_path", "target_sha256", "target_present", "verification"}, map[string]any{
+	timestampData := closedRecord([]string{"question_id", "forecast_id", "scope", "state", "target_path", "target_sha256", "target_present", "verification"}, map[string]any{
 		"question_id": map[string]any{"type": "string"}, "forecast_id": map[string]any{"type": "string"},
+		"scope": map[string]any{"enum": []string{"forecast", "lifecycle"}}, "head_event_id": map[string]any{"type": "string"},
 		"selection_mode": map[string]any{"enum": []string{"auto", "named", "custom"}}, "selected_provider": map[string]any{"type": "string"},
 		"attempts":    map[string]any{"type": "array", "maxItems": 16, "items": timestampAttempt},
 		"state":       map[string]any{"enum": []string{"unanchored", "pending", "verified", "failed", "inconsistent"}},

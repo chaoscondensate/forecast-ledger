@@ -51,9 +51,9 @@ The following commands have connected application services:
 | `forecast-ledger group ...`, `relationship ...` | Manages groups, memberships, and acyclic conditional relationships with guarded removal. | None |
 | `forecast-ledger question add|revise|update|list|show|resolve|ambiguous|void|dispute|not-applicable ...` | Creates immutable typed revisions, applies question-level patches, reads redacted summaries, and records approved v2 terminal states. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal|withdraw|expire|reaffirm ...`, `forecast key-hint update ...` | Appends revision-bound public or sealed forecasts and activity events, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
-| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v2` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
-| `forecast-ledger timestamp stamp|status|verify ...` | Acquires RFC 3161 evidence through `auto` (currently FreeTSA), one named built-in provider, or a custom public HTTPS TSA and CA pair; status and verify inspect retained bytes locally. | Selected TSA only for stamp; none for status or verify |
-| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
+| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v2` bytes or one `forecast-lifecycle/v1` event prefix at deterministic ledger-relative paths. | None |
+| `forecast-ledger timestamp stamp|status|verify ...` | Acquires or locally checks RFC 3161 evidence for forecast or exact-head lifecycle targets; lifecycle stamp records the checkpoint atomically. | Selected TSA only for stamp; none for status or verify |
+| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, activity, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
 | `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package containing the exact RFC 3161 artifacts and verifies it locally. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None |
 | `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Explicit TSA only for timestamp stamp unless server is offline |
 | `forecast-ledger validate --file <path>` | Parses and validates an embedded-schema JSON or YAML ledger. Eligible for `--file -`. | None |
@@ -96,12 +96,12 @@ or upgrade to `v0.6.1`.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `2.0.1` |
-| Schema commit | `55b1431d379128e1d75b9c30a3874398cea9ff0f` |
-| Annotated tag object | `ac69f718de92f2c087b44b1b02d325ba37945db6` |
-| Release archive SHA-256 | `bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41` |
-| `SHA256SUMS` SHA-256 | `fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6` |
-| Embedded schema SHA-256 | `5ceeeca7b2b3e46884c116aeb4f20998daf619569c0191728f574c245a4a595b` |
+| Forecast Ledger schema | `2.1.0` |
+| Schema commit | `d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4` |
+| Annotated tag object | `6d74d483f7cb177470ba77f4fcb4063fe04f4003` |
+| Release archive SHA-256 | `f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17` |
+| `SHA256SUMS` SHA-256 | `6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b` |
+| Embedded schema SHA-256 | `cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
@@ -110,8 +110,8 @@ Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
 never a floating tag. Documents with any other schema version receive an
 `unsupported_schema_version` warning and are rejected before side effects.
-There is no v2.0.0 runtime contract, converter, or compatibility reader;
-historical v2.0.0 evidence remains interpretable from its exact upstream tag.
+There is no v2.0.1 runtime contract, converter, or compatibility reader;
+historical v2.0.1 evidence remains interpretable from its exact upstream tag.
 
 ### Platforms and release artifacts
 
@@ -121,7 +121,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.9.1` contains those six archives and eight native Linux packages:
+Release `v0.10.0` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -249,7 +249,7 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**.
-  `v0.9.1` is published through the explicit release workflow; stable `0.x`
+  `v0.10.0` is published through the explicit release workflow; stable `0.x`
   packaging does not imply feature completeness, independent audit, or formal
   verification.
 - No independent security or cryptographic audit is recorded. A pinned

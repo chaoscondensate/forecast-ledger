@@ -206,7 +206,8 @@ func cloneSlugs(value *[]ledger.Slug) *[]ledger.Slug {
 	if value == nil {
 		return nil
 	}
-	copyValue := append([]ledger.Slug(nil), (*value)...)
+	copyValue := make([]ledger.Slug, len(*value))
+	copy(copyValue, *value)
 	return &copyValue
 }
 
@@ -214,6 +215,7 @@ func cloneStrings(value *[]string) *[]string {
 	if value == nil {
 		return nil
 	}
-	copyValue := append([]string(nil), (*value)...)
+	copyValue := make([]string, len(*value))
+	copy(copyValue, *value)
 	return &copyValue
 }

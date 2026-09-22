@@ -23,8 +23,31 @@ type ForecastSummary struct {
 	Visibility           ledger.ForecastVisibility   `json:"visibility"`
 	RepresentationKinds  []ledger.RepresentationKind `json:"representation_kinds,omitempty"`
 	Active               bool                        `json:"active"`
+	Activity             ActivityResult              `json:"activity"`
 	SupersedesForecastID *ledger.Slug                `json:"supersedes_forecast_id,omitempty"`
 	IntegrityStatus      ledger.IntegrityStatus      `json:"integrity_status"`
+}
+
+type ActivityCoverage string
+
+const (
+	ActivityUnbound    ActivityCoverage = "unbound"
+	ActivityPartial    ActivityCoverage = "partial"
+	ActivityPending    ActivityCoverage = "pending"
+	ActivityNotChecked ActivityCoverage = "not_checked"
+	ActivityVerified   ActivityCoverage = "verified"
+	ActivityFailed     ActivityCoverage = "failed"
+)
+
+type ActivityResult struct {
+	Active          bool                      `json:"active"`
+	EventCount      int                       `json:"event_count"`
+	LastEventID     ledger.Slug               `json:"last_event_id,omitempty"`
+	LastEventType   ledger.LifecycleEventType `json:"last_event_type,omitempty"`
+	LastEffectiveAt ledger.Timestamp          `json:"last_effective_at,omitempty"`
+	LastRecordedAt  ledger.Timestamp          `json:"last_recorded_at,omitempty"`
+	Coverage        ActivityCoverage          `json:"coverage"`
+	CoveredHead     ledger.Slug               `json:"covered_head,omitempty"`
 }
 
 type CommitmentView struct {
@@ -37,16 +60,17 @@ type CommitmentView struct {
 }
 
 type ForecastView struct {
-	Summary         ForecastSummary                  `json:"summary"`
-	Representations *[]ledger.ForecastRepresentation `json:"representations,omitempty"`
-	Rationale       *string                          `json:"rationale,omitempty"`
-	KeyFactors      *[]string                        `json:"key_factors,omitempty"`
-	Comment         *string                          `json:"comment,omitempty"`
-	PublicNote      *string                          `json:"public_note,omitempty"`
-	Provenance      *ledger.Provenance               `json:"provenance,omitempty"`
-	LifecycleEvents *[]ledger.LifecycleEvent         `json:"lifecycle_events,omitempty"`
-	Commitment      *CommitmentView                  `json:"commitment,omitempty"`
-	Integrity       ForecastIntegrityView            `json:"integrity"`
+	Summary             ForecastSummary                  `json:"summary"`
+	Representations     *[]ledger.ForecastRepresentation `json:"representations,omitempty"`
+	Rationale           *string                          `json:"rationale,omitempty"`
+	KeyFactors          *[]string                        `json:"key_factors,omitempty"`
+	Comment             *string                          `json:"comment,omitempty"`
+	PublicNote          *string                          `json:"public_note,omitempty"`
+	Provenance          *ledger.Provenance               `json:"provenance,omitempty"`
+	LifecycleEvents     *[]ledger.LifecycleEvent         `json:"lifecycle_events,omitempty"`
+	ActivityCheckpoints *[]ledger.ActivityCheckpoint     `json:"activity_checkpoints,omitempty"`
+	Commitment          *CommitmentView                  `json:"commitment,omitempty"`
+	Integrity           ForecastIntegrityView            `json:"integrity"`
 }
 
 type ForecastIntegrityView struct {
@@ -192,7 +216,7 @@ func ShowForecast(model *ledger.Ledger, questionID, forecastID ledger.Slug) (For
 	if selected == nil {
 		return ForecastView{}, app.WithDetails(app.NewError(app.CodeNotFound, "forecast was not found in the selected question", nil), map[string]any{"question_id": questionID, "forecast_id": forecastID})
 	}
-	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote), Provenance: selected.Provenance, LifecycleEvents: selected.LifecycleEvents, Integrity: forecastIntegrityView(selected.Integrity)}
+	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote), Provenance: selected.Provenance, LifecycleEvents: selected.LifecycleEvents, ActivityCheckpoints: selected.ActivityCheckpoints, Integrity: forecastIntegrityView(selected.Integrity)}
 	if selected.Visibility != ledger.VisibilitySealed {
 		view.Representations = cloneRepresentations(selected.Representations)
 		view.Rationale, view.KeyFactors, view.Comment = cloneString(selected.Rationale), cloneStrings(selected.KeyFactors), cloneString(selected.Comment)
@@ -252,7 +276,8 @@ func summarizeForecast(forecast ledger.Forecast) ForecastSummary {
 			kinds = append(kinds, representationKind(representation))
 		}
 	}
-	return ForecastSummary{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, RepresentationKinds: kinds, Active: forecastActive(forecast), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), IntegrityStatus: integrityStatus(forecast.Integrity)}
+	activity := deriveActivity(forecast)
+	return ForecastSummary{ID: forecast.ID, QuestionRevisionID: forecast.QuestionRevisionID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt, Visibility: forecast.Visibility, RepresentationKinds: kinds, Active: activity.Active, Activity: activity, SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), IntegrityStatus: integrityStatus(forecast.Integrity)}
 }
 
 func representationKind(value ledger.ForecastRepresentation) ledger.RepresentationKind {
@@ -281,6 +306,39 @@ func forecastActive(value ledger.Forecast) bool {
 	}
 	last := (*value.LifecycleEvents)[len(*value.LifecycleEvents)-1]
 	return last.Type == ledger.LifecycleReaffirmed
+}
+
+func deriveActivity(value ledger.Forecast) ActivityResult {
+	result := ActivityResult{Active: true, Coverage: ActivityUnbound}
+	if value.LifecycleEvents != nil {
+		result.EventCount = len(*value.LifecycleEvents)
+		if result.EventCount > 0 {
+			last := (*value.LifecycleEvents)[result.EventCount-1]
+			result.Active = last.Type == ledger.LifecycleReaffirmed
+			result.LastEventID, result.LastEventType = last.ID, last.Type
+			result.LastEffectiveAt, result.LastRecordedAt = last.EffectiveAt, last.RecordedAt
+		}
+	}
+	if value.ActivityCheckpoints == nil || len(*value.ActivityCheckpoints) == 0 {
+		return result
+	}
+	checkpoint := (*value.ActivityCheckpoints)[len(*value.ActivityCheckpoints)-1]
+	result.CoveredHead = checkpoint.HeadEventID
+	if result.LastEventID != "" && checkpoint.HeadEventID != result.LastEventID {
+		result.Coverage = ActivityPartial
+		return result
+	}
+	switch {
+	case checkpoint.Integrity.Pending != nil:
+		result.Coverage = ActivityPending
+	case checkpoint.Integrity.Verified != nil:
+		result.Coverage = ActivityVerified
+	case checkpoint.Integrity.Failed != nil:
+		result.Coverage = ActivityFailed
+	default:
+		result.Coverage = ActivityNotChecked
+	}
+	return result
 }
 
 func integrityStatus(value ledger.Integrity) ledger.IntegrityStatus {

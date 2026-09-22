@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
@@ -102,7 +104,7 @@ func sortedMapKeys(value any) []string {
 func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	path := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"), path)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), path)
 	err := storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
 		Validate: func(parsed *document.Document) error {
 			return service.ValidateLedgerDocument(parsed, os.DirFS(ledgerRoot))
@@ -145,7 +147,7 @@ func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 func TestMCPMissingRevealKeyNamesKeyFile(t *testing.T) {
 	ledgerRoot, secretRoot := t.TempDir(), t.TempDir()
 	path := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"), path)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), path)
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -436,7 +438,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -533,6 +535,23 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil || targetBuild.IsError {
 		t.Fatalf("MCP target build result=%s err=%v", toolText(targetBuild), err)
 	}
+	lifecycleArgs := map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-002", "scope": "lifecycle", "head": "event-election-reaffirmed"}
+	lifecycleBuild, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: lifecycleArgs})
+	if err != nil || lifecycleBuild.IsError || !strings.Contains(toolText(lifecycleBuild), `"scope":"forecast-lifecycle/v1"`) || !strings.Contains(toolText(lifecycleBuild), `"head_event_id":"event-election-reaffirmed"`) {
+		t.Fatalf("MCP lifecycle target build result=%s err=%v", toolText(lifecycleBuild), err)
+	}
+	lifecycleCheck, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_check", Arguments: lifecycleArgs})
+	if err != nil || lifecycleCheck.IsError || !strings.Contains(toolText(lifecycleCheck), `"valid":true`) {
+		t.Fatalf("MCP lifecycle target check result=%s err=%v", toolText(lifecycleCheck), err)
+	}
+	lifecycleStatus, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_status", Arguments: lifecycleArgs})
+	if err != nil || lifecycleStatus.IsError || !strings.Contains(toolText(lifecycleStatus), `"scope":"lifecycle"`) || !strings.Contains(toolText(lifecycleStatus), `"state":"unanchored"`) {
+		t.Fatalf("MCP lifecycle timestamp status result=%s err=%v", toolText(lifecycleStatus), err)
+	}
+	lifecycleVerify, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_verify", Arguments: lifecycleArgs})
+	if err != nil || lifecycleVerify.IsError || !strings.Contains(toolText(lifecycleVerify), `"state":"not_applicable"`) || !strings.Contains(toolText(lifecycleVerify), `"scope":"lifecycle"`) {
+		t.Fatalf("MCP lifecycle timestamp verify result=%s err=%v", toolText(lifecycleVerify), err)
+	}
 	targetPath := filepath.Join(ledgerRoot, "proofs", "targets", "f-election-coalition-001.json")
 	if err := os.WriteFile(targetPath, []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
@@ -599,7 +618,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "name": "Independent", "kind": "internal",
 	}})
@@ -644,11 +663,11 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 
 func TestEveryMCPExistingLedgerToolRejectsUnsupportedVersionAtAdmission(t *testing.T) {
 	ledgerRoot, outputRoot, secretRoot := t.TempDir(), t.TempDir(), t.TempDir()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "2.0.1"`), []byte(`"schema_version": "2.0.0"`), 1)
+	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "2.1.0"`), []byte(`"schema_version": "2.0.1"`), 1)
 	if err := os.WriteFile(filepath.Join(ledgerRoot, "ledger.json"), oldLedger, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +706,7 @@ func TestEveryMCPExistingLedgerToolRejectsUnsupportedVersionAtAdmission(t *testi
 func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
 	ledgerRoot, outputRoot := t.TempDir(), t.TempDir()
 	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", "examples", "valid", "individual-ledger.json"), ledgerPath)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), ledgerPath)
 	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
 	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
 	if err != nil {
@@ -779,6 +798,207 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 	}
 }
 
+func TestMCPProtectedInputDiagnosticsPrecedeAllSealedWriteRoutes(t *testing.T) {
+	ledgerRoot, secretRoot := t.TempDir(), t.TempDir()
+	const canary = "PRIVATE-MCP-DIAGNOSTIC-CANARY"
+	if err := storage.CreateProtectedFile(filepath.Join(secretRoot, "invalid.yaml"), []byte("rationale: "+canary+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, SecretRoots: []string{"keys=" + secretRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	sealedForecast := func(id string) map[string]any {
+		return map[string]any{"id": id, "visibility": "sealed", "forecasted_at": "2026-09-22T00:00:00Z"}
+	}
+	datedRevision := func(id string) map[string]any {
+		revision := binaryRevision(id, "Will it happen?", "Use the public result.", "2027-01-01T00:00:00Z")
+		revision["effective_at"] = "2026-01-01T00:00:00Z"
+		revision["recorded_at"] = "2026-01-01T00:00:01Z"
+		return revision
+	}
+	assertFailure := func(name, key string, params *sdk.CallToolParams) {
+		t.Helper()
+		result, err := callToolForTest(t, client, params)
+		text := toolText(result)
+		if err != nil || !result.IsError || !strings.Contains(text, `"pointer":"/representations"`) || strings.Contains(text, canary) || strings.Contains(text, `"line":1`) {
+			t.Fatalf("%s result=%s err=%v", name, text, err)
+		}
+		if _, statErr := os.Stat(filepath.Join(secretRoot, key)); !os.IsNotExist(statErr) {
+			t.Fatalf("%s created key: %v", name, statErr)
+		}
+	}
+
+	assertFailure("ledger_init", "initial.key", &sdk.CallToolParams{Name: "ledger_init", Arguments: map[string]any{
+		"file": "main:initial.json", "ledger_id": "initial", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner",
+		"question":                  map[string]any{"id": "q-initial", "revision": datedRevision("qr-initial"), "initial_forecast": sealedForecast("f-initial")},
+		"initial_secret_input_file": "keys:invalid.yaml", "key_file": "keys:initial.key",
+	}})
+	if _, statErr := os.Stat(filepath.Join(ledgerRoot, "initial.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("failed MCP init created ledger: %v", statErr)
+	}
+
+	created, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_init", Arguments: map[string]any{
+		"file": "main:ledger.json", "ledger_id": "main", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner",
+	}})
+	if err != nil || created.IsError {
+		t.Fatalf("base init failed: %s %v", toolText(created), err)
+	}
+	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
+	before, err := os.ReadFile(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFailure("question_add", "question.key", &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-secret", "revision": datedRevision("qr-secret"),
+		"initial_forecast": sealedForecast("f-secret"), "initial_secret_input_file": "keys:invalid.yaml", "key_file": "keys:question.key",
+	}})
+	after, err := os.ReadFile(ledgerPath)
+	if err != nil || !bytes.Equal(after, before) {
+		t.Fatalf("failed MCP question add changed ledger: %v", err)
+	}
+
+	added, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-one", "revision": datedRevision("qr-one"),
+	}})
+	if err != nil || added.IsError {
+		t.Fatalf("base question failed: %s %v", toolText(added), err)
+	}
+	before, err = os.ReadFile(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFailure("forecast_seal", "forecast.key", &sdk.CallToolParams{Name: "forecast_seal", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-one", "forecast": "f-one", "question_revision_id": "qr-one", "forecasted_at": "2026-09-22T00:00:00Z",
+		"secret_input_file": "keys:invalid.yaml", "key_file": "keys:forecast.key",
+	}})
+	after, err = os.ReadFile(ledgerPath)
+	if err != nil || !bytes.Equal(after, before) {
+		t.Fatalf("failed MCP forecast seal changed ledger: %v", err)
+	}
+
+	validPrivate := []byte("representations:\n  - kind: probability\n    outcome: true\n    probability: '0.7'\n")
+	if err := storage.CreateProtectedFile(filepath.Join(secretRoot, "minimal.yaml"), validPrivate); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []struct {
+		name string
+		args map[string]any
+	}{
+		{"ledger_init", map[string]any{
+			"file": "main:minimal.json", "ledger_id": "minimal", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner",
+			"question":                  map[string]any{"id": "q-minimal", "revision": datedRevision("qr-minimal"), "initial_forecast": sealedForecast("f-minimal")},
+			"initial_secret_input_file": "keys:minimal.yaml", "key_file": "keys:minimal-init.key",
+		}},
+		{"question_add", map[string]any{
+			"file": "main:ledger.json", "question": "q-secret", "revision": datedRevision("qr-secret"),
+			"initial_forecast": sealedForecast("f-secret"), "initial_secret_input_file": "keys:minimal.yaml", "key_file": "keys:minimal-question.key",
+		}},
+		{"forecast_seal", map[string]any{
+			"file": "main:ledger.json", "question": "q-one", "forecast": "f-one", "question_revision_id": "qr-one", "forecasted_at": "2026-09-22T00:00:00Z",
+			"secret_input_file": "keys:minimal.yaml", "key_file": "keys:minimal-forecast.key",
+		}},
+	} {
+		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: call.name, Arguments: call.args})
+		if err != nil || result.IsError || strings.Contains(toolText(result), "0.7") {
+			t.Fatalf("minimal %s result=%s err=%v", call.name, toolText(result), err)
+		}
+	}
+}
+
+func TestMCPActivityCoveragePresentation(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	for _, coverage := range []service.ActivityCoverage{service.ActivityPartial, service.ActivityVerified} {
+		writeMCPActivityCoverageFixture(t, ledgerRoot, string(coverage)+".json", coverage)
+	}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	for _, coverage := range []service.ActivityCoverage{service.ActivityPartial, service.ActivityVerified} {
+		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{
+			"file": "main:" + string(coverage) + ".json", "question": "q-lifecycle-vector", "forecast": "f-lifecycle-vector-1",
+		}})
+		text := toolText(result)
+		if err != nil || result.IsError || !strings.Contains(text, `"coverage":"`+string(coverage)+`"`) || !strings.Contains(text, `"active":true`) {
+			t.Fatalf("coverage %s result=%s err=%v", coverage, text, err)
+		}
+	}
+}
+
+func writeMCPActivityCoverageFixture(t *testing.T, directory, name string, coverage service.ActivityCoverage) {
+	t.Helper()
+	raw, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/lifecycle-checkpoints.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model ledger.Ledger
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	forecast := &model.Questions[0].Forecasts[0]
+	checkpoints := append([]ledger.ActivityCheckpoint(nil), (*forecast.ActivityCheckpoints)...)
+	if coverage == service.ActivityPartial {
+		checkpoints = checkpoints[:1]
+	} else {
+		checkpoint := &checkpoints[len(checkpoints)-1]
+		target := *checkpoint.Integrity.Failed.Target
+		genTime := ledger.Timestamp("2026-09-04T10:00:06Z")
+		policy, serial := "1.2.3", "1"
+		caPath := ledger.RelativePath("trust/example.pem")
+		checkpoint.Integrity = ledger.LifecycleIntegrity{Verified: &ledger.VerifiedLifecycleIntegrity{
+			Status: ledger.IntegrityVerified, Target: target, VerifiedAt: "2026-09-04T10:00:07Z",
+			Timestamps: []ledger.RFC3161Timestamp{{Type: "rfc3161", RequestPath: "proofs/timestamps/request.tsq", ResponsePath: "proofs/timestamps/response.tsr", TSAURL: "https://tsa.example.test/stamp", HashAlgorithm: "sha256", State: ledger.RFC3161Verified, GenTime: &genTime, PolicyOID: &policy, SerialNumber: &serial, CABundlePath: &caPath}},
+		}}
+	}
+	forecast.ActivityCheckpoints = &checkpoints
+	encoded, err := json.MarshalIndent(model, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, name), append(encoded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vector struct {
+		Checkpoints []struct {
+			HeadEventID ledger.Slug `json:"head_event_id"`
+			Expected    struct {
+				CanonicalTarget string `json:"canonical_target"`
+			} `json:"expected"`
+		} `json:"checkpoints"`
+	}
+	if err := json.Unmarshal(vectorRaw, &vector); err != nil {
+		t.Fatal(err)
+	}
+	targets := make(map[ledger.Slug]string, len(vector.Checkpoints))
+	for _, item := range vector.Checkpoints {
+		targets[item.HeadEventID] = item.Expected.CanonicalTarget
+	}
+	for _, checkpoint := range checkpoints {
+		var target ledger.LifecycleTarget
+		if checkpoint.Integrity.Failed != nil {
+			target = *checkpoint.Integrity.Failed.Target
+		} else {
+			target = checkpoint.Integrity.Verified.Target
+		}
+		absolute := filepath.Join(directory, filepath.FromSlash(string(target.ArtifactPath)))
+		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(absolute, []byte(targets[checkpoint.HeadEventID]), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestMCPValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
@@ -793,9 +1013,10 @@ func TestMCPValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
 		"examples/valid/question-without-forecasts.yaml",
 		"examples/valid/team-ledger.yaml",
 		"tests/conformance/valid/relationships-and-datetime.json",
+		"tests/conformance/valid/revealed-representation-only.json",
 	} {
 		name := fmt.Sprintf("fixture-%d%s", index, filepath.Ext(relative))
-		copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1", filepath.FromSlash(relative)), filepath.Join(ledgerRoot, name))
+		copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", filepath.FromSlash(relative)), filepath.Join(ledgerRoot, name))
 		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:" + name}})
 		if err != nil || result.IsError || !strings.Contains(toolText(result), `"code":"ledger.valid"`) {
 			t.Fatalf("fixture %s: result=%s err=%v", relative, toolText(result), err)

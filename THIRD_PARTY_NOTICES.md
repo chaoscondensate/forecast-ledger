@@ -9,10 +9,10 @@ and `go.sum`.
 
 ## Embedded Forecast Ledger contract
 
-The embedded Forecast Ledger v2.0.1 schema, examples, conformance fixtures, v2
+The embedded Forecast Ledger v2.1.0 schema, examples, conformance fixtures, v2
 seal and target vectors, and required v2 reference documents were copied
 from <https://github.com/chaoscondensate/schema> at commit
-`55b1431d379128e1d75b9c30a3874398cea9ff0f` and retain the upstream MIT
+`d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4` and retain the upstream MIT
 license. Exact file digests, provenance, and license text are stored in
 [`third_party/forecast-ledger`](third_party/forecast-ledger/).
 

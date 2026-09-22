@@ -198,9 +198,9 @@ type SealedForecastInput struct {
 	ForecastedAt         ledger.Timestamp                `json:"forecasted_at"`
 	RecordedAt           *ledger.Timestamp               `json:"recorded_at,omitempty"`
 	Representations      []ledger.ForecastRepresentation `json:"representations"`
-	Rationale            string                          `json:"rationale"`
-	KeyFactors           []string                        `json:"key_factors"`
-	Comment              string                          `json:"comment"`
+	Rationale            *string                         `json:"rationale,omitempty"`
+	KeyFactors           *[]string                       `json:"key_factors,omitempty"`
+	Comment              *string                         `json:"comment,omitempty"`
 	PublicNote           *string                         `json:"public_note,omitempty"`
 	Provenance           *ledger.Provenance              `json:"provenance,omitempty"`
 	SupersedesForecastID *ledger.Slug                    `json:"supersedes_forecast_id,omitempty"`
@@ -210,9 +210,9 @@ type SealedForecastInput struct {
 // times, selectors, provenance and public notes remain direct public fields.
 type SealedForecastPrivateInput struct {
 	Representations []ledger.ForecastRepresentation `json:"representations"`
-	Rationale       string                          `json:"rationale"`
-	KeyFactors      []string                        `json:"key_factors"`
-	Comment         string                          `json:"comment"`
+	Rationale       *string                         `json:"rationale,omitempty"`
+	KeyFactors      *[]string                       `json:"key_factors,omitempty"`
+	Comment         *string                         `json:"comment,omitempty"`
 }
 
 type KeyHintUpdateInput struct {

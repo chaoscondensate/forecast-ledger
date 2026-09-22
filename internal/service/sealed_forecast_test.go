@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,54 @@ func TestForecastSealRevealAndKeyHintPreserveTargetBytes(t *testing.T) {
 	afterHint, err := BuildForecastTarget(hint.Ledger, "q-one", "f-one")
 	if err != nil || !bytes.Equal(before.Bytes, afterHint.Bytes) {
 		t.Fatalf("key hint changed target: %v", err)
+	}
+}
+
+func TestInitialSealRevealPreservesOptionalPrivateFieldPresence(t *testing.T) {
+	empty, rationale, comment := "", "private rationale", "private comment"
+	emptyFactors, factors := []string{}, []string{"base rate"}
+	for _, testCase := range []struct {
+		name       string
+		rationale  *string
+		keyFactors *[]string
+		comment    *string
+	}{
+		{name: "representation-only"},
+		{name: "all-present", rationale: &rationale, keyFactors: &factors, comment: &comment},
+		{name: "explicit-empty", rationale: &empty, keyFactors: &emptyFactors, comment: &empty},
+		{name: "mixed", keyFactors: &factors, comment: &empty},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root, err := BuildLedgerRootAt(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "me", ForecasterName: "Me"}, "2026-01-01T00:00:00Z")
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := binaryInitialQuestion()
+			input.InitialForecast.Visibility = ledger.VisibilitySealed
+			input.InitialForecast.Rationale = testCase.rationale
+			input.InitialForecast.KeyFactors = testCase.keyFactors
+			input.InitialForecast.Comment = testCase.comment
+			built, err := BuildInitialSealedLedger(t.Context(), root, input, Effects{Clock: fixedTestClock{}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 76))}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := BuildForecastTarget(built.Ledger, "q-one", "f-one")
+			if err != nil {
+				t.Fatal(err)
+			}
+			revealed, err := BuildForecastReveal(built.Ledger, "q-one", "f-one", built.KeyFile, "2026-02-01T00:00:00Z")
+			if err != nil {
+				t.Fatal(err)
+			}
+			forecast := revealed.Ledger.Questions[0].Forecasts[0]
+			if !reflect.DeepEqual(forecast.Rationale, testCase.rationale) || !reflect.DeepEqual(forecast.KeyFactors, testCase.keyFactors) || !reflect.DeepEqual(forecast.Comment, testCase.comment) {
+				t.Fatalf("revealed presence = rationale %#v factors %#v comment %#v", forecast.Rationale, forecast.KeyFactors, forecast.Comment)
+			}
+			after, err := BuildForecastTarget(revealed.Ledger, "q-one", "f-one")
+			if err != nil || !bytes.Equal(before.Bytes, after.Bytes) {
+				t.Fatalf("presence-aware reveal changed target: %v", err)
+			}
+		})
 	}
 }
 

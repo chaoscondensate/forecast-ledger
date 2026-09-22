@@ -3,6 +3,38 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## 0.10.0 - 2026-09-22
+
+### Changed
+
+- **Breaking:** replace the embedded Forecast Ledger v2.0.1 contract with the
+  exact v2.1.0 correction. The runtime accepts only v2.1.0 and rejects v2.0.1
+  before side effects; no converter or compatibility bundle is included.
+- Add deterministic `forecast-lifecycle/v1` targets, exact-head RFC 3161
+  checkpoints, retained prefix verification, and portable publication-package
+  support without changing `forecast-envelope/v2` bytes.
+- Report current activity and lifecycle coverage separately from forecast
+  integrity across CLI, JSON, MCP, and package verification. Coverage can be
+  unbound, partial, pending, not checked, verified, or failed.
+
+### Fixed
+
+- Reject lifecycle events dated before their forecast and events recorded
+  before either their effective time or the forecast record time.
+- Require only representations in protected sealed-forecast input. Rationale,
+  key factors, and comment are independently optional, preserve absent versus
+  explicit empty values, and are revealed only when authenticated as present.
+- Point protected-input diagnostics at the exact missing or invalid property
+  without inventing a line-one scalar or exposing rejected secret content.
+- Accept the documented nested question object in MCP `ledger_init`, including
+  sealed initial forecasts, instead of misreading it as a string selector.
+
+### Security and evidence limits
+
+- A verified lifecycle checkpoint detects changes within its covered event
+  prefix, but cannot prove that a removed event existed after every independent
+  observation and retained artifact for it has also been deleted.
+
 ## 0.9.1 - 2026-09-22
 
 ### Changed

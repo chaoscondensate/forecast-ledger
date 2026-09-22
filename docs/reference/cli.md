@@ -39,9 +39,9 @@ only ledger bytes and cannot resolve sibling target or timestamp paths.
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
 | `forecast withdraw|expire|reaffirm` | `--file --question --forecast --event --effective-at` | Append a forecast activity event. |
-| `target build|check` | `--file` plus `--all` or question+forecast | Create or compare canonical target bytes. |
-| `timestamp stamp` | `--file --question --forecast`; optional `--tsa-provider`, custom `--tsa-url`+`--ca-bundle`, or `--offline` | Request and locally verify RFC 3161 evidence; omission selects `auto` (currently FreeTSA). |
-| `timestamp status|verify` | `--file --question --forecast` | Inspect or locally verify retained RFC 3161 evidence. |
+| `target build|check` | `--file` plus `--all` or question+forecast; lifecycle adds `--scope lifecycle --head` | Create or compare forecast or exact-head lifecycle target bytes. |
+| `timestamp stamp` | `--file --question --forecast`; lifecycle adds `--scope lifecycle --head`; optional provider fields or `--offline` | Request and locally verify RFC 3161 evidence; omission selects `auto` (currently FreeTSA). |
+| `timestamp status|verify` | `--file --question --forecast`; lifecycle adds `--scope lifecycle --head` | Inspect or locally verify retained forecast or lifecycle evidence. |
 | `verify` | `--file`; optional question+forecast | Run layered evidence checks. |
 | `publish build` | `--file --output` | Create a new standalone package. |
 | `publish verify` | package ledger `--file` and `--manifest` | Verify the package and retained RFC 3161 evidence locally. |
@@ -78,13 +78,14 @@ It does not turn ledger-lock conflicts into a wait queue. A second writer fails
 immediately with exit 5. Callers that intentionally contend must serialize
 mutations or implement a bounded retry with backoff.
 
-Question and forecast show output includes business fields and type-aware public
-values in normal human and plain modes. Forecast show also exposes safe stored
-target/timestamp/timing metadata without network access. Layered verification
-prints its complete ordered evidence matrix, including safe evidence values,
-without requiring `--verbose`. Plain verification rows are ordered as question
-ID, forecast ID, layer, state, comma-separated reason codes, and compact JSON
-evidence. Quote RFC 3339 values in maintained YAML input, such as
+Question and forecast list/show output includes business fields, type-aware
+public values, derived activity, lifecycle coverage, and forecast integrity in
+normal human and plain modes. Forecast show also exposes safe stored lifecycle
+events, checkpoints, target/timestamp/timing metadata without network access.
+Layered verification prints its complete ordered evidence matrix, including
+safe activity evidence, without requiring `--verbose`. Plain verification rows
+are ordered as question ID, forecast ID, layer, state, comma-separated reason
+codes, and compact JSON evidence. Quote RFC 3339 values in maintained YAML input, such as
 `recorded_at: "2026-09-01T09:01:00Z"`.
 
 Verification commands emit their complete expected outcome report to stdout
@@ -128,12 +129,12 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-The supported schema is exact. A ledger other than v2.0.1, including v2.0.0,
+The supported schema is exact. A ledger other than v2.1.0, including v2.0.1,
 produces an explicit warning on stderr, returns
 `unsupported_schema_version`/exit 3, and stops before locks, files, keys,
 artifacts, entropy, or network side effects. The runtime has no converter or
-compatibility reader. Interpret historical v2.0.0 evidence against the
-[exact retained upstream source](https://github.com/chaoscondensate/schema/tree/1d3b186a15136bc5aff38647cb59fbef475dbe55).
+compatibility reader. Interpret historical v2.0.1 evidence against the
+[exact upstream source](https://github.com/chaoscondensate/schema/tree/55b1431d379128e1d75b9c30a3874398cea9ff0f).
 
 Exact direct request schemas and operation policies are generated under
 [generated interface reference](generated/index.md). Candidate-binary

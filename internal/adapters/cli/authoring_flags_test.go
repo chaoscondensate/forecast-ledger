@@ -178,7 +178,7 @@ func TestFlagOnlyV2WorkflowJSONAndYAML(t *testing.T) {
 		t.Run(extension, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "ledger"+extension)
 			code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "flags", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
-			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.1"`) {
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.1.0"`) {
 				t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 			code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-launch", "--revision-id", "qr-launch-1", "--effective-at", "2026-09-21T10:00:00Z", "--revision-recorded-at", "2026-09-21T10:01:00Z", "--title", "Will it launch?", "--resolution-criteria", "Resolve yes on launch.", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--outcome-kind", "binary")
@@ -359,7 +359,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := writeVersionInfo(&plain, info, presentation.ModePlain, false); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.0.1") {
+	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.1.0") {
 		t.Fatalf("plain version is stale:\n%s", plain.String())
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "version", "--json")
@@ -370,7 +370,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Schema.Version != "2.0.1" || decoded.Schema != info.Schema {
+	if decoded.Schema.Version != "2.1.0" || decoded.Schema != info.Schema {
 		t.Fatalf("version JSON = %#v", decoded)
 	}
 }

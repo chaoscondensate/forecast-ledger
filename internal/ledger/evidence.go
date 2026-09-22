@@ -13,6 +13,13 @@ type ForecastTarget struct {
 	Digest           Digest       `json:"digest" yaml:"digest"`
 }
 
+type LifecycleTarget struct {
+	Scope            string       `json:"scope" yaml:"scope"`
+	Canonicalization string       `json:"canonicalization" yaml:"canonicalization"`
+	ArtifactPath     RelativePath `json:"artifact_path" yaml:"artifact_path"`
+	Digest           Digest       `json:"digest" yaml:"digest"`
+}
+
 type RFC3161TimestampState string
 
 const (
@@ -89,6 +96,64 @@ type FailedIntegrity struct {
 	FailureReason string              `json:"failure_reason" yaml:"failure_reason"`
 	Target        *ForecastTarget     `json:"target,omitempty" yaml:"target,omitempty"`
 	Timestamps    *[]RFC3161Timestamp `json:"timestamps,omitempty" yaml:"timestamps,omitempty"`
+}
+
+// LifecycleIntegrity deliberately has no unanchored variant. An activity
+// checkpoint exists only after a target has been retained or an attempted
+// verification has failed.
+type LifecycleIntegrity struct {
+	Pending  *PendingLifecycleIntegrity
+	Verified *VerifiedLifecycleIntegrity
+	Failed   *FailedLifecycleIntegrity
+}
+
+type PendingLifecycleIntegrity struct {
+	Status          IntegrityStatus    `json:"status" yaml:"status"`
+	Target          LifecycleTarget    `json:"target" yaml:"target"`
+	Timestamps      []RFC3161Timestamp `json:"timestamps" yaml:"timestamps"`
+	ExternalAnchors *[]ExternalAnchor  `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
+}
+
+type VerifiedLifecycleIntegrity struct {
+	Status          IntegrityStatus    `json:"status" yaml:"status"`
+	Target          LifecycleTarget    `json:"target" yaml:"target"`
+	Timestamps      []RFC3161Timestamp `json:"timestamps" yaml:"timestamps"`
+	VerifiedAt      Timestamp          `json:"verified_at" yaml:"verified_at"`
+	ExternalAnchors *[]ExternalAnchor  `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
+}
+
+type FailedLifecycleIntegrity struct {
+	Status        IntegrityStatus     `json:"status" yaml:"status"`
+	FailureReason string              `json:"failure_reason" yaml:"failure_reason"`
+	Target        *LifecycleTarget    `json:"target,omitempty" yaml:"target,omitempty"`
+	Timestamps    *[]RFC3161Timestamp `json:"timestamps,omitempty" yaml:"timestamps,omitempty"`
+}
+
+func (v LifecycleIntegrity) MarshalJSON() ([]byte, error) {
+	return marshalOne("lifecycle integrity", v.Pending, v.Verified, v.Failed)
+}
+
+func (v *LifecycleIntegrity) UnmarshalJSON(data []byte) error {
+	*v = LifecycleIntegrity{}
+	var discriminator struct {
+		Status IntegrityStatus `json:"status"`
+	}
+	if err := json.Unmarshal(data, &discriminator); err != nil {
+		return err
+	}
+	switch discriminator.Status {
+	case IntegrityPending:
+		v.Pending = new(PendingLifecycleIntegrity)
+		return decodeClosed(data, v.Pending)
+	case IntegrityVerified:
+		v.Verified = new(VerifiedLifecycleIntegrity)
+		return decodeClosed(data, v.Verified)
+	case IntegrityFailed:
+		v.Failed = new(FailedLifecycleIntegrity)
+		return decodeClosed(data, v.Failed)
+	default:
+		return fmt.Errorf("unknown lifecycle integrity status %q", discriminator.Status)
+	}
 }
 
 func (v Integrity) MarshalJSON() ([]byte, error) {

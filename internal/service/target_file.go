@@ -20,6 +20,8 @@ const maxTargetBytes = 16 << 20
 type TargetResult struct {
 	QuestionID   ledger.Slug                `json:"question_id"`
 	ForecastID   ledger.Slug                `json:"forecast_id"`
+	HeadEventID  ledger.Slug                `json:"head_event_id,omitempty"`
+	Scope        string                     `json:"scope"`
 	Path         ledger.RelativePath        `json:"path"`
 	SHA256       string                     `json:"sha256"`
 	ActualSHA256 string                     `json:"actual_sha256,omitempty"`
@@ -32,6 +34,29 @@ type TargetResult struct {
 	Message      string                     `json:"message,omitempty"`
 }
 
+type TargetScope string
+
+const (
+	TargetScopeForecast  TargetScope = "forecast"
+	TargetScopeLifecycle TargetScope = "lifecycle"
+)
+
+func validateTargetSelection(scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) error {
+	if scope == "" {
+		scope = TargetScopeForecast
+	}
+	if scope != TargetScopeForecast && scope != TargetScopeLifecycle {
+		return app.NewError(app.CodeUsage, "target scope must be forecast or lifecycle", nil)
+	}
+	if scope == TargetScopeLifecycle && (all || questionID == "" || forecastID == "" || headEventID == "") {
+		return app.NewError(app.CodeUsage, "lifecycle target scope requires question, forecast, and head and cannot be combined with all", nil)
+	}
+	if scope == TargetScopeForecast && headEventID != "" {
+		return app.NewError(app.CodeUsage, "head can be used only with lifecycle target scope", nil)
+	}
+	return nil
+}
+
 type TargetOperationResult struct {
 	LedgerID    ledger.Slug    `json:"ledger_id"`
 	Targets     []TargetResult `json:"targets"`
@@ -41,7 +66,11 @@ type TargetOperationResult struct {
 }
 
 func PlanTargetBuild(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
-	loaded, artifacts, err := loadSelectedTargets(ctx, path, all, questionID, forecastID)
+	return PlanTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+}
+
+func PlanTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+	loaded, artifacts, err := loadSelectedTargets(ctx, path, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
@@ -69,13 +98,20 @@ func PlanTargetBuild(ctx context.Context, path string, all bool, questionID, for
 }
 
 func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
+	return CommitTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+}
+
+func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+	if err := validateTargetSelection(scope, all, questionID, forecastID, headEventID); err != nil {
+		return TargetOperationResult{}, err
+	}
 	resolvedLedger, err := storage.ResolveLedgerPath(path, true)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
 	// Admission must happen before the advisory lock is created. In particular,
 	// a superseded schema cannot cause lock or artifact side effects.
-	if _, err := LoadAndValidateLedger(ctx, resolvedLedger, nil); err != nil {
+	if _, err := loadAndValidateLedgerForEvidence(ctx, resolvedLedger); err != nil {
 		return TargetOperationResult{}, err
 	}
 	lock, err := storage.AcquireLedgerLock(ctx, resolvedLedger, 0)
@@ -83,14 +119,14 @@ func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, f
 		return TargetOperationResult{}, err
 	}
 	defer lock.Release()
-	planned, err := PlanTargetBuild(ctx, resolvedLedger, all, questionID, forecastID)
+	planned, err := PlanTargetBuildScoped(ctx, resolvedLedger, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
 	if len(planned.Targets) == 0 {
 		return planned, nil
 	}
-	loaded, artifacts, err := loadSelectedTargets(ctx, resolvedLedger, all, questionID, forecastID)
+	loaded, artifacts, err := loadSelectedTargets(ctx, resolvedLedger, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
@@ -188,7 +224,11 @@ func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, f
 }
 
 func CheckTargets(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
-	result, err := InspectTargets(ctx, path, all, questionID, forecastID)
+	return CheckTargetsScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+}
+
+func CheckTargetsScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+	result, err := InspectTargetsScoped(ctx, path, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return result, err
 	}
@@ -207,7 +247,11 @@ func CheckTargets(ctx context.Context, path string, all bool, questionID, foreca
 // was never retained is a successful not_applicable observation; independently
 // inspectable failures are collected so --all never stops at the first row.
 func InspectTargets(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
-	loaded, artifacts, err := loadSelectedTargets(ctx, path, all, questionID, forecastID)
+	return InspectTargetsScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+}
+
+func InspectTargetsScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+	loaded, artifacts, err := loadSelectedTargets(ctx, path, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
@@ -222,7 +266,7 @@ func InspectTargets(ctx context.Context, path string, all bool, questionID, fore
 			return result, app.NewError(app.CodeInterrupted, "target inspection was interrupted", ctx.Err())
 		}
 		row := targetResult(artifact, storage.DeterministicState(LayerPass), nil)
-		metadata := recordedForecastTarget(loaded.Model, artifact.QuestionID, artifact.ForecastID)
+		metadata := recordedTargetMetadata(loaded.Model, artifact)
 		candidate := filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath)))
 		info, statErr := os.Lstat(candidate)
 		if errors.Is(statErr, fs.ErrNotExist) && metadata == nil {
@@ -276,8 +320,7 @@ func InspectTargets(ctx context.Context, path string, all bool, questionID, fore
 			continue
 		}
 		if target := metadata; target != nil {
-			expected := TargetMetadataFor(artifact)
-			if *target != expected {
+			if target.scope != artifact.Scope || target.canonicalization != TargetCanonicalization || target.path != artifact.RelativePath || target.digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
 				err = app.NewError(app.CodeVerification, "recorded target metadata does not match the deterministic target", nil)
 				result.Targets[index] = failedTargetResult(row, "content.target_metadata_mismatch", err)
 				result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeVerification)
@@ -292,13 +335,31 @@ func InspectTargets(ctx context.Context, path string, all bool, questionID, fore
 	return result, nil
 }
 
-func loadSelectedTargets(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (*LoadedLedger, []TargetArtifact, error) {
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+func loadSelectedTargets(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (*LoadedLedger, []TargetArtifact, error) {
+	if err := validateTargetSelection(scope, all, questionID, forecastID, headEventID); err != nil {
+		return nil, nil, err
+	}
+	if scope == "" {
+		scope = TargetScopeForecast
+	}
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return nil, nil, err
 	}
 	var artifacts []TargetArtifact
-	if all {
+	if scope == TargetScopeLifecycle {
+		var artifact TargetArtifact
+		artifact, err = BuildLifecycleTarget(loaded.Model, questionID, forecastID, headEventID)
+		if err == nil {
+			if metadata := recordedTargetMetadata(loaded.Model, artifact); metadata != nil {
+				if metadata.scope != artifact.Scope || metadata.canonicalization != TargetCanonicalization || metadata.digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+					return nil, nil, app.NewError(app.CodeVerification, "recorded lifecycle target metadata does not match its canonical prefix", nil)
+				}
+				artifact.RelativePath = metadata.path
+			}
+		}
+		artifacts = []TargetArtifact{artifact}
+	} else if all {
 		artifacts, err = BuildAllForecastTargets(loaded.Model)
 	} else {
 		var artifact TargetArtifact
@@ -409,8 +470,47 @@ func recordedForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.
 	return nil
 }
 
+type recordedTarget struct {
+	scope            string
+	canonicalization string
+	path             ledger.RelativePath
+	digest           ledger.Digest
+}
+
+func recordedTargetMetadata(model *ledger.Ledger, artifact TargetArtifact) *recordedTarget {
+	if artifact.Scope == ForecastEnvelopeSchema {
+		target := recordedForecastTarget(model, artifact.QuestionID, artifact.ForecastID)
+		if target == nil {
+			return nil
+		}
+		return &recordedTarget{target.Scope, target.Canonicalization, target.ArtifactPath, target.Digest}
+	}
+	_, _, _, forecast, err := selectForecast(model, artifact.QuestionID, artifact.ForecastID)
+	if err != nil || forecast.ActivityCheckpoints == nil {
+		return nil
+	}
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		if checkpoint.HeadEventID != artifact.HeadEventID {
+			continue
+		}
+		var target *ledger.LifecycleTarget
+		switch {
+		case checkpoint.Integrity.Pending != nil:
+			target = &checkpoint.Integrity.Pending.Target
+		case checkpoint.Integrity.Verified != nil:
+			target = &checkpoint.Integrity.Verified.Target
+		case checkpoint.Integrity.Failed != nil:
+			target = checkpoint.Integrity.Failed.Target
+		}
+		if target != nil {
+			return &recordedTarget{target.Scope, target.Canonicalization, target.ArtifactPath, target.Digest}
+		}
+	}
+	return nil
+}
+
 func targetResult(artifact TargetArtifact, state storage.DeterministicState, valid *bool) TargetResult {
-	return TargetResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, Path: artifact.RelativePath, SHA256: artifact.SHA256, Size: artifact.Size, State: state, Valid: valid}
+	return TargetResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, HeadEventID: artifact.HeadEventID, Scope: artifact.Scope, Path: artifact.RelativePath, SHA256: artifact.SHA256, Size: artifact.Size, State: state, Valid: valid}
 }
 
 func failedTargetResult(row TargetResult, reason string, err error) TargetResult {

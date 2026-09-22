@@ -41,17 +41,25 @@ type LedgerStatus struct {
 }
 
 func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader) (*LoadedLedger, error) {
-	return loadAndValidateLedger(ctx, filename, stdin, "")
+	return loadAndValidateLedger(ctx, filename, stdin, "", true)
+}
+
+// loadAndValidateLedgerForEvidence validates the ledger contract and semantic
+// relationships without requiring declared evidence files to be present. The
+// evidence operation then classifies missing, unreadable, or mismatched bytes
+// in its own result layer instead of collapsing them into document validity.
+func loadAndValidateLedgerForEvidence(ctx context.Context, filename string) (*LoadedLedger, error) {
+	return loadAndValidateLedger(ctx, filename, nil, "", false)
 }
 
 // LoadAndValidateLedgerWithArtifactRoot is used for portable packages whose
 // byte-exact ledger lives under ledger/ while its stable proofs/ paths are
 // rooted at the package directory.
 func LoadAndValidateLedgerWithArtifactRoot(ctx context.Context, filename, artifactRoot string) (*LoadedLedger, error) {
-	return loadAndValidateLedger(ctx, filename, nil, artifactRoot)
+	return loadAndValidateLedger(ctx, filename, nil, artifactRoot, true)
 }
 
-func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader, artifactRoot string) (*LoadedLedger, error) {
+func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader, artifactRoot string, validateArtifacts bool) (*LoadedLedger, error) {
 	if ctx != nil && ctx.Err() != nil {
 		return nil, app.NewError(app.CodeInterrupted, "operation was interrupted", ctx.Err())
 	}
@@ -75,7 +83,9 @@ func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		}
 		defer file.Close()
 		path = resolved
-		if artifactRoot == "" {
+		if !validateArtifacts {
+			artifacts = nil
+		} else if artifactRoot == "" {
 			artifacts = os.DirFS(filepath.Dir(resolved))
 		} else {
 			resolver, resolverErr := storage.NewPathResolver(artifactRoot)

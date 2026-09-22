@@ -14,14 +14,15 @@ func TestForecastLedgerV2ReleasePinsMoveTogether(t *testing.T) {
 	t.Parallel()
 
 	pins := []string{
-		"2.0.1",
-		"55b1431d379128e1d75b9c30a3874398cea9ff0f",
-		"ac69f718de92f2c087b44b1b02d325ba37945db6",
-		"bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41",
-		"fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6",
-		"5ceeeca7b2b3e46884c116aeb4f20998daf619569c0191728f574c245a4a595b",
+		"2.1.0",
+		"d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4",
+		"6d74d483f7cb177470ba77f4fcb4063fe04f4003",
+		"f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17",
+		"6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b",
+		"cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107",
 		"forecast-seal/v2",
 		"forecast-envelope/v2",
+		"forecast-lifecycle/v1",
 	}
 	actual := []string{
 		ledgerschema.Version,
@@ -32,6 +33,7 @@ func TestForecastLedgerV2ReleasePinsMoveTogether(t *testing.T) {
 		ledgerschema.SchemaSHA256,
 		ledgerschema.ForecastSealProtocol,
 		ledgerschema.ForecastTargetProfile,
+		ledgerschema.LifecycleTargetProfile,
 	}
 	for index := range pins {
 		if actual[index] != pins[index] {
@@ -43,7 +45,7 @@ func TestForecastLedgerV2ReleasePinsMoveTogether(t *testing.T) {
 	for _, name := range []string{
 		"AGENTS.md",
 		filepath.Join("third_party", "forecast-ledger", "README.md"),
-		filepath.Join("internal", "schema", "upstream", "forecast-ledger", "v2.0.1", "SOURCE.md"),
+		filepath.Join("internal", "schema", "upstream", "forecast-ledger", "v2.1.0", "SOURCE.md"),
 	} {
 		data, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {

@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../schema/forecast-ledger.schema.json",
+  "schema_version": "2.1.0",
+  "ledger_id": "representation-only-reveal",
+  "created_at": "2026-09-01T09:00:00Z",
+  "default_timezone": "UTC",
+  "forecaster": {
+    "id": "example-forecaster",
+    "kind": "individual",
+    "name": "Example Forecaster"
+  },
+  "platforms": {},
+  "questions": [
+    {
+      "id": "q-seal-presence",
+      "status": "open",
+      "created_at": "2026-09-01T09:00:00Z",
+      "current_revision_id": "qr-seal-presence-1",
+      "revisions": [
+        {
+          "id": "qr-seal-presence-1",
+          "effective_at": "2026-09-01T09:00:00Z",
+          "recorded_at": "2026-09-01T09:00:05Z",
+          "title": "Will the example event occur?",
+          "resolution_criteria": "Resolve YES if the example event occurs.",
+          "expected_resolution_at": "2026-12-31T23:59:59Z",
+          "outcome_space": {
+            "kind": "binary"
+          },
+          "domain": {
+            "kind": "binary"
+          }
+        }
+      ],
+      "forecasts": [
+        {
+          "id": "f-seal-presence-1",
+          "question_revision_id": "qr-seal-presence-1",
+          "forecasted_at": "2026-09-02T10:00:00Z",
+          "recorded_at": "2026-09-02T10:00:05Z",
+          "visibility": "revealed",
+          "representations": [
+            {
+              "kind": "probability",
+              "outcome": true,
+              "probability": "0.65"
+            }
+          ],
+          "commitment": {
+            "scheme": "forecast-seal/v2",
+            "commitment_hash": {
+              "algorithm": "sha-256",
+              "value": "90e4c1329a1b09fdfba52b92775e9ac87ca2323cee789e2f9ae7cc545130625d"
+            },
+            "encryption": {
+              "algorithm": "chacha20-poly1305",
+              "nonce": "MzMzMzMzMzMzMzMz",
+              "ciphertext": "9Go4775177r8oTwOJaHBa76HPkIWNCN0toFBjVHJb4ibmfvXsFkXmpMP6QQRKsX2y780Zd4COnFEl0xZZjit3J96ovkad60l6U42h6MqHWJSjnwmYMKYdG6TndmscPyERZopqXzdv2S/M2T5Lq3jKQ5UTybta5XuuAb6bFjFPYi1ZnG7LoZTSKh5qFoXr7Hk76flDbp4RnmG/g4Ktoo+LWugXiI9X8wW93YXYz6dg5HznIh+TMcJRsx4k4YoGaOz+VThwJqiHxsxRdsWi8Ci1ssm4kzKn6yTYezn7gjmicGfFCXAj1XCTcKAgJEj8xo7rVW7VU+5RSSfIk1B9JQq7IAK643m4mFx+iPfJO+QiwMyNYUYgH4j0+eayVqUNMmk3VLC7Cdh5xgO9ZSyA//BTYGD0PY7OiD7R1009VNvqg=="
+            },
+            "key_hint": "secret-manager://forecast-ledger/f-seal-presence-1",
+            "revealed_at": "2026-09-03T10:00:00Z",
+            "revealed_key": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "integrity": {
+            "status": "unanchored",
+            "note": "Representation-only reveal fixture."
+          }
+        }
+      ]
+    }
+  ]
+}

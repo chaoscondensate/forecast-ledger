@@ -6597,9 +6597,21 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "head": {
+            "description": "Lifecycle head event ID",
+            "type": "string"
+          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Target scope",
+            "enum": [
+              "forecast",
+              "lifecycle"
+            ],
             "type": "string"
           }
         },
@@ -6635,9 +6647,21 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "head": {
+            "description": "Lifecycle head event ID",
+            "type": "string"
+          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Target scope",
+            "enum": [
+              "forecast",
+              "lifecycle"
+            ],
             "type": "string"
           }
         },
@@ -6680,9 +6704,21 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "head": {
+            "description": "Lifecycle head event ID",
+            "type": "string"
+          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Evidence scope",
+            "enum": [
+              "forecast",
+              "lifecycle"
+            ],
             "type": "string"
           },
           "tsa_provider": {
@@ -6728,9 +6764,21 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "head": {
+            "description": "Lifecycle head event ID",
+            "type": "string"
+          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Evidence scope",
+            "enum": [
+              "forecast",
+              "lifecycle"
+            ],
             "type": "string"
           }
         },
@@ -6784,9 +6832,21 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "head": {
+            "description": "Lifecycle head event ID",
+            "type": "string"
+          },
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Evidence scope",
+            "enum": [
+              "forecast",
+              "lifecycle"
+            ],
             "type": "string"
           }
         },

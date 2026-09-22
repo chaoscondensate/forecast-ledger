@@ -15,6 +15,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/buildinfo"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
@@ -159,7 +160,7 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 		t.Fatalf("validate code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "status", "--file", path)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.0.1"`) {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.1.0"`) {
 		t.Fatalf("status code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.3.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
@@ -169,20 +170,21 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 	for _, args := range [][]string{{"forecast-ledger", "--json", "version"}, {"forecast-ledger", "version", "--json"}} {
 		code, stdout, stderr = runCLI(args...)
 		var got buildinfo.Info
-		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.0.1" {
+		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.1.0" {
 			t.Fatalf("version %v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
 	}
 }
 
 func TestCLIValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
-	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.0.1")
+	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0")
 	for _, relative := range []string{
 		"examples/valid/empty-ledger.json",
 		"examples/valid/individual-ledger.json",
 		"examples/valid/question-without-forecasts.yaml",
 		"examples/valid/team-ledger.yaml",
 		"tests/conformance/valid/relationships-and-datetime.json",
+		"tests/conformance/valid/revealed-representation-only.json",
 	} {
 		t.Run(filepath.Base(relative), func(t *testing.T) {
 			code, stdout, stderr := runCLI("forecast-ledger", "--json", "validate", "--file", filepath.Join(root, filepath.FromSlash(relative)))
@@ -219,6 +221,110 @@ func TestTargetBuildCheckAndDryRun(t *testing.T) {
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"valid":true`) {
 		t.Fatalf("target check code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
+	lifecycleSelector := []string{"--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--scope", "lifecycle", "--head", "event-election-reaffirmed"}
+	lifecycleBuild := append([]string{"forecast-ledger", "--json", "target", "build"}, lifecycleSelector...)
+	code, stdout, stderr = runCLI(lifecycleBuild...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"scope":"forecast-lifecycle/v1"`) || !strings.Contains(stdout, `"head_event_id":"event-election-reaffirmed"`) || !strings.Contains(stdout, `f-election-coalition-002.lifecycle.event-election-reaffirmed.json`) {
+		t.Fatalf("lifecycle target build code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	lifecycleCheck := append([]string{"forecast-ledger", "--json", "target", "check"}, lifecycleSelector...)
+	code, stdout, stderr = runCLI(lifecycleCheck...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"valid":true`) {
+		t.Fatalf("lifecycle target check code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	status := append([]string{"forecast-ledger", "--json", "timestamp", "status"}, lifecycleSelector...)
+	code, stdout, stderr = runCLI(status...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"scope":"lifecycle"`) || !strings.Contains(stdout, `"state":"unanchored"`) {
+		t.Fatalf("lifecycle timestamp status code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	verify := append([]string{"forecast-ledger", "--json", "timestamp", "verify"}, lifecycleSelector...)
+	code, stdout, stderr = runCLI(verify...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"state":"not_applicable"`) || !strings.Contains(stdout, `"scope":"lifecycle"`) {
+		t.Fatalf("lifecycle timestamp verify code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestCLIActivityCoveragePresentation(t *testing.T) {
+	for _, coverage := range []service.ActivityCoverage{service.ActivityPartial, service.ActivityVerified} {
+		t.Run(string(coverage), func(t *testing.T) {
+			path := writeActivityCoverageFixture(t, t.TempDir(), coverage)
+			code, stdout, stderr := runCLI("forecast-ledger", "--json", "forecast", "show", "--file", path, "--question", "q-lifecycle-vector", "--forecast", "f-lifecycle-vector-1")
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"coverage":"`+string(coverage)+`"`) || !strings.Contains(stdout, `"active":true`) {
+				t.Fatalf("coverage %s code=%d stdout=%q stderr=%q", coverage, code, stdout, stderr)
+			}
+		})
+	}
+}
+
+func writeActivityCoverageFixture(t *testing.T, directory string, coverage service.ActivityCoverage) string {
+	t.Helper()
+	raw, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/lifecycle-checkpoints.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model ledger.Ledger
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	forecast := &model.Questions[0].Forecasts[0]
+	checkpoints := append([]ledger.ActivityCheckpoint(nil), (*forecast.ActivityCheckpoints)...)
+	if coverage == service.ActivityPartial {
+		checkpoints = checkpoints[:1]
+	} else {
+		checkpoint := &checkpoints[len(checkpoints)-1]
+		target := *checkpoint.Integrity.Failed.Target
+		genTime := ledger.Timestamp("2026-09-04T10:00:06Z")
+		policy, serial := "1.2.3", "1"
+		caPath := ledger.RelativePath("trust/example.pem")
+		checkpoint.Integrity = ledger.LifecycleIntegrity{Verified: &ledger.VerifiedLifecycleIntegrity{
+			Status: ledger.IntegrityVerified, Target: target, VerifiedAt: "2026-09-04T10:00:07Z",
+			Timestamps: []ledger.RFC3161Timestamp{{Type: "rfc3161", RequestPath: "proofs/timestamps/request.tsq", ResponsePath: "proofs/timestamps/response.tsr", TSAURL: "https://tsa.example.test/stamp", HashAlgorithm: "sha256", State: ledger.RFC3161Verified, GenTime: &genTime, PolicyOID: &policy, SerialNumber: &serial, CABundlePath: &caPath}},
+		}}
+	}
+	forecast.ActivityCheckpoints = &checkpoints
+	encoded, err := json.MarshalIndent(model, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vector struct {
+		Checkpoints []struct {
+			HeadEventID ledger.Slug `json:"head_event_id"`
+			Expected    struct {
+				CanonicalTarget string `json:"canonical_target"`
+			} `json:"expected"`
+		} `json:"checkpoints"`
+	}
+	if err := json.Unmarshal(vectorRaw, &vector); err != nil {
+		t.Fatal(err)
+	}
+	targets := make(map[ledger.Slug]string, len(vector.Checkpoints))
+	for _, item := range vector.Checkpoints {
+		targets[item.HeadEventID] = item.Expected.CanonicalTarget
+	}
+	for _, checkpoint := range checkpoints {
+		var target ledger.LifecycleTarget
+		if checkpoint.Integrity.Failed != nil {
+			target = *checkpoint.Integrity.Failed.Target
+		} else {
+			target = checkpoint.Integrity.Verified.Target
+		}
+		absolute := filepath.Join(directory, filepath.FromSlash(string(target.ArtifactPath)))
+		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(absolute, []byte(targets[checkpoint.HeadEventID]), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return path
 }
 
 func TestHelpCompletionAndUnknownCommands(t *testing.T) {

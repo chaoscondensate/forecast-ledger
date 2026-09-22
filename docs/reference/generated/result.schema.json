@@ -136,6 +136,9 @@
         "forecast_id": {
           "type": "string"
         },
+        "head_event_id": {
+          "type": "string"
+        },
         "next_actions": {
           "items": {
             "type": "string"
@@ -164,6 +167,12 @@
             "request_count"
           ],
           "type": "object"
+        },
+        "scope": {
+          "enum": [
+            "forecast",
+            "lifecycle"
+          ]
         },
         "selected_provider": {
           "type": "string"
@@ -321,6 +330,7 @@
       "required": [
         "question_id",
         "forecast_id",
+        "scope",
         "state",
         "target_path",
         "target_sha256",

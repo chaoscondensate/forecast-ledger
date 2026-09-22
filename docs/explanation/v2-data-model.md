@@ -52,6 +52,18 @@ These mutable activity events are excluded from the immutable forecast target.
 They can change current activity without changing previously retained target
 bytes or timestamp evidence.
 
+An activity checkpoint names one event head and a separate
+`forecast-lifecycle/v1` target. That target contains the full ordered event
+prefix through the head and the digest of the unchanged forecast envelope.
+Checkpoints must cover successively longer prefixes. Older verified coverage
+remains valid but becomes partial when a later event is appended.
+
+This separates three questions: what belief was recorded, whether that record
+is currently active, and which activity prefix has independent evidence. A
+checkpoint can expose deletion or alteration inside its covered prefix. It
+cannot prove a deleted event existed after every copy of both the event and its
+evidence has been removed.
+
 ## Conditions and not applicable
 
 A conditional relationship names a parent question revision, one typed parent

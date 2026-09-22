@@ -900,9 +900,9 @@ func buildInitialForecast(ctx context.Context, command *urfavecli.Command, stdin
 			return nil, err
 		}
 		result.Representations = private.Representations
-		result.Rationale = &private.Rationale
-		result.KeyFactors = &private.KeyFactors
-		result.Comment = &private.Comment
+		result.Rationale = private.Rationale
+		result.KeyFactors = private.KeyFactors
+		result.Comment = private.Comment
 		return result, nil
 	}
 	if visibility != ledger.VisibilityPublic {

@@ -27,17 +27,14 @@ type EntropySource interface {
 	ReadFull(context.Context, []byte) error
 }
 
-// PrivateBundle is the exact seven-field v2 mirror disclosed by a reveal.
-// Public note, supersession, provenance, lifecycle, key hint, and integrity do
-// not enter the secret plaintext.
+// PrivateBundle is the closed forecast-seal/v2 private value disclosed by a
+// reveal. Optional fields are pointers so an absent property remains distinct
+// from a present empty string or array.
 type PrivateBundle struct {
-	QuestionRevisionID ledger.Slug                     `json:"question_revision_id"`
-	ForecastedAt       ledger.Timestamp                `json:"forecasted_at"`
-	RecordedAt         ledger.Timestamp                `json:"recorded_at"`
-	Representations    []ledger.ForecastRepresentation `json:"representations"`
-	Rationale          string                          `json:"rationale"`
-	KeyFactors         []string                        `json:"key_factors"`
-	Comment            string                          `json:"comment"`
+	Representations []ledger.ForecastRepresentation `json:"representations"`
+	Rationale       *string                         `json:"rationale,omitempty"`
+	KeyFactors      *[]string                       `json:"key_factors,omitempty"`
+	Comment         *string                         `json:"comment,omitempty"`
 }
 
 type SealResult struct {
@@ -56,8 +53,18 @@ func Seal(ctx context.Context, questionID, revisionID, forecastID ledger.Slug, b
 	if entropy == nil {
 		return result, errors.New("entropy source is not configured")
 	}
-	if revisionID == "" || bundle.QuestionRevisionID != revisionID {
-		return result, errors.New("sealed bundle question revision does not match seal context")
+	if revisionID == "" {
+		return result, errors.New("sealed bundle question revision is missing from seal context")
+	}
+	if len(bundle.Representations) == 0 {
+		return result, errors.New("sealed bundle representations are required")
+	}
+	if bundle.KeyFactors != nil {
+		for _, factor := range *bundle.KeyFactors {
+			if factor == "" {
+				return result, errors.New("sealed bundle key factors must be non-empty strings")
+			}
+		}
 	}
 	salt := make([]byte, 32)
 	key := make([]byte, chacha20poly1305.KeySize)
@@ -248,9 +255,17 @@ func openWithKey(key []byte, questionID, revisionID, forecastID ledger.Slug, com
 	}
 	salt, saltErr := hex.DecodeString(sealed.Salt)
 	defer clear(salt)
-	if sealed.Schema != SealScheme || sealed.QuestionID != questionID || sealed.QuestionRevisionID != revisionID || sealed.ForecastID != forecastID || sealed.Bundle.QuestionRevisionID != revisionID || saltErr != nil || len(salt) != 32 || sealed.Salt != hex.EncodeToString(salt) {
+	if sealed.Schema != SealScheme || sealed.QuestionID != questionID || sealed.QuestionRevisionID != revisionID || sealed.ForecastID != forecastID || len(sealed.Bundle.Representations) == 0 || saltErr != nil || len(salt) != 32 || sealed.Salt != hex.EncodeToString(salt) {
 		clear(plaintext)
 		return empty, nil, errors.New("sealed plaintext binding is invalid")
+	}
+	if sealed.Bundle.KeyFactors != nil {
+		for _, factor := range *sealed.Bundle.KeyFactors {
+			if factor == "" {
+				clear(plaintext)
+				return empty, nil, errors.New("sealed plaintext private bundle is invalid")
+			}
+		}
 	}
 	return sealed.Bundle, bytes.Clone(plaintext), nil
 }

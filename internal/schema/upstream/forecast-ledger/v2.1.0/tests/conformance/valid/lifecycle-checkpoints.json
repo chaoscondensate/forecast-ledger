@@ -1,0 +1,100 @@
+{
+  "$schema": "../../../schema/forecast-ledger.schema.json",
+  "schema_version": "2.1.0",
+  "ledger_id": "lifecycle-checkpoint-fixture",
+  "created_at": "2026-09-01T09:00:00Z",
+  "default_timezone": "UTC",
+  "forecaster": {
+    "id": "example-forecaster",
+    "kind": "individual",
+    "name": "Example Forecaster"
+  },
+  "platforms": {},
+  "questions": [
+    {
+      "id": "q-lifecycle-vector",
+      "status": "open",
+      "created_at": "2026-09-01T09:00:00Z",
+      "current_revision_id": "qr-lifecycle-vector-1",
+      "revisions": [
+        {
+          "id": "qr-lifecycle-vector-1",
+          "effective_at": "2026-09-01T09:00:00Z",
+          "recorded_at": "2026-09-01T09:00:05Z",
+          "title": "Will the example event occur?",
+          "resolution_criteria": "Resolve YES if the example event occurs.",
+          "expected_resolution_at": "2026-12-31T23:59:59Z",
+          "outcome_space": { "kind": "binary" },
+          "domain": { "kind": "binary" }
+        }
+      ],
+      "forecasts": [
+        {
+          "id": "f-lifecycle-vector-1",
+          "question_revision_id": "qr-lifecycle-vector-1",
+          "forecasted_at": "2026-09-02T10:00:00Z",
+          "recorded_at": "2026-09-02T10:00:05Z",
+          "visibility": "public",
+          "representations": [
+            { "kind": "probability", "outcome": true, "probability": "0.65" }
+          ],
+          "lifecycle_events": [
+            {
+              "id": "event-withdrawn",
+              "type": "withdrawn",
+              "effective_at": "2026-09-03T10:00:00Z",
+              "recorded_at": "2026-09-03T10:00:05Z",
+              "reason": "Evidence review started."
+            },
+            {
+              "id": "event-reaffirmed",
+              "type": "reaffirmed",
+              "effective_at": "2026-09-04T10:00:00Z",
+              "recorded_at": "2026-09-04T10:00:05Z",
+              "reason": "The review confirmed the forecast."
+            }
+          ],
+          "activity_checkpoints": [
+            {
+              "id": "checkpoint-withdrawal",
+              "head_event_id": "event-withdrawn",
+              "recorded_at": "2026-09-03T10:00:06Z",
+              "integrity": {
+                "status": "failed",
+                "failure_reason": "Timestamp service was unavailable in this fixture.",
+                "target": {
+                  "scope": "forecast-lifecycle/v1",
+                  "canonicalization": "RFC8785",
+                  "artifact_path": "tests/vectors/targets/forecast-lifecycle-v1-withdrawal.json",
+                  "digest": {
+                    "algorithm": "sha-256",
+                    "value": "6494b4d78a2a59e7e3a9292756725e0e7b61da74682c43bc45025386ffcb56bf"
+                  }
+                }
+              }
+            },
+            {
+              "id": "checkpoint-reaffirmation",
+              "head_event_id": "event-reaffirmed",
+              "recorded_at": "2026-09-04T10:00:06Z",
+              "integrity": {
+                "status": "failed",
+                "failure_reason": "Timestamp service was unavailable in this fixture.",
+                "target": {
+                  "scope": "forecast-lifecycle/v1",
+                  "canonicalization": "RFC8785",
+                  "artifact_path": "tests/vectors/targets/forecast-lifecycle-v1-reaffirmation.json",
+                  "digest": {
+                    "algorithm": "sha-256",
+                    "value": "be4440f5ac52f518301d73223c218a686930a42dde48ecf9cdbf723594450952"
+                  }
+                }
+              }
+            }
+          ],
+          "integrity": { "status": "unanchored", "note": "Vector fixture." }
+        }
+      ]
+    }
+  ]
+}

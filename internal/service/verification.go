@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -83,7 +84,7 @@ var verificationLimitations = []string{
 }
 
 func VerifyLedgerEvidence(ctx context.Context, path string, options VerificationOptions) (VerificationReport, error) {
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -105,6 +106,7 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 			item := ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID}
 			content := verifyContentLayer(ctx, loaded, question, forecast)
 			item.Layers = append(item.Layers, content)
+			item.Layers = append(item.Layers, verifyActivityLayer(ctx, loaded, question, forecast))
 			item.Layers = append(item.Layers, verifyTimingLayer(ctx, loaded, question, forecast, content))
 			item.Layers = append(item.Layers, verifyRevealLayer(question, forecast, content))
 			item.Layers = append(item.Layers, verifyOutcomeLayer(ctx, question, options))
@@ -116,6 +118,105 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 	}
 	report.Overall, report.FailureCode = aggregateVerification(report)
 	return report, nil
+}
+
+func verifyActivityLayer(ctx context.Context, loaded *LoadedLedger, question ledger.Question, forecast ledger.Forecast) VerificationLayer {
+	activity := deriveActivity(forecast)
+	evidence := activityEvidence(activity)
+	layer := VerificationLayer{Name: "activity", Evidence: evidence, Limitations: []string{"Current activity is derived from the retained event stream; absence of all independent observations cannot prove that an earlier event never existed."}}
+	if forecast.ActivityCheckpoints == nil || len(*forecast.ActivityCheckpoints) == 0 {
+		layer.State, layer.ReasonCodes = LayerNotApplicable, []string{"activity.unbound"}
+		return layer
+	}
+	root := filepath.Dir(loaded.Path)
+	hasVerified, hasPending, hasNotChecked := false, false, false
+	checkpointResults := make([]map[string]any, 0, len(*forecast.ActivityCheckpoints))
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		artifact, err := BuildLifecycleTarget(loaded.Model, question.ID, forecast.ID, checkpoint.HeadEventID)
+		if err != nil {
+			return failedLayerWithEvidence(layer.Name, "activity.target_build_failed", evidence)
+		}
+		declaredTarget := lifecycleIntegrityTarget(checkpoint.Integrity)
+		if declaredTarget == nil || declaredTarget.Scope != artifact.Scope || declaredTarget.Canonicalization != TargetCanonicalization || declaredTarget.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+			return failedLayerWithEvidence(layer.Name, "activity.target_metadata_mismatch", evidence)
+		}
+		row := map[string]any{"checkpoint_id": checkpoint.ID, "head_event_id": checkpoint.HeadEventID, "target_path": declaredTarget.ArtifactPath, "target_sha256": artifact.SHA256}
+		targetBytes, err := readConfinedArtifact(root, string(declaredTarget.ArtifactPath), maxTargetBytes)
+		if err != nil {
+			row["state"] = ActivityNotChecked
+			checkpointResults = append(checkpointResults, row)
+			hasNotChecked = true
+			continue
+		}
+		if !bytes.Equal(targetBytes, artifact.Bytes) {
+			evidence["checkpoints"] = append(checkpointResults, row)
+			return failedLayerWithEvidence(layer.Name, "activity.target_mismatch", evidence)
+		}
+		var timestamps []ledger.RFC3161Timestamp
+		integrityState := ledger.IntegrityPending
+		switch {
+		case checkpoint.Integrity.Pending != nil:
+			timestamps = checkpoint.Integrity.Pending.Timestamps
+		case checkpoint.Integrity.Verified != nil:
+			integrityState = ledger.IntegrityVerified
+			timestamps = checkpoint.Integrity.Verified.Timestamps
+		case checkpoint.Integrity.Failed != nil:
+			evidence["checkpoints"] = checkpointResults
+			return failedLayerWithEvidence(layer.Name, "activity.imported_failed", evidence)
+		}
+		results := inspectTimestampEntries(ctx, root, artifact.Bytes, timestamps)
+		row["timestamps"] = results
+		row["state"] = integrityState
+		checkpointResults = append(checkpointResults, row)
+		verifiedHere, pendingHere := false, len(results) == 0
+		for _, result := range results {
+			if result.CheckState == LayerFail {
+				evidence["checkpoints"] = checkpointResults
+				return failedLayerWithEvidence(layer.Name, "activity.timestamp_mismatch", evidence)
+			}
+			if result.CheckState == LayerPass && result.State == ledger.RFC3161Verified {
+				verifiedHere = true
+			}
+			if result.CheckState == LayerPending || result.CheckState == LayerNotChecked || result.State == ledger.RFC3161Pending {
+				pendingHere = true
+			}
+		}
+		hasVerified = hasVerified || verifiedHere
+		hasPending = hasPending || pendingHere
+	}
+	evidence["checkpoints"] = checkpointResults
+	layer.State, layer.ReasonCodes = classifyActivityEvidence(activity, hasVerified, hasPending, hasNotChecked)
+	return layer
+}
+
+func activityEvidence(activity ActivityResult) map[string]any {
+	evidence := map[string]any{
+		"active": activity.Active, "event_count": activity.EventCount, "coverage": activity.Coverage,
+	}
+	if activity.LastEventID != "" {
+		evidence["last_event_id"], evidence["last_event_type"] = activity.LastEventID, activity.LastEventType
+		evidence["last_effective_at"], evidence["last_recorded_at"] = activity.LastEffectiveAt, activity.LastRecordedAt
+	}
+	if activity.CoveredHead != "" {
+		evidence["covered_head"] = activity.CoveredHead
+	}
+	return evidence
+}
+
+func classifyActivityEvidence(activity ActivityResult, hasVerified, hasPending, hasNotChecked bool) (LayerState, []string) {
+	if hasNotChecked {
+		return LayerNotChecked, []string{"activity.declared_evidence_missing"}
+	}
+	if activity.Coverage == ActivityPartial && hasVerified {
+		return LayerPass, []string{"activity.prefix_verified_current_head_uncovered"}
+	}
+	if activity.Coverage == ActivityPending || hasPending && !hasVerified {
+		return LayerPending, []string{"activity.evidence_pending"}
+	}
+	if hasVerified {
+		return LayerPass, []string{"activity.current_head_verified"}
+	}
+	return LayerNotChecked, []string{"activity.evidence_not_checked"}
 }
 
 func selectVerificationQuestions(model *ledger.Ledger, questionID, forecastID ledger.Slug) ([]ledger.Question, error) {

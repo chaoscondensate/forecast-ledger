@@ -1,7 +1,7 @@
 # Verify ledger evidence
 
 <!-- doc-metadata
-coverage: v0.9.1
+coverage: v0.10.0
 reviewed: 2026-09-22
 owner: security
 generated: false
@@ -31,9 +31,9 @@ and again after redirects. A rejected or unavailable source is `not_checked`;
 it is not evidence that the recorded outcome is false.
 
 Narrow the report with `--question`; `--forecast` also requires its question.
-The ordered layers are document validity, content binding, existence timing,
-reveal authentication, and outcome evidence. Human, plain, and JSON output
-report each layer separately.
+The ordered layers are document validity, content binding, activity, existence
+timing, reveal authentication, and outcome evidence. Human, plain, and JSON
+output report each layer separately.
 
 Existence timing rebuilds the exact target and locally verifies every retained
 RFC 3161 request, response, and CA bundle. One complete valid entry passes. It
@@ -47,6 +47,25 @@ state, not its immutable `forecast-envelope/v2` target. Existing target and
 timestamp verification can therefore still pass after lifecycle activity; the
 report presents current activity separately and does not call an inactive
 forecast active merely because its evidence passes.
+
+Activity reports the derived active state, event count, last event identity and
+times, covered head, and one coverage value:
+
+- `unbound`: no lifecycle checkpoint is declared; this observation cannot make
+  the aggregate pass;
+- `partial`: verified evidence covers an older prefix and a later event exists;
+- `pending`: retained checkpoint evidence is not yet verified;
+- `not_checked`: declared local evidence is unavailable or incomplete;
+- `verified`: the current event head is covered by locally verified evidence;
+  and
+- `failed`: a covered prefix, target, timestamp, identity, or checkpoint order
+  does not verify.
+
+Each checkpoint is rebuilt through its exact head and checked against its
+canonical target, digest, RFC 3161 request and response, metadata, and retained
+trust bytes. This detects deletion, alteration, and reordering within a covered
+prefix. It cannot prove completeness after every independent observation of a
+removed event has also been deleted.
 
 The aggregate precedence is fail, not checked, pending, no evidence, then pass.
 `pass` requires at least one applicable evidence layer. An empty ledger or a

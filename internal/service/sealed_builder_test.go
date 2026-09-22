@@ -55,17 +55,18 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	}
 }
 
-func TestBuildInitialSealedLedgerRejectsMissingMirrorBeforeEntropy(t *testing.T) {
+func TestBuildInitialSealedLedgerRejectsMissingRepresentationsBeforeEntropy(t *testing.T) {
 	root, err := BuildLedgerRoot(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "andrey", ForecasterName: "Andrey"}, fixedTestClock{value: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	input := binaryInitialQuestion()
 	input.InitialForecast.Visibility = ledger.VisibilitySealed
+	input.InitialForecast.Representations = nil
 	counting := &countingTestRandom{}
 	_, err = BuildInitialSealedLedger(context.Background(), root, input, Effects{Clock: fixedTestClock{}, Random: counting})
 	if app.ErrorCodeOf(err) != app.CodeInvalidData {
-		t.Fatalf("missing mirror error = %v", err)
+		t.Fatalf("missing representations error = %v", err)
 	}
 	if counting.calls != 0 {
 		t.Fatalf("entropy calls = %d", counting.calls)

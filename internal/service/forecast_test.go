@@ -47,6 +47,51 @@ func TestForecastListAndShowExposeRepresentationKinds(t *testing.T) {
 	}
 }
 
+func TestDeriveActivitySeparatesCurrentStateFromCheckpointCoverage(t *testing.T) {
+	events := []ledger.LifecycleEvent{
+		{ID: "event-withdrawn", Type: ledger.LifecycleWithdrawn, EffectiveAt: "2026-02-01T00:00:00Z", RecordedAt: "2026-02-01T00:00:01Z"},
+		{ID: "event-reaffirmed", Type: ledger.LifecycleReaffirmed, EffectiveAt: "2026-02-02T00:00:00Z", RecordedAt: "2026-02-02T00:00:01Z"},
+	}
+	forecast := ledger.Forecast{LifecycleEvents: &events}
+	activity := deriveActivity(forecast)
+	if !activity.Active || activity.EventCount != 2 || activity.LastEventID != "event-reaffirmed" || activity.Coverage != ActivityUnbound {
+		t.Fatalf("unbound activity = %#v", activity)
+	}
+	checkpoints := []ledger.ActivityCheckpoint{{
+		ID: "checkpoint-event-withdrawn", HeadEventID: "event-withdrawn", RecordedAt: "2026-02-01T00:00:02Z",
+		Integrity: ledger.LifecycleIntegrity{Verified: &ledger.VerifiedLifecycleIntegrity{Status: ledger.IntegrityVerified}},
+	}}
+	forecast.ActivityCheckpoints = &checkpoints
+	activity = deriveActivity(forecast)
+	if activity.Coverage != ActivityPartial || activity.CoveredHead != "event-withdrawn" || !activity.Active {
+		t.Fatalf("partial activity = %#v", activity)
+	}
+	checkpoints[0].HeadEventID = "event-reaffirmed"
+	activity = deriveActivity(forecast)
+	if activity.Coverage != ActivityVerified {
+		t.Fatalf("verified activity = %#v", activity)
+	}
+	checkpoints[0].Integrity = ledger.LifecycleIntegrity{Pending: &ledger.PendingLifecycleIntegrity{Status: ledger.IntegrityPending}}
+	if activity = deriveActivity(forecast); activity.Coverage != ActivityPending {
+		t.Fatalf("pending activity = %#v", activity)
+	}
+	checkpoints[0].Integrity = ledger.LifecycleIntegrity{Failed: &ledger.FailedLifecycleIntegrity{Status: ledger.IntegrityFailed}}
+	if activity = deriveActivity(forecast); activity.Coverage != ActivityFailed {
+		t.Fatalf("failed activity = %#v", activity)
+	}
+}
+
+func TestActivityClassificationDoesNotLetOlderVerifiedEvidenceOverrideCurrentPendingHead(t *testing.T) {
+	state, reasons := classifyActivityEvidence(ActivityResult{Coverage: ActivityPending}, true, true, false)
+	if state != LayerPending || len(reasons) != 1 || reasons[0] != "activity.evidence_pending" {
+		t.Fatalf("current pending head classified as %s %v", state, reasons)
+	}
+	state, reasons = classifyActivityEvidence(ActivityResult{Coverage: ActivityPartial}, true, false, false)
+	if state != LayerPass || len(reasons) != 1 || reasons[0] != "activity.prefix_verified_current_head_uncovered" {
+		t.Fatalf("verified older prefix classified as %s %v", state, reasons)
+	}
+}
+
 func TestForecastFileMutationIsMinimalAndStdinReadsWork(t *testing.T) {
 	raw, err := fs.ReadFile(contractschema.ValidExamples(), "individual-ledger.json")
 	if err != nil {

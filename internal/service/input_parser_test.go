@@ -105,3 +105,54 @@ func TestDecodeOperationInputPreservesStructuredSchemaIssueLocations(t *testing.
 		t.Fatalf("issue = %#v", issues[0])
 	}
 }
+
+func TestProtectedInputMissingRepresentationsNamesAbsentPropertyWithoutInventedLine(t *testing.T) {
+	for _, input := range []string{"{\n  \"rationale\": \"private\"\n}\n", "rationale: private\n"} {
+		var destination SealedForecastPrivateInput
+		err := DecodeOperationInput(t.Context(), "-", strings.NewReader(input), InputSchemaForecastSealPrivate, &destination)
+		var applicationErr *app.Error
+		if !errors.As(err, &applicationErr) {
+			t.Fatalf("error = %#v", err)
+		}
+		issues, ok := applicationErr.Details["issues"].([]document.Diagnostic)
+		if !ok || len(issues) != 1 {
+			t.Fatalf("issues = %#v", applicationErr.Details["issues"])
+		}
+		if issues[0].Code != "schema.required" || issues[0].Location.Pointer != "/representations" || issues[0].Location.Start.Line != 0 || issues[0].Location.Start.Column != 0 {
+			t.Fatalf("missing-property issue = %#v", issues[0])
+		}
+	}
+}
+
+func TestProtectedInputEmptyKeyFactorUsesExactNodeLocation(t *testing.T) {
+	input := "representations:\n  - kind: probability\n    outcome: true\n    probability: '0.5'\nkey_factors:\n  - ok\n  - ''\n"
+	var destination SealedForecastPrivateInput
+	err := DecodeOperationInput(t.Context(), "-", strings.NewReader(input), InputSchemaForecastSealPrivate, &destination)
+	var applicationErr *app.Error
+	if !errors.As(err, &applicationErr) {
+		t.Fatalf("error = %#v", err)
+	}
+	issues := applicationErr.Details["issues"].([]document.Diagnostic)
+	if len(issues) != 1 || issues[0].Location.Pointer != "/key_factors/1" || issues[0].Location.Start.Line != 7 {
+		t.Fatalf("key-factor issue = %#v", issues)
+	}
+}
+
+func FuzzDecodeProtectedForecastInputDiagnostics(f *testing.F) {
+	for _, seed := range []string{
+		`{}`,
+		`{"representations":[],"unknown":"private"}`,
+		`{"representations":[{"kind":"probability","outcome":true,"probability":"2"}]}`,
+		"representations:\n  - kind: probability\n    outcome: true\n    probability: '0.5'\nkey_factors:\n  - ''\n",
+		"representations: [\n",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		if len(input) > 16<<10 {
+			t.Skip()
+		}
+		var destination SealedForecastPrivateInput
+		_ = DecodeOperationInput(t.Context(), "-", strings.NewReader(input), InputSchemaForecastSealPrivate, &destination)
+	})
+}

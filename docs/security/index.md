@@ -43,6 +43,14 @@ expiry, and reaffirmation change the derived active state without invalidating
 the original target or its timestamp. Consumers must check both evidence
 validity and current activity instead of treating either as the other.
 
+An activity checkpoint binds `forecast-lifecycle/v1` bytes for one exact event
+prefix to retained RFC 3161 evidence. It can detect changes or deletion inside
+that covered prefix. A later event makes older verified coverage partial; it
+does not invalidate the older proof. No local format can prove that a deleted
+event existed after the event, its checkpoint, and every independent copy of
+their evidence have all been removed. Verification reports this completeness
+limit instead of treating an unbound event stream as verified.
+
 Ordinary public ledger values supplied through CLI flags are visible in process
 listings, shell history, terminal logs, and job metadata. Do not place a private
 forecast value, rationale, key factor, working comment, raw key, salt, or

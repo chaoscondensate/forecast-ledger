@@ -43,6 +43,27 @@ type sealV2Vector struct {
 	} `json:"expected"`
 }
 
+type sealPresenceVector struct {
+	QuestionID         string `json:"question_id"`
+	QuestionRevisionID string `json:"question_revision_id"`
+	ForecastID         string `json:"forecast_id"`
+	KeyHint            string `json:"key_hint"`
+	Material           struct {
+		SaltHex  string `json:"salt_hex"`
+		KeyHex   string `json:"key_hex"`
+		NonceHex string `json:"nonce_hex"`
+	} `json:"material"`
+	Cases []struct {
+		Name     string        `json:"name"`
+		Bundle   PrivateBundle `json:"bundle"`
+		Expected struct {
+			CanonicalPlaintext string `json:"canonical_plaintext"`
+			CommitmentSHA256   string `json:"commitment_sha256"`
+			CiphertextBase64   string `json:"ciphertext_base64"`
+		} `json:"expected"`
+	} `json:"cases"`
+}
+
 func TestSealMatchesPinnedV2VectorByteForByte(t *testing.T) {
 	vector := loadSealV2Vector(t)
 	material := append(decodeHex(t, vector.Material.SaltHex), decodeHex(t, vector.Material.KeyHex)...)
@@ -80,6 +101,34 @@ func TestSealMatchesPinnedV2VectorByteForByte(t *testing.T) {
 	opened, err := Open(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), sealed.Commitment)
 	if err != nil || !reflect.DeepEqual(opened.Bundle, vector.Bundle) || string(opened.KeyHex) != vector.Material.KeyHex || string(opened.Plaintext) != vector.Expected.CanonicalPlaintext {
 		t.Fatalf("opened = %#v, error = %v", opened, err)
+	}
+}
+
+func TestSealMatchesPinnedPresenceVectorsByteForByte(t *testing.T) {
+	data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-seal-v2-presence.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vector sealPresenceVector
+	if err := json.Unmarshal(data, &vector); err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range vector.Cases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			material := append(decodeHex(t, vector.Material.SaltHex), decodeHex(t, vector.Material.KeyHex)...)
+			material = append(material, decodeHex(t, vector.Material.NonceHex)...)
+			sealed, err := Seal(t.Context(), ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), testCase.Bundle, vector.KeyHint, vectorEntropy{reader: bytes.NewReader(material)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(sealed.Commitment.CommitmentHash.Value) != testCase.Expected.CommitmentSHA256 || string(sealed.Commitment.Encryption.Ciphertext) != testCase.Expected.CiphertextBase64 {
+				t.Fatalf("commitment differs: %#v", sealed.Commitment)
+			}
+			opened, err := Open(sealed.KeyFile, ledger.Slug(vector.QuestionID), ledger.Slug(vector.QuestionRevisionID), ledger.Slug(vector.ForecastID), sealed.Commitment)
+			if err != nil || string(opened.Plaintext) != testCase.Expected.CanonicalPlaintext || !reflect.DeepEqual(opened.Bundle, testCase.Bundle) {
+				t.Fatalf("presence round trip = %#v, %v", opened.Bundle, err)
+			}
+		})
 	}
 }
 
@@ -142,10 +191,10 @@ func loadSealV2Vector(t *testing.T) sealV2Vector {
 }
 
 func testPrivateBundle() PrivateBundle {
+	rationale, factors, comment := "private", []string{}, "private"
 	return PrivateBundle{
-		QuestionRevisionID: "r-one", ForecastedAt: "2026-01-01T00:00:00Z", RecordedAt: "2026-01-01T00:01:00Z",
 		Representations: []ledger.ForecastRepresentation{{Probability: &ledger.ProbabilityRepresentation{Kind: ledger.RepresentationProbability, Outcome: true, Probability: "0.5"}}},
-		Rationale:       "private", KeyFactors: []string{}, Comment: "private",
+		Rationale:       &rationale, KeyFactors: &factors, Comment: &comment,
 	}
 }
 

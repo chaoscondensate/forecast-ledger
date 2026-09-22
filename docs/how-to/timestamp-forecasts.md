@@ -1,4 +1,4 @@
-# Timestamp a forecast
+# Timestamp forecast and lifecycle targets
 
 <!-- doc-metadata
 coverage: current-main
@@ -60,6 +60,24 @@ verified built-in response and retains:
 - the exact ledger-relative PEM CA bundle. Built-in trust is materialized at
   `trust/rfc3161/<provider>-<sha256>.pem`.
 
+To timestamp an exact activity prefix, select its head:
+
+```sh
+forecast-ledger timestamp stamp \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --scope lifecycle \
+  --head withdraw-001
+```
+
+Lifecycle evidence uses
+`proofs/targets/f-launch-002.lifecycle.withdraw-001.json` and
+`proofs/timestamps/f-launch-002.lifecycle.withdraw-001/<tsa-id>/...`. A
+successful or retained-pending attempt appends the exact-head activity
+checkpoint, or updates that checkpoint on retry, through the same atomic
+journal as its resources. Evidence for other heads is preserved.
+
 `<tsa-id>` is a stable short digest of the exact TSA URL. A custom URL must be
 public HTTPS without credentials, query, fragment, or a non-default port.
 Private, loopback, link-local, reserved, and redirect-to-other-origin
@@ -90,6 +108,10 @@ forecast-ledger timestamp verify \
   --question q-launch \
   --forecast f-launch-002
 ```
+
+For lifecycle evidence, add `--scope lifecycle --head <event-id>` to status or
+verify. These commands inspect only that checkpoint and its retained local
+bytes.
 
 Both commands are local. They read the target, request, response, declared
 metadata, and retained CA bundle. Verify checks request/response nonce and

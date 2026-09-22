@@ -73,6 +73,8 @@ type TimestampAttemptResult struct {
 type TimestampArtifactResult struct {
 	QuestionID       ledger.Slug              `json:"question_id"`
 	ForecastID       ledger.Slug              `json:"forecast_id"`
+	HeadEventID      ledger.Slug              `json:"head_event_id,omitempty"`
+	Scope            TargetScope              `json:"scope"`
 	SelectionMode    string                   `json:"selection_mode,omitempty"`
 	SelectedProvider string                   `json:"selected_provider,omitempty"`
 	Attempts         []TimestampAttemptResult `json:"attempts,omitempty"`
@@ -103,11 +105,15 @@ type TimestampStampOptions struct {
 	CABundlePath string
 	Effects      Effects
 	HTTPClient   *rfc3161.HTTPClient
+	Scope        TargetScope
+	HeadEventID  ledger.Slug
 }
 
 type TimestampVerifyOptions struct {
-	DryRun  bool
-	Effects Effects
+	DryRun      bool
+	Effects     Effects
+	Scope       TargetScope
+	HeadEventID ledger.Slug
 }
 
 type timestampPaths struct {
@@ -190,6 +196,14 @@ func TimestampEvidencePaths(forecastID ledger.Slug, tsaURL string) (ledger.Relat
 	return timestampEvidencePathsForEndpoint(forecastID, normalized)
 }
 
+func timestampEvidencePathsForArtifact(artifact TargetArtifact, endpoint string) (ledger.RelativePath, ledger.RelativePath, error) {
+	evidenceID := artifact.ForecastID
+	if artifact.Scope == LifecycleTargetSchema {
+		evidenceID = ledger.Slug(string(artifact.ForecastID) + ".lifecycle." + string(artifact.HeadEventID))
+	}
+	return timestampEvidencePathsForEndpoint(evidenceID, endpoint)
+}
+
 func timestampEvidencePathsForEndpoint(forecastID ledger.Slug, endpoint string) (ledger.RelativePath, ledger.RelativePath, error) {
 	if endpoint == "" {
 		return "", "", app.NewError(app.CodeInvalidData, "timestamp authority endpoint is missing", nil)
@@ -207,14 +221,15 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 	if options.Offline {
 		return TimestampArtifactResult{}, app.NewError(app.CodeNetworkDisabled, "timestamp stamp requires network access", nil)
 	}
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	subject, err := timestampPreflightScoped(loaded.Model, questionID, forecastID, options.Scope, options.HeadEventID)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
+	artifact := subject.Artifact
 	root := filepath.Dir(loaded.Path)
 	resolver, err := storage.NewPathResolver(root)
 	if err != nil {
@@ -252,7 +267,7 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 			return result, app.NewError(app.CodeInvalidData, "timestamp CA bundle is invalid", nil)
 		}
 		bundleDigest := sha256.Sum256(candidate.CABundle)
-		requestPath, responsePath, pathErr := timestampEvidencePathsForEndpoint(forecastID, candidate.TSAURL)
+		requestPath, responsePath, pathErr := timestampEvidencePathsForArtifact(artifact, candidate.TSAURL)
 		if pathErr != nil {
 			return result, pathErr
 		}
@@ -281,7 +296,7 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 				return result, app.NewError(app.CodeConflict, "timestamp response exists without its request", nil)
 			}
 		}
-		for _, existing := range integrityTimestamps(forecast.Integrity) {
+		for _, existing := range timestampSubjectTimestamps(subject) {
 			if existing.TSAURL == candidate.TSAURL && (existing.RequestPath != requestPath || existing.ResponsePath != responsePath || existing.CABundlePath == nil || *existing.CABundlePath != candidate.CABundlePath) {
 				return result, app.NewError(app.CodeConflict, "timestamp authority already has different retained artifact paths", nil)
 			}
@@ -313,14 +328,15 @@ func CommitTimestampStamp(ctx context.Context, path string, questionID, forecast
 	if err := options.Effects.Validate(); err != nil {
 		options.Effects = ProductionEffects()
 	}
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return planned, err
 	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	subject, err := timestampPreflightScoped(loaded.Model, questionID, forecastID, options.Scope, options.HeadEventID)
 	if err != nil {
 		return planned, err
 	}
+	artifact := subject.Artifact
 	root := filepath.Dir(loaded.Path)
 	resolver, err := storage.NewPathResolver(root)
 	if err != nil {
@@ -329,7 +345,7 @@ func CommitTimestampStamp(ctx context.Context, path string, questionID, forecast
 
 	// Reuse complete matching evidence before entropy, network, or writes.
 	for index, entry := range planned.Entries {
-		for _, existing := range integrityTimestamps(forecast.Integrity) {
+		for _, existing := range timestampSubjectTimestamps(subject) {
 			if existing.TSAURL != entry.TSAURL || existing.RequestPath != entry.RequestPath || existing.ResponsePath != entry.ResponsePath || existing.CABundlePath == nil || entry.CABundlePath == nil || *existing.CABundlePath != *entry.CABundlePath {
 				continue
 			}
@@ -429,7 +445,7 @@ func CommitTimestampStamp(ctx context.Context, path string, questionID, forecast
 		verifiedAt := ledger.Timestamp(options.Effects.Clock.Now().UTC().Format(time.RFC3339Nano))
 		planned.SelectedProvider = candidate.ProviderID
 		planned.RequestSummary = TimestampRequestSummary{RequestCount: requestCount, TSAOrigin: safeTSAOrigin(entry.TSAURL)}
-		committed, commitErr := commitTimestampEvidence(ctx, loaded.Path, questionID, forecastID, artifact, entry, requestBytes, responseBytes, caBytes, metadata, verifiedAt, verifyErr == nil, selection.Mode != timestampSelectionCustom, planned)
+		committed, commitErr := commitTimestampEvidence(ctx, loaded.Path, questionID, forecastID, options.Scope, options.HeadEventID, artifact, entry, requestBytes, responseBytes, caBytes, metadata, verifiedAt, verifyErr == nil, selection.Mode != timestampSelectionCustom, planned)
 		if commitErr != nil {
 			return committed, commitErr
 		}
@@ -454,28 +470,37 @@ func CommitTimestampStamp(ctx context.Context, path string, questionID, forecast
 }
 
 func TimestampStatusFor(ctx context.Context, path string, questionID, forecastID ledger.Slug) (TimestampArtifactResult, error) {
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	return TimestampStatusForScoped(ctx, path, questionID, forecastID, TargetScopeForecast, "")
+}
+
+func TimestampStatusForScoped(ctx context.Context, path string, questionID, forecastID ledger.Slug, scope TargetScope, headEventID ledger.Slug) (TimestampArtifactResult, error) {
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	subject, err := timestampPreflightScoped(loaded.Model, questionID, forecastID, scope, headEventID)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
+	artifact, forecast := subject.Artifact, subject.Forecast
 	result := baseTimestampResult(artifact)
 	root := filepath.Dir(loaded.Path)
 	result.TargetPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))
 	switch {
-	case forecast.Integrity.Unanchored != nil:
+	case subject.LifecycleCheckpoint == nil && artifact.Scope == LifecycleTargetSchema:
+		result.State = TimestampUnanchored
+		result.NextActions = []string{"timestamp stamp --scope lifecycle --head " + string(headEventID)}
+		return result, nil
+	case artifact.Scope == ForecastEnvelopeSchema && forecast.Integrity.Unanchored != nil:
 		result.State = TimestampUnanchored
 		result.NextActions = []string{"timestamp stamp --tsa-url <url> --ca-bundle <relative.pem>"}
 		return result, nil
-	case forecast.Integrity.Failed != nil:
+	case timestampSubjectFailed(subject):
 		result.State = TimestampFailed
 		result.NextActions = []string{"forecast add --supersedes-forecast-id " + string(forecastID)}
 		return result, nil
 	}
-	result.Entries = inspectTimestampEntries(ctx, root, artifact.Bytes, integrityTimestamps(forecast.Integrity))
+	result.Entries = inspectTimestampEntries(ctx, root, artifact.Bytes, timestampSubjectTimestamps(subject))
 	result.State = stateFromEntries(result.Entries)
 	if result.State == TimestampPending || result.State == TimestampInconsistent {
 		result.NextActions = []string{"timestamp verify"}
@@ -487,18 +512,19 @@ func CommitTimestampVerify(ctx context.Context, path string, questionID, forecas
 	if err := options.Effects.Validate(); err != nil {
 		options.Effects = ProductionEffects()
 	}
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
 	if err != nil {
 		return TimestampVerifyResult{}, err
 	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	subject, err := timestampPreflightScoped(loaded.Model, questionID, forecastID, options.Scope, options.HeadEventID)
 	if err != nil {
 		return TimestampVerifyResult{}, err
 	}
+	artifact := subject.Artifact
 	result := TimestampVerifyResult{TimestampArtifactResult: baseTimestampResult(artifact)}
 	root := filepath.Dir(loaded.Path)
 	result.TargetPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))
-	entries := integrityTimestamps(forecast.Integrity)
+	entries := timestampSubjectTimestamps(subject)
 	if len(entries) == 0 {
 		result.State = TimestampUnanchored
 		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotApplicable, ReasonCodes: []string{"timing.no_evidence"}}
@@ -541,27 +567,77 @@ func CommitTimestampVerify(ctx context.Context, path string, questionID, forecas
 		return result, nil
 	}
 	verifiedAt := ledger.Timestamp(options.Effects.Clock.Now().UTC().Format(time.RFC3339Nano))
-	committed, err := promoteTimestampEntries(ctx, loaded.Path, questionID, forecastID, artifact, verified, verifiedAt, result.TimestampArtifactResult)
+	committed, err := promoteTimestampEntries(ctx, loaded.Path, questionID, forecastID, options.Scope, options.HeadEventID, artifact, verified, verifiedAt, result.TimestampArtifactResult)
 	result.TimestampArtifactResult = committed
 	return result, err
 }
 
 func timestampPreflight(model *ledger.Ledger, questionID, forecastID ledger.Slug) (TargetArtifact, ledger.Forecast, error) {
+	subject, err := timestampPreflightScoped(model, questionID, forecastID, TargetScopeForecast, "")
+	return subject.Artifact, subject.Forecast, err
+}
+
+type timestampSubject struct {
+	Artifact            TargetArtifact
+	Forecast            ledger.Forecast
+	LifecycleCheckpoint *ledger.ActivityCheckpoint
+}
+
+func timestampPreflightScoped(model *ledger.Ledger, questionID, forecastID ledger.Slug, scope TargetScope, headEventID ledger.Slug) (timestampSubject, error) {
+	if scope == "" {
+		scope = TargetScopeForecast
+	}
+	if err := validateTargetSelection(scope, false, questionID, forecastID, headEventID); err != nil {
+		return timestampSubject{}, err
+	}
 	artifact, err := BuildForecastTarget(model, questionID, forecastID)
+	if scope == TargetScopeLifecycle {
+		artifact, err = BuildLifecycleTarget(model, questionID, forecastID, headEventID)
+	}
 	if err != nil {
-		return TargetArtifact{}, ledger.Forecast{}, err
+		return timestampSubject{}, err
 	}
 	_, _, _, forecast, err := selectForecast(model, questionID, forecastID)
 	if err != nil {
-		return TargetArtifact{}, ledger.Forecast{}, err
+		return timestampSubject{}, err
 	}
-	if forecast.Integrity.Failed != nil {
-		return TargetArtifact{}, ledger.Forecast{}, app.NewError(app.CodeConflict, "failed integrity is terminal; append a new forecast revision", nil)
+	subject := timestampSubject{Artifact: artifact, Forecast: forecast}
+	if scope == TargetScopeLifecycle && forecast.ActivityCheckpoints != nil {
+		for index := range *forecast.ActivityCheckpoints {
+			if (*forecast.ActivityCheckpoints)[index].HeadEventID == headEventID {
+				checkpoint := (*forecast.ActivityCheckpoints)[index]
+				if target := lifecycleIntegrityTarget(checkpoint.Integrity); target != nil {
+					if target.Scope != artifact.Scope || target.Canonicalization != TargetCanonicalization || target.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+						return timestampSubject{}, app.NewError(app.CodeVerification, "recorded lifecycle target metadata does not match its canonical prefix", nil)
+					}
+					artifact.RelativePath = target.ArtifactPath
+				}
+				subject.LifecycleCheckpoint = &checkpoint
+				subject.Artifact = artifact
+				break
+			}
+		}
 	}
-	return artifact, forecast, nil
+	if timestampSubjectFailed(subject) {
+		return timestampSubject{}, app.NewError(app.CodeConflict, "failed integrity is terminal for the selected evidence scope", nil)
+	}
+	return subject, nil
 }
 
-func commitTimestampEvidence(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, entry TimestampEntryResult, requestBytes, responseBytes, caBytes []byte, metadata rfc3161.Metadata, verifiedAt ledger.Timestamp, verified, materializeCA bool, result TimestampArtifactResult) (TimestampArtifactResult, error) {
+func lifecycleIntegrityTarget(integrity ledger.LifecycleIntegrity) *ledger.LifecycleTarget {
+	switch {
+	case integrity.Pending != nil:
+		return &integrity.Pending.Target
+	case integrity.Verified != nil:
+		return &integrity.Verified.Target
+	case integrity.Failed != nil:
+		return integrity.Failed.Target
+	default:
+		return nil
+	}
+}
+
+func commitTimestampEvidence(ctx context.Context, path string, questionID, forecastID ledger.Slug, scope TargetScope, headEventID ledger.Slug, artifact TargetArtifact, entry TimestampEntryResult, requestBytes, responseBytes, caBytes []byte, metadata rfc3161.Metadata, verifiedAt ledger.Timestamp, verified, materializeCA bool, result TimestampArtifactResult) (TimestampArtifactResult, error) {
 	root := filepath.Dir(path)
 	resolver, err := storage.NewPathResolver(root)
 	if err != nil {
@@ -623,18 +699,15 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 		if selectErr != nil {
 			return nil, selectErr
 		}
-		if forecast.Integrity.Failed != nil {
-			return nil, app.NewError(app.CodeConflict, "failed integrity is terminal; append a new forecast revision", nil)
-		}
-		currentArtifact, _, preflightErr := timestampPreflight(model, questionID, forecastID)
-		if preflightErr != nil || currentArtifact.SHA256 != artifact.SHA256 || !bytes.Equal(currentArtifact.Bytes, artifact.Bytes) {
-			return nil, app.NewError(app.CodeConflict, "forecast target changed while the timestamp authority request was in flight", nil)
+		currentSubject, preflightErr := timestampPreflightScoped(model, questionID, forecastID, scope, headEventID)
+		if preflightErr != nil || currentSubject.Artifact.SHA256 != artifact.SHA256 || !bytes.Equal(currentSubject.Artifact.Bytes, artifact.Bytes) {
+			return nil, app.NewError(app.CodeConflict, "selected target changed while the timestamp authority request was in flight", nil)
 		}
 		currentCA, caErr := readOptionalBoundedFile(caAbsolute, maxTimestampCABundleBytes)
 		if caErr != nil || currentCA != nil && !bytes.Equal(currentCA, caBytes) || !materializeCA && currentCA == nil {
 			return nil, app.NewError(app.CodeConflict, "timestamp CA bundle changed while the request was in flight", nil)
 		}
-		if recordedForecastTarget(model, questionID, forecastID) != nil && !sameTargetMetadata(*recordedForecastTarget(model, questionID, forecastID), TargetMetadataFor(artifact)) {
+		if target := recordedTargetMetadata(model, artifact); target != nil && (target.scope != artifact.Scope || target.canonicalization != TargetCanonicalization || target.path != artifact.RelativePath || target.digest.Value != ledger.Hex32(artifact.SHA256)) {
 			return nil, app.NewError(app.CodeConflict, "recorded target metadata changed before timestamp commit", nil)
 		}
 		if mkdirErr := os.MkdirAll(filepath.Dir(requestAbsolute), 0o755); mkdirErr != nil {
@@ -700,16 +773,19 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 			}
 		}
 		timestamp := timestampRecord(entry, metadata, verified)
-		updated, updateErr := integrityWithTimestamp(forecast.Integrity, TargetMetadataFor(artifact), timestamp, verifiedAt)
-		if updateErr != nil {
-			return nil, updateErr
+		if artifact.Scope == ForecastEnvelopeSchema {
+			updated, updateErr := integrityWithTimestamp(forecast.Integrity, TargetMetadataFor(artifact), timestamp, verifiedAt)
+			if updateErr != nil {
+				return nil, updateErr
+			}
+			value, encodeErr := jsonPatchValue(updated)
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
+			return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
 		}
-		value, encodeErr := jsonPatchValue(updated)
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
-		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
+		return patchLifecycleTimestamp(parsed, questionPosition, forecastPosition, forecast, artifact, timestamp, verifiedAt)
 	}})
 	if err != nil {
 		return finishRetained(err)
@@ -746,7 +822,7 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 	return result, nil
 }
 
-func promoteTimestampEntries(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, verified map[string]rfc3161.Metadata, verifiedAt ledger.Timestamp, result TimestampArtifactResult) (TimestampArtifactResult, error) {
+func promoteTimestampEntries(ctx context.Context, path string, questionID, forecastID ledger.Slug, scope TargetScope, headEventID ledger.Slug, artifact TargetArtifact, verified map[string]rfc3161.Metadata, verifiedAt ledger.Timestamp, result TimestampArtifactResult) (TimestampArtifactResult, error) {
 	root := filepath.Dir(path)
 	err := storage.UpdateLedger(ctx, path, storage.TransactionOptions{Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, os.DirFS(root)) }, Mutate: func(parsed *document.Document) ([]byte, error) {
 		model, decodeErr := validation.DecodeLedger(parsed)
@@ -757,10 +833,15 @@ func promoteTimestampEntries(ctx context.Context, path string, questionID, forec
 		if selectErr != nil {
 			return nil, selectErr
 		}
-		if recordedForecastTarget(model, questionID, forecastID) == nil || !sameTargetMetadata(*recordedForecastTarget(model, questionID, forecastID), TargetMetadataFor(artifact)) {
+		recorded := recordedTargetMetadata(model, artifact)
+		if recorded == nil || recorded.scope != artifact.Scope || recorded.path != artifact.RelativePath || recorded.digest.Value != ledger.Hex32(artifact.SHA256) {
 			return nil, app.NewError(app.CodeVerification, "stored target metadata does not match the selected forecast", nil)
 		}
-		timestamps := integrityTimestamps(forecast.Integrity)
+		subject, preflightErr := timestampPreflightScoped(model, questionID, forecastID, scope, headEventID)
+		if preflightErr != nil {
+			return nil, preflightErr
+		}
+		timestamps := timestampSubjectTimestamps(subject)
 		for index := range timestamps {
 			metadata, ok := verified[timestampEntryKey(timestamps[index])]
 			if !ok {
@@ -768,19 +849,22 @@ func promoteTimestampEntries(ctx context.Context, path string, questionID, forec
 			}
 			applyVerifiedMetadata(&timestamps[index], metadata)
 		}
-		var external *[]ledger.ExternalAnchor
-		if forecast.Integrity.Pending != nil {
-			external = forecast.Integrity.Pending.ExternalAnchors
-		} else if forecast.Integrity.Verified != nil {
-			external = forecast.Integrity.Verified.ExternalAnchors
+		if artifact.Scope == ForecastEnvelopeSchema {
+			var external *[]ledger.ExternalAnchor
+			if forecast.Integrity.Pending != nil {
+				external = forecast.Integrity.Pending.ExternalAnchors
+			} else if forecast.Integrity.Verified != nil {
+				external = forecast.Integrity.Verified.ExternalAnchors
+			}
+			updated := ledger.Integrity{Verified: &ledger.VerifiedIntegrity{Status: ledger.IntegrityVerified, Target: TargetMetadataFor(artifact), Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}
+			value, encodeErr := jsonPatchValue(updated)
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
+			return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
 		}
-		updated := ledger.Integrity{Verified: &ledger.VerifiedIntegrity{Status: ledger.IntegrityVerified, Target: TargetMetadataFor(artifact), Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}
-		value, encodeErr := jsonPatchValue(updated)
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
-		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
+		return patchLifecyclePromotion(parsed, questionPosition, forecastPosition, forecast, artifact, timestamps, verifiedAt)
 	}})
 	if err != nil {
 		return result, err
@@ -872,6 +956,36 @@ func integrityTimestamps(integrity ledger.Integrity) []ledger.RFC3161Timestamp {
 	}
 }
 
+func lifecycleIntegrityTimestamps(integrity ledger.LifecycleIntegrity) []ledger.RFC3161Timestamp {
+	switch {
+	case integrity.Pending != nil:
+		return append([]ledger.RFC3161Timestamp(nil), integrity.Pending.Timestamps...)
+	case integrity.Verified != nil:
+		return append([]ledger.RFC3161Timestamp(nil), integrity.Verified.Timestamps...)
+	case integrity.Failed != nil && integrity.Failed.Timestamps != nil:
+		return append([]ledger.RFC3161Timestamp(nil), (*integrity.Failed.Timestamps)...)
+	default:
+		return nil
+	}
+}
+
+func timestampSubjectTimestamps(subject timestampSubject) []ledger.RFC3161Timestamp {
+	if subject.Artifact.Scope == LifecycleTargetSchema {
+		if subject.LifecycleCheckpoint == nil {
+			return nil
+		}
+		return lifecycleIntegrityTimestamps(subject.LifecycleCheckpoint.Integrity)
+	}
+	return integrityTimestamps(subject.Forecast.Integrity)
+}
+
+func timestampSubjectFailed(subject timestampSubject) bool {
+	if subject.Artifact.Scope == LifecycleTargetSchema {
+		return subject.LifecycleCheckpoint != nil && subject.LifecycleCheckpoint.Integrity.Failed != nil
+	}
+	return subject.Forecast.Integrity.Failed != nil
+}
+
 func integrityWithTimestamp(current ledger.Integrity, target ledger.ForecastTarget, timestamp ledger.RFC3161Timestamp, verifiedAt ledger.Timestamp) (ledger.Integrity, error) {
 	timestamps := integrityTimestamps(current)
 	replaced := false
@@ -906,6 +1020,115 @@ func integrityWithTimestamp(current ledger.Integrity, target ledger.ForecastTarg
 	return ledger.Integrity{Pending: &ledger.PendingIntegrity{Status: ledger.IntegrityPending, Target: target, Timestamps: timestamps, ExternalAnchors: external}}, nil
 }
 
+func lifecycleIntegrityWithTimestamp(current ledger.LifecycleIntegrity, target ledger.LifecycleTarget, timestamp ledger.RFC3161Timestamp, verifiedAt ledger.Timestamp) ledger.LifecycleIntegrity {
+	timestamps := lifecycleIntegrityTimestamps(current)
+	replaced := false
+	for index := range timestamps {
+		if timestampEntryKey(timestamps[index]) == timestampEntryKey(timestamp) {
+			timestamps[index] = timestamp
+			replaced = true
+		}
+	}
+	if !replaced {
+		timestamps = append(timestamps, timestamp)
+	}
+	var external *[]ledger.ExternalAnchor
+	var existingVerifiedAt ledger.Timestamp
+	if current.Pending != nil {
+		external = current.Pending.ExternalAnchors
+	}
+	if current.Verified != nil {
+		external = current.Verified.ExternalAnchors
+		existingVerifiedAt = current.Verified.VerifiedAt
+	}
+	hasVerified := false
+	for _, item := range timestamps {
+		hasVerified = hasVerified || item.State == ledger.RFC3161Verified
+	}
+	if hasVerified {
+		if existingVerifiedAt != "" {
+			verifiedAt = existingVerifiedAt
+		}
+		return ledger.LifecycleIntegrity{Verified: &ledger.VerifiedLifecycleIntegrity{Status: ledger.IntegrityVerified, Target: target, Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}
+	}
+	return ledger.LifecycleIntegrity{Pending: &ledger.PendingLifecycleIntegrity{Status: ledger.IntegrityPending, Target: target, Timestamps: timestamps, ExternalAnchors: external}}
+}
+
+func patchLifecycleTimestamp(parsed *document.Document, questionPosition, forecastPosition int, forecast ledger.Forecast, artifact TargetArtifact, timestamp ledger.RFC3161Timestamp, recordedAt ledger.Timestamp) ([]byte, error) {
+	base := fmt.Sprintf("/questions/%d/forecasts/%d/activity_checkpoints", questionPosition, forecastPosition)
+	if forecast.ActivityCheckpoints != nil {
+		for index, checkpoint := range *forecast.ActivityCheckpoints {
+			if checkpoint.HeadEventID != artifact.HeadEventID {
+				continue
+			}
+			updated := lifecycleIntegrityWithTimestamp(checkpoint.Integrity, LifecycleTargetMetadataFor(artifact), timestamp, recordedAt)
+			value, err := jsonPatchValue(updated)
+			if err != nil {
+				return nil, err
+			}
+			return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: fmt.Sprintf("%s/%d/integrity", base, index), Value: value}})
+		}
+	}
+	checkpointRecorded := lifecycleCheckpointRecordedAt(forecast, artifact.HeadEventID, recordedAt)
+	checkpoint := ledger.ActivityCheckpoint{
+		ID: ledger.Slug("checkpoint-" + string(artifact.HeadEventID)), HeadEventID: artifact.HeadEventID, RecordedAt: checkpointRecorded,
+		Integrity: lifecycleIntegrityWithTimestamp(ledger.LifecycleIntegrity{}, LifecycleTargetMetadataFor(artifact), timestamp, recordedAt),
+	}
+	value, err := jsonPatchValue(checkpoint)
+	if err != nil {
+		return nil, err
+	}
+	pointer := base
+	if forecast.ActivityCheckpoints != nil {
+		pointer += "/-"
+		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchAdd, Pointer: pointer, Value: value}})
+	}
+	return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchAdd, Pointer: pointer, Value: []any{value}}})
+}
+
+func patchLifecyclePromotion(parsed *document.Document, questionPosition, forecastPosition int, forecast ledger.Forecast, artifact TargetArtifact, timestamps []ledger.RFC3161Timestamp, verifiedAt ledger.Timestamp) ([]byte, error) {
+	if forecast.ActivityCheckpoints == nil {
+		return nil, app.NewError(app.CodeVerification, "activity checkpoint is missing", nil)
+	}
+	for index, checkpoint := range *forecast.ActivityCheckpoints {
+		if checkpoint.HeadEventID != artifact.HeadEventID {
+			continue
+		}
+		var external *[]ledger.ExternalAnchor
+		if checkpoint.Integrity.Pending != nil {
+			external = checkpoint.Integrity.Pending.ExternalAnchors
+		} else if checkpoint.Integrity.Verified != nil {
+			external = checkpoint.Integrity.Verified.ExternalAnchors
+		}
+		updated := ledger.LifecycleIntegrity{Verified: &ledger.VerifiedLifecycleIntegrity{Status: ledger.IntegrityVerified, Target: LifecycleTargetMetadataFor(artifact), Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}
+		value, err := jsonPatchValue(updated)
+		if err != nil {
+			return nil, err
+		}
+		pointer := fmt.Sprintf("/questions/%d/forecasts/%d/activity_checkpoints/%d/integrity", questionPosition, forecastPosition, index)
+		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
+	}
+	return nil, app.NewError(app.CodeVerification, "activity checkpoint head is missing", nil)
+}
+
+func lifecycleCheckpointRecordedAt(forecast ledger.Forecast, head ledger.Slug, observed ledger.Timestamp) ledger.Timestamp {
+	observedTime, observedErr := ledger.ParseTimestamp(observed)
+	if forecast.LifecycleEvents == nil {
+		return observed
+	}
+	for _, event := range *forecast.LifecycleEvents {
+		if event.ID != head {
+			continue
+		}
+		headTime, headErr := ledger.ParseTimestamp(event.RecordedAt)
+		if observedErr != nil || headErr == nil && observedTime.Before(headTime) {
+			return event.RecordedAt
+		}
+		break
+	}
+	return observed
+}
+
 func timestampRecord(entry TimestampEntryResult, metadata rfc3161.Metadata, verified bool) ledger.RFC3161Timestamp {
 	result := ledger.RFC3161Timestamp{Type: "rfc3161", RequestPath: entry.RequestPath, ResponsePath: entry.ResponsePath, TSAURL: entry.TSAURL, HashAlgorithm: rfc3161.HashAlgorithm, State: ledger.RFC3161Pending, CABundlePath: cloneRelativePath(entry.CABundlePath)}
 	if verified {
@@ -930,7 +1153,11 @@ func entryResultFromMetadata(entry ledger.RFC3161Timestamp, metadata rfc3161.Met
 }
 
 func baseTimestampResult(artifact TargetArtifact) TimestampArtifactResult {
-	return TimestampArtifactResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, State: TimestampPending, TargetPath: artifact.RelativePath, TargetSHA256: artifact.SHA256, Recovery: Recovery{State: RecoveryNone}}
+	scope := TargetScopeForecast
+	if artifact.Scope == LifecycleTargetSchema {
+		scope = TargetScopeLifecycle
+	}
+	return TimestampArtifactResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, HeadEventID: artifact.HeadEventID, Scope: scope, State: TimestampPending, TargetPath: artifact.RelativePath, TargetSHA256: artifact.SHA256, Recovery: Recovery{State: RecoveryNone}}
 }
 
 func stateFromEntries(entries []TimestampEntryResult) TimestampState {

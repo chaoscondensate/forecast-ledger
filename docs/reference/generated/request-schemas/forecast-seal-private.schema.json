@@ -192,10 +192,7 @@
         }
       },
       "required": [
-        "representations",
-        "rationale",
-        "key_factors",
-        "comment"
+        "representations"
       ],
       "type": "object"
     },

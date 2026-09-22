@@ -33,30 +33,36 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 	if err := decoder.Decode(&cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 26 {
-		t.Fatalf("got %d invalid cases, want 26", len(cases))
+	if len(cases) != 32 {
+		t.Fatalf("got %d invalid cases, want 32", len(cases))
 	}
 	expectedSemanticCode := map[string]string{
-		"outcome-space-domain-mismatch":          "semantic.domain_kind",
-		"pmf-probabilities-do-not-sum":           "semantic.probability_sum",
-		"pmf-missing-option":                     "semantic.pmf_coverage",
-		"option-set-version-mismatch":            "semantic.option_set_ref",
-		"bin-gap":                                "semantic.bin_continuity",
-		"bin-overlap":                            "semantic.bin_continuity",
-		"binned-pmf-tails-do-not-sum":            "semantic.binned_probability_sum",
-		"noncanonical-numeric-value":             "semantic.point_domain",
-		"quantiles-not-monotonic":                "semantic.quantile_value_order",
-		"cdf-not-monotonic":                      "semantic.cdf_probability_order",
-		"unknown-platform-provenance":            "semantic.unknown_platform",
-		"unknown-group-reference":                "semantic.relationship_group",
-		"duplicate-question-id":                  "semantic.duplicate_question_id",
-		"forecast-before-bound-revision":         "semantic.forecast_revision_chronology",
-		"tampered-revealed-probability":          "semantic.revealed_mirror",
-		"resolved-outcome-outside-domain":        "semantic.resolution_outcome",
-		"invalid-lifecycle-transition":           "semantic.lifecycle_transition",
-		"conditional-reference-cycle":            "semantic.relationship_cycle",
-		"not-applicable-condition-was-satisfied": "semantic.not_applicable_satisfied",
-		"rfc3161-timestamp-after-known-outcome":  "semantic.timestamp_chronology",
+		"outcome-space-domain-mismatch":               "semantic.domain_kind",
+		"pmf-probabilities-do-not-sum":                "semantic.probability_sum",
+		"pmf-missing-option":                          "semantic.pmf_coverage",
+		"option-set-version-mismatch":                 "semantic.option_set_ref",
+		"bin-gap":                                     "semantic.bin_continuity",
+		"bin-overlap":                                 "semantic.bin_continuity",
+		"binned-pmf-tails-do-not-sum":                 "semantic.binned_probability_sum",
+		"noncanonical-numeric-value":                  "semantic.point_domain",
+		"quantiles-not-monotonic":                     "semantic.quantile_value_order",
+		"cdf-not-monotonic":                           "semantic.cdf_probability_order",
+		"unknown-platform-provenance":                 "semantic.unknown_platform",
+		"unknown-group-reference":                     "semantic.relationship_group",
+		"duplicate-question-id":                       "semantic.duplicate_question_id",
+		"forecast-before-bound-revision":              "semantic.forecast_revision_chronology",
+		"tampered-revealed-probability":               "semantic.revealed_mirror",
+		"resolved-outcome-outside-domain":             "semantic.resolution_outcome",
+		"invalid-lifecycle-transition":                "semantic.lifecycle_transition",
+		"lifecycle-effective-before-forecasted":       "semantic.lifecycle_forecast_chronology",
+		"lifecycle-recorded-before-forecast-recorded": "semantic.lifecycle_forecast_chronology",
+		"lifecycle-recorded-before-effective":         "semantic.lifecycle_chronology",
+		"duplicate-lifecycle-event-id":                "semantic.duplicate_lifecycle_event_id",
+		"lifecycle-effective-order-regression":        "semantic.lifecycle_effective_order",
+		"lifecycle-recorded-order-regression":         "semantic.lifecycle_recorded_order",
+		"conditional-reference-cycle":                 "semantic.relationship_cycle",
+		"not-applicable-condition-was-satisfied":      "semantic.not_applicable_satisfied",
+		"rfc3161-timestamp-after-known-outcome":       "semantic.timestamp_chronology",
 	}
 
 	for _, testCase := range cases {

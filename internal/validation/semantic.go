@@ -17,6 +17,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/exact"
 	"github.com/chaoscondensate/forecast-ledger/internal/forecastcrypto"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	targetbytes "github.com/chaoscondensate/forecast-ledger/internal/target"
 )
 
 type SemanticIssue struct {
@@ -175,6 +176,7 @@ func (v *semanticValidator) validateQuestion(index int, question *ledger.Questio
 			v.validateProvenance(forecast.Provenance, fp+"/provenance")
 		}
 		v.validateLifecycleEvents(forecast, fp+"/lifecycle_events")
+		v.validateActivityCheckpoints(question, forecast, fp+"/activity_checkpoints")
 		v.validateIntegrity(forecast.Integrity, fp+"/integrity")
 		v.validateReveal(question.ID, forecast, fp)
 	}
@@ -500,6 +502,8 @@ func (v *semanticValidator) validateLifecycleEvents(forecast *ledger.Forecast, p
 	ids := make([]ledger.Slug, len(*forecast.LifecycleEvents))
 	active := true
 	var previousEffective, previousRecorded time.Time
+	forecasted, forecastedErr := ledger.ParseTimestamp(forecast.ForecastedAt)
+	forecastRecorded, forecastRecordedErr := ledger.ParseTimestamp(forecast.RecordedAt)
 	for index := range *forecast.LifecycleEvents {
 		event := &(*forecast.LifecycleEvents)[index]
 		ids[index] = event.ID
@@ -507,8 +511,14 @@ func (v *semanticValidator) validateLifecycleEvents(forecast *ledger.Forecast, p
 		effective, effectiveErr := ledger.ParseTimestamp(event.EffectiveAt)
 		recorded, recordedErr := ledger.ParseTimestamp(event.RecordedAt)
 		if effectiveErr == nil && recordedErr == nil {
+			if forecastedErr == nil && effective.Before(forecasted) {
+				v.add("semantic.lifecycle_forecast_chronology", ep+"/effective_at", "must not precede forecast.forecasted_at")
+			}
 			if recorded.Before(effective) {
 				v.add("semantic.lifecycle_chronology", ep+"/recorded_at", "must not precede effective_at")
+			}
+			if forecastRecordedErr == nil && recorded.Before(forecastRecorded) {
+				v.add("semantic.lifecycle_forecast_chronology", ep+"/recorded_at", "must not precede forecast.recorded_at")
 			}
 			if !previousEffective.IsZero() && effective.Before(previousEffective) {
 				v.add("semantic.lifecycle_effective_order", ep, "events must be ordered by effective_at")
@@ -535,6 +545,75 @@ func (v *semanticValidator) validateLifecycleEvents(forecast *ledger.Forecast, p
 		}
 	}
 	v.uniqueSlugs(ids, pointer, "semantic.duplicate_lifecycle_event_id")
+}
+
+func (v *semanticValidator) validateActivityCheckpoints(question *ledger.Question, forecast *ledger.Forecast, pointer string) {
+	if forecast.ActivityCheckpoints == nil {
+		return
+	}
+	eventIndexes := make(map[ledger.Slug]int)
+	if forecast.LifecycleEvents != nil {
+		for index, event := range *forecast.LifecycleEvents {
+			eventIndexes[event.ID] = index
+		}
+	}
+	ids := make([]ledger.Slug, len(*forecast.ActivityCheckpoints))
+	heads := make([]ledger.Slug, len(*forecast.ActivityCheckpoints))
+	previousHead := -1
+	var previousRecorded time.Time
+	for index := range *forecast.ActivityCheckpoints {
+		checkpoint := &(*forecast.ActivityCheckpoints)[index]
+		ids[index], heads[index] = checkpoint.ID, checkpoint.HeadEventID
+		cp := fmt.Sprintf("%s/%d", pointer, index)
+		headIndex, exists := eventIndexes[checkpoint.HeadEventID]
+		if !exists {
+			v.add("semantic.activity_checkpoint_head", cp+"/head_event_id", "must reference a lifecycle event")
+		} else {
+			if previousHead >= 0 && headIndex <= previousHead {
+				v.add("semantic.activity_checkpoint_order", cp+"/head_event_id", "checkpoints must cover strictly increasing lifecycle prefixes")
+			}
+			checkpointRecorded, checkpointErr := ledger.ParseTimestamp(checkpoint.RecordedAt)
+			headRecorded, headErr := ledger.ParseTimestamp((*forecast.LifecycleEvents)[headIndex].RecordedAt)
+			if checkpointErr == nil {
+				if headErr == nil && checkpointRecorded.Before(headRecorded) {
+					v.add("semantic.activity_checkpoint_chronology", cp+"/recorded_at", "must not precede the covered lifecycle head recorded_at")
+				}
+				if !previousRecorded.IsZero() && checkpointRecorded.Before(previousRecorded) {
+					v.add("semantic.activity_checkpoint_order", cp+"/recorded_at", "checkpoints must be append-only ordered by recorded_at")
+				}
+				previousRecorded = checkpointRecorded
+			}
+			previousHead = headIndex
+		}
+		v.validateLifecycleIntegrity(question, forecast, checkpoint.Integrity, checkpoint.HeadEventID, cp+"/integrity")
+	}
+	v.uniqueSlugs(ids, pointer, "semantic.duplicate_activity_checkpoint_id")
+	v.uniqueSlugs(heads, pointer, "semantic.duplicate_activity_checkpoint_head")
+}
+
+func (v *semanticValidator) validateLifecycleIntegrity(question *ledger.Question, forecast *ledger.Forecast, value ledger.LifecycleIntegrity, headEventID ledger.Slug, pointer string) {
+	var target *ledger.LifecycleTarget
+	switch {
+	case value.Pending != nil:
+		target = &value.Pending.Target
+	case value.Verified != nil:
+		target = &value.Verified.Target
+	case value.Failed != nil:
+		target = value.Failed.Target
+	}
+	if target == nil {
+		return
+	}
+	if target.Scope != targetbytes.LifecycleSchema {
+		v.add("semantic.activity_target_scope", pointer+"/target/scope", "must be "+targetbytes.LifecycleSchema)
+	}
+	if target.Canonicalization != targetbytes.Canonicalization {
+		v.add("semantic.activity_target_canonicalization", pointer+"/target/canonicalization", "must be "+targetbytes.Canonicalization)
+	}
+	if _, expectedDigest, err := targetbytes.Lifecycle(*question, *forecast, headEventID); err == nil && (target.Digest.Algorithm != "sha-256" || string(target.Digest.Value) != expectedDigest) {
+		v.add("semantic.activity_target_digest", pointer+"/target/digest/value", "does not match the canonical forecast-lifecycle/v1 target")
+	}
+	v.validateArtifact(target.ArtifactPath, target.Digest, pointer+"/target")
 }
 
 func (v *semanticValidator) validateProvenance(value *ledger.Provenance, pointer string) {
@@ -569,13 +648,10 @@ func (v *semanticValidator) validateReveal(questionID ledger.Slug, forecast *led
 		left  any
 		right any
 	}{
-		{"question_revision_id", forecast.QuestionRevisionID, payload.Bundle.QuestionRevisionID},
-		{"forecasted_at", forecast.ForecastedAt, payload.Bundle.ForecastedAt},
-		{"recorded_at", forecast.RecordedAt, payload.Bundle.RecordedAt},
 		{"representations", dereferenceRepresentations(forecast.Representations), payload.Bundle.Representations},
-		{"rationale", dereferenceString(forecast.Rationale), payload.Bundle.Rationale},
-		{"key_factors", dereferenceStrings(forecast.KeyFactors), payload.Bundle.KeyFactors},
-		{"comment", dereferenceString(forecast.Comment), payload.Bundle.Comment},
+		{"rationale", forecast.Rationale, payload.Bundle.Rationale},
+		{"key_factors", forecast.KeyFactors, payload.Bundle.KeyFactors},
+		{"comment", forecast.Comment, payload.Bundle.Comment},
 	}
 	for _, check := range checks {
 		if !reflect.DeepEqual(check.left, check.right) {

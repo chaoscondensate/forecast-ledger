@@ -84,17 +84,17 @@ goreleaser release --snapshot --clean --skip=publish,chocolatey
 ```
 
 For a Forecast Ledger contract update, also run the generated-contract parity
-tests, documentation examples, and removed-surface denylist. For v2.0.1,
-confirm together schema commit `55b1431d379128e1d75b9c30a3874398cea9ff0f`,
-annotated tag object `ac69f718de92f2c087b44b1b02d325ba37945db6`,
+tests, documentation examples, and removed-surface denylist. For v2.1.0,
+confirm together schema commit `d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4`,
+annotated tag object `6d74d483f7cb177470ba77f4fcb4063fe04f4003`,
 release archive digest
-`bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41`,
+`f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17`,
 checksum-asset digest
-`fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6`,
+`6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b`,
 embedded schema digest
-`5ceeeca7b2b3e46884c116aeb4f20998daf619569c0191728f574c245a4a595b`,
-attribution, fixtures, reference semantics, the seal vector, and both
-lifecycle-bearing target vectors as one identity. Do not publish while any of
+`cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107`,
+attribution, fixtures, reference semantics, every seal presence vector, and all
+forecast/lifecycle target vectors as one identity. Do not publish while any of
 those identities disagree.
 
 Then inspect `dist/artifacts.json`, run each native binary available on the
@@ -132,10 +132,11 @@ and Linux packages on Ubuntu, and validates the complete artifact matrix again
 on Windows, including Chocolatey package generation. Treat either snapshot
 failure as a release blocker.
 
-Before releasing the v2.0.1 correction, exercise relationship mutations,
-same-tick question revision defaults, ledger-timezone operation defaults,
+Before releasing the v2.1.0 correction, exercise lifecycle chronology,
+checkpoint prefix order, forecast/lifecycle target isolation, exact-head
+timestamp retry and recovery, optional protected-field presence, actionable
 protected-file diagnostics, locks, safe replacement, path confinement, and
-interruption recovery on native macOS, Linux, and Windows jobs. A local pass or
+package portability on native macOS, Linux, and Windows jobs. A local pass or
 cross-build does not replace those native checks.
 
 ## Publishing

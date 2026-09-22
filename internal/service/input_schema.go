@@ -177,7 +177,7 @@ func operationDefinitions() map[InputSchemaName]any {
 		InputSchemaQuestionAdd:    ref("questionAddInput"), InputSchemaQuestionRevision: ref("revisionInput"),
 		InputSchemaQuestionPatch:  closedObject(nil, map[string]any{"tags": nullable(arrayOf(ref("slug"), 0)), "notes": nullable(stringValue(0)), "status": map[string]any{"enum": []string{"open", "closed", "awaiting_resolution"}}}, map[string]any{"minProperties": 1}),
 		InputSchemaForecastCreate: ref("publicForecastInput"), InputSchemaForecastSeal: ref("sealedForecastInput"),
-		InputSchemaForecastSealPrivate:  closedObject([]string{"representations", "rationale", "key_factors", "comment"}, map[string]any{"representations": arrayOf(ref("forecastRepresentation"), 1), "rationale": stringValue(0), "key_factors": arrayOf(stringValue(1), 0), "comment": stringValue(0)}, nil),
+		InputSchemaForecastSealPrivate:  closedObject([]string{"representations"}, map[string]any{"representations": arrayOf(ref("forecastRepresentation"), 1), "rationale": stringValue(0), "key_factors": arrayOf(stringValue(1), 0), "comment": stringValue(0)}, nil),
 		InputSchemaKeyHintUpdate:        closedObject([]string{"key_hint"}, map[string]any{"key_hint": map[string]any{"type": "string", "pattern": `^[a-z][a-z0-9+.-]*:[A-Za-z0-9._~+-]+$`}}, nil),
 		InputSchemaResolution:           closedObject([]string{"question_revision_id", "outcome", "outcome_known_at", "sources"}, map[string]any{"question_revision_id": ref("slug"), "outcome": ref("scalarValue"), "outcome_known_at": ref("timestamp"), "recorded_at": ref("timestamp"), "sources": arrayOf(ref("resolutionSource"), 1), "notes": stringValue(0)}, nil),
 		InputSchemaUnresolvedResolution: reasonInputDefinition(),
@@ -207,7 +207,7 @@ func commonInputDefinitions() map[string]any {
 		"initialQuestionInput":      closedObject([]string{"id", "revision"}, initialQuestionProperties, nil),
 		"questionAddInput":          closedObject([]string{"revision"}, questionProperties, nil),
 		"publicForecastInput":       closedObject([]string{"question_revision_id", "representations"}, forecastProperties, nil),
-		"sealedForecastInput":       closedObject([]string{"question_revision_id", "representations", "rationale", "key_factors", "comment"}, forecastProperties, nil),
+		"sealedForecastInput":       closedObject([]string{"question_revision_id", "representations"}, forecastProperties, nil),
 		"forecasterPatchInput":      closedObject(nil, map[string]any{"kind": map[string]any{"enum": []string{"individual", "team"}}, "name": stringValue(1), "contact": nullable(ref("contact")), "profiles": nullable(arrayOf(ref("profile"), 0)), "members": nullable(arrayOf(ref("member"), 2))}, map[string]any{"minProperties": 1}),
 		"platformAccountPatchInput": closedObject(nil, map[string]any{"username": nullable(stringValue(1)), "user_id": nullable(stringValue(1)), "profile_url": nullable(map[string]any{"type": "string", "format": "uri"})}, map[string]any{"minProperties": 1}),
 	}

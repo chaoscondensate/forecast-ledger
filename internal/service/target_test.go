@@ -18,9 +18,10 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
+	targetbytes "github.com/chaoscondensate/forecast-ledger/internal/target"
 )
 
-func TestForecastTargetMatchesPublishedV201LifecycleVectors(t *testing.T) {
+func TestForecastTargetMatchesPublishedV210LifecycleVectors(t *testing.T) {
 	for _, name := range []string{
 		"forecast-envelope-v2-public-lifecycle.json",
 		"forecast-envelope-v2-sealed-lifecycle.json",
@@ -64,6 +65,119 @@ func TestForecastTargetMatchesPublishedV201LifecycleVectors(t *testing.T) {
 				t.Fatalf("lifecycle activity changed target: %v", err)
 			}
 		})
+	}
+}
+
+func TestLifecycleTargetMatchesPublishedV210Vectors(t *testing.T) {
+	data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vector struct {
+		QuestionID       ledger.Slug             `json:"question_id"`
+		QuestionRevision ledger.QuestionRevision `json:"question_revision"`
+		Forecast         ledger.Forecast         `json:"forecast"`
+		Checkpoints      []struct {
+			Name        string      `json:"name"`
+			HeadEventID ledger.Slug `json:"head_event_id"`
+			Expected    struct {
+				CanonicalTarget string `json:"canonical_target"`
+				SHA256          string `json:"sha256"`
+			} `json:"expected"`
+		} `json:"checkpoints"`
+	}
+	if err := json.Unmarshal(data, &vector); err != nil {
+		t.Fatal(err)
+	}
+	model := &ledger.Ledger{Questions: []ledger.Question{{ID: vector.QuestionID, CurrentRevisionID: vector.QuestionRevision.ID, Revisions: []ledger.QuestionRevision{vector.QuestionRevision}, Forecasts: []ledger.Forecast{vector.Forecast}}}}
+	for _, checkpoint := range vector.Checkpoints {
+		t.Run(checkpoint.Name, func(t *testing.T) {
+			artifact, err := BuildLifecycleTarget(model, vector.QuestionID, vector.Forecast.ID, checkpoint.HeadEventID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(artifact.Bytes) != checkpoint.Expected.CanonicalTarget || artifact.SHA256 != checkpoint.Expected.SHA256 {
+				t.Fatalf("lifecycle target differs: sha=%s bytes=%s", artifact.SHA256, artifact.Bytes)
+			}
+		})
+	}
+}
+
+func TestLifecycleTargetBuildAndCheckUseHeadSpecificNonOverwritingPaths(t *testing.T) {
+	model := testPublicInitialLedger(t)
+	first, err := BuildForecastLifecycle(model, "q-one", "f-one", ledger.LifecycleWithdrawn, LifecycleInput{ID: "event-withdrawn", EffectiveAt: "2026-02-01T00:00:00Z"}, "2026-02-01T00:00:01Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := BuildForecastLifecycle(first.Ledger, "q-one", "f-one", ledger.LifecycleReaffirmed, LifecycleInput{ID: "event-reaffirmed", EffectiveAt: "2026-02-02T00:00:00Z"}, "2026-02-02T00:00:01Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ledger.json")
+	writeLedgerModel(t, path, second.Ledger)
+	for _, head := range []ledger.Slug{"event-withdrawn", "event-reaffirmed"} {
+		result, err := CommitTargetBuildScoped(t.Context(), path, TargetScopeLifecycle, false, "q-one", "f-one", head)
+		if err != nil || len(result.Targets) != 1 || result.Targets[0].HeadEventID != head || result.Targets[0].Scope != LifecycleTargetSchema {
+			t.Fatalf("build %s = %#v, %v", head, result, err)
+		}
+		checked, err := CheckTargetsScoped(t.Context(), path, TargetScopeLifecycle, false, "q-one", "f-one", head)
+		if err != nil || checked.Targets[0].Valid == nil || !*checked.Targets[0].Valid {
+			t.Fatalf("check %s = %#v, %v", head, checked, err)
+		}
+	}
+	firstPath := filepath.Join(filepath.Dir(path), "proofs", "targets", "f-one.lifecycle.event-withdrawn.json")
+	secondPath := filepath.Join(filepath.Dir(path), "proofs", "targets", "f-one.lifecycle.event-reaffirmed.json")
+	firstBytes, firstErr := os.ReadFile(firstPath)
+	secondBytes, secondErr := os.ReadFile(secondPath)
+	if firstErr != nil || secondErr != nil || bytes.Equal(firstBytes, secondBytes) {
+		t.Fatalf("head-specific targets were not retained independently: %v %v", firstErr, secondErr)
+	}
+}
+
+func TestLifecycleTargetCheckHonorsPortableDeclaredArtifactPaths(t *testing.T) {
+	raw, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/lifecycle-checkpoints.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var model ledger.Ledger
+	if err := json.Unmarshal(raw, &model); err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(ledgerPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	forecast := &model.Questions[0].Forecasts[0]
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		artifact, err := BuildLifecycleTarget(&model, model.Questions[0].ID, forecast.ID, checkpoint.HeadEventID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		declared := lifecycleIntegrityTarget(checkpoint.Integrity)
+		path := filepath.Join(directory, filepath.FromSlash(string(declared.ArtifactPath)))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, artifact.Bytes, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		declared := lifecycleIntegrityTarget(checkpoint.Integrity)
+		result, err := CheckTargetsScoped(t.Context(), ledgerPath, TargetScopeLifecycle, false, model.Questions[0].ID, forecast.ID, checkpoint.HeadEventID)
+		if err != nil || len(result.Targets) != 1 || result.Targets[0].Valid == nil || !*result.Targets[0].Valid || result.Targets[0].Path != declared.ArtifactPath {
+			t.Fatalf("portable checkpoint %s = %#v, %v", checkpoint.HeadEventID, result, err)
+		}
+	}
+	first := (*forecast.ActivityCheckpoints)[0]
+	declared := lifecycleIntegrityTarget(first.Integrity)
+	if err := os.Remove(filepath.Join(directory, filepath.FromSlash(string(declared.ArtifactPath)))); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, err := CommitTargetBuildScoped(t.Context(), ledgerPath, TargetScopeLifecycle, false, model.Questions[0].ID, forecast.ID, first.HeadEventID)
+	if err != nil || len(rebuilt.Targets) != 1 || rebuilt.Targets[0].Path != declared.ArtifactPath || rebuilt.Targets[0].State != storage.DeterministicCreated {
+		t.Fatalf("portable lifecycle target rebuild = %#v, %v", rebuilt, err)
 	}
 }
 
@@ -113,7 +227,7 @@ func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
 		"recorded_at": included, "visibility": included, "representations": included,
 		"rationale": included, "key_factors": included, "comment": included,
 		"public_note": included, "supersedes_forecast_id": included, "provenance": included,
-		"lifecycle_events": excluded, "commitment": included, "integrity": excluded,
+		"lifecycle_events": excluded, "activity_checkpoints": excluded, "commitment": included, "integrity": excluded,
 	})
 	assertClassified(t, ledger.SealedCommitment{}, map[string]classification{
 		"scheme": included, "commitment_hash": included, "encryption": included,
@@ -124,7 +238,7 @@ func TestForecastTargetProjectionClassifiesEveryModelField(t *testing.T) {
 		"key_hint": excluded, "revealed_at": excluded, "revealed_key": secret,
 	})
 
-	projectionFields := jsonFieldNames(targetForecast{})
+	projectionFields := jsonFieldNames(targetbytes.ForecastProjection{})
 	sort.Strings(projectionFields)
 	wantProjection := []string{
 		"comment", "commitment", "forecasted_at", "id", "key_factors",
@@ -170,6 +284,55 @@ func FuzzBuildForecastTargetDeterminism(f *testing.F) {
 		}
 		if _, err := document.ParseJSON(bytes.NewReader(first.Bytes), document.DefaultLimits); err != nil {
 			t.Fatalf("target is not valid bounded JSON: %v", err)
+		}
+	})
+}
+
+func FuzzBuildLifecycleTargetPrefixDeterminism(f *testing.F) {
+	f.Add("review started", "review finished")
+	f.Add("Unicode: прогноз", "line one\nline two")
+	root, err := BuildLedgerRootAt(InitRootRequest{LedgerID: "fuzz-ledger", Timezone: "UTC", ForecasterID: "me", ForecasterName: "Me"}, "2026-01-01T00:00:00Z")
+	if err != nil {
+		f.Fatal(err)
+	}
+	seed, err := BuildInitialPublicLedger(root, binaryInitialQuestion())
+	if err != nil {
+		f.Fatal(err)
+	}
+	first, err := BuildForecastLifecycle(seed, "q-one", "f-one", ledger.LifecycleWithdrawn, LifecycleInput{ID: "event-withdrawn", EffectiveAt: "2026-02-01T00:00:00Z"}, "2026-02-01T00:00:01Z")
+	if err != nil {
+		f.Fatal(err)
+	}
+	second, err := BuildForecastLifecycle(first.Ledger, "q-one", "f-one", ledger.LifecycleReaffirmed, LifecycleInput{ID: "event-reaffirmed", EffectiveAt: "2026-02-02T00:00:00Z"}, "2026-02-02T00:00:01Z")
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Fuzz(func(t *testing.T, firstReason, secondReason string) {
+		if len(firstReason) > 2048 || len(secondReason) > 2048 {
+			t.Skip()
+		}
+		model, err := cloneLedger(second.Ledger)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events := model.Questions[0].Forecasts[0].LifecycleEvents
+		(*events)[0].Reason, (*events)[1].Reason = &firstReason, &secondReason
+		withdrawal, err := BuildLifecycleTarget(model, "q-one", "f-one", "event-withdrawn")
+		if err != nil {
+			t.Fatal(err)
+		}
+		repeat, err := BuildLifecycleTarget(model, "q-one", "f-one", "event-withdrawn")
+		if err != nil || withdrawal.SHA256 != repeat.SHA256 || !bytes.Equal(withdrawal.Bytes, repeat.Bytes) {
+			t.Fatal("lifecycle target construction is not deterministic")
+		}
+		changedLater := secondReason + " changed"
+		(*events)[1].Reason = &changedLater
+		prefix, err := BuildLifecycleTarget(model, "q-one", "f-one", "event-withdrawn")
+		if err != nil || !bytes.Equal(withdrawal.Bytes, prefix.Bytes) {
+			t.Fatal("later event changed an earlier lifecycle prefix")
+		}
+		if _, err := document.ParseJSON(bytes.NewReader(prefix.Bytes), document.DefaultLimits); err != nil {
+			t.Fatalf("lifecycle target is not valid bounded JSON: %v", err)
 		}
 	})
 }

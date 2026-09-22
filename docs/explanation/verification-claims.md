@@ -1,7 +1,7 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: v0.9.1
+coverage: current-main
 reviewed: 2026-09-22
 owner: security
 generated: false
@@ -10,7 +10,7 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: Forecast Ledger CLI release v0.9.1 (Preview).
+Applies to: Forecast Ledger CLI current main for the next Preview release.
 Last substantive review: 2026-09-22.
 Owner: security and interface owners
 
@@ -47,7 +47,10 @@ bundle are sufficient for local verification.
 Forecast activity and evidence validity are also separate. Lifecycle events
 are not part of the immutable forecast target, so withdrawal, expiry, or
 reaffirmation does not rewrite or invalidate retained target and timestamp
-evidence. A report must state the derived active state separately.
+evidence. A report must state the derived active state separately. A lifecycle
+checkpoint can verify one exact event prefix; `partial` means that verified
+coverage exists but the retained stream has a later head. `unbound` cannot by
+itself make the aggregate pass.
 
 ## Approved terms
 
@@ -155,10 +158,12 @@ Keep these conclusions separate in human and JSON results:
    the embedded contract and project semantic rules.
 2. **Content binding** — the selected ledger content matches the exact target,
    digest, commitment, or package manifest being checked.
-3. **Existence timing** — a verified RFC 3161 response supports a bounded
+3. **Activity** — current active state is derived from the retained event
+   stream, while checkpoint coverage states only what exact prefix was checked.
+4. **Existence timing** — a verified RFC 3161 response supports a bounded
    “existed no later than” claim under its named TSA and retained CA trust.
-4. **Reveal validity** — disclosed material matches the sealed commitment.
-5. **Outcome evidence** — recorded resolution evidence passes only the checks
+5. **Reveal validity** — disclosed material matches the sealed commitment.
+6. **Outcome evidence** — recorded resolution evidence passes only the checks
    actually performed on it.
 
 Authorship, completeness, truth, exact self-reported creation time, and

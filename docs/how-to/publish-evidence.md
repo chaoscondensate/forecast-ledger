@@ -21,7 +21,7 @@ The destination must not exist. Build validates the ledger, rebuilds referenced
 targets, validates timestamp artifact structure, and copies only:
 
 - the ledger at `ledger/<original-name>`;
-- each referenced `forecast_target`;
+- each referenced `forecast_target`, including every declared lifecycle target;
 - each referenced `timestamp_request` (`.tsq`);
 - each referenced `timestamp_response` (`.tsr`); and
 - each referenced `timestamp_ca_bundle` (PEM).
@@ -36,14 +36,15 @@ A timestamped package keeps proofs and trust beside `ledger/`, not inside it:
 ```text
 evidence-package/
   ledger/ledger.yaml
-  proofs/targets/...
-  proofs/timestamps/.../request.tsq
-  proofs/timestamps/.../response.tsr
+  proofs/targets/<forecast>.json
+  proofs/targets/<forecast>.lifecycle.<head>.json
+  proofs/timestamps/<forecast>/.../request.tsq
+  proofs/timestamps/<forecast>.lifecycle.<head>/.../response.tsr
   trust/rfc3161/...pem
   manifest.json
 ```
 
-The canonical `forecast-ledger-publication/v2` manifest pins schema v2.0.1 and
+The canonical `forecast-ledger-publication/v2` manifest pins schema v2.1.0 and
 records each allowlisted path, role, size, and SHA-256 digest.
 
 Verify on another machine with no network option:
@@ -73,11 +74,11 @@ The MCP adapter resolves the packaged ledger and its sibling `proofs/` and
 paths relative to the `ledger/` directory.
 
 Verification first checks the manifest and every listed file, rejects extra
-files, then runs the same target, RFC 3161, reveal, chronology, and outcome
-metadata checks against packaged bytes. It does not contact a TSA, blockchain,
-Git host, system trust store, or outcome URL. Manifest observations remain
-available even when the evidence aggregate is pending, failed, or
-`no_evidence`.
+files, then runs the same forecast target, activity checkpoint, RFC 3161,
+reveal, chronology, and outcome metadata checks against packaged bytes. It
+does not contact a TSA, blockchain, Git host, system trust store, or outcome
+URL. Manifest observations remain available even when the evidence aggregate
+is pending, failed, or `no_evidence`.
 
 The package is portable evidence, not proof of authorship, completeness, truth,
 TSA clock honesty, current revocation status, or long-term validation.

@@ -21,6 +21,7 @@ func TestEveryPublishedV2LedgerFixtureRunsThroughApplicableWorkflows(t *testing.
 		{relative: "examples/valid/question-without-forecasts.yaml"},
 		{relative: "examples/valid/team-ledger.yaml", publicationFailureCode: app.CodeConflict},
 		{relative: "tests/conformance/valid/relationships-and-datetime.json"},
+		{relative: "tests/conformance/valid/revealed-representation-only.json", publicationFailureCode: app.CodeConflict},
 	} {
 		t.Run(filepath.Base(fixture.relative), func(t *testing.T) {
 			raw, err := fs.ReadFile(contractschema.Conformance(), fixture.relative)

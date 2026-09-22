@@ -266,6 +266,18 @@ func inputSchemaIssues(parsed *document.Document, err error) []document.Diagnost
 			}
 			return
 		}
+		if required, ok := current.ErrorKind.(*jsonschemakind.Required); ok && len(required.Missing) > 0 {
+			properties := append([]string(nil), required.Missing...)
+			sort.Strings(properties)
+			for _, property := range properties {
+				propertyPointer := appendJSONPointer(pointer, property)
+				issues = append(issues, document.Diagnostic{
+					Code: code, Message: "required field " + property + " is missing",
+					Location: document.SourceRef{Pointer: propertyPointer},
+				})
+			}
+			return
+		}
 		issues = append(issues, document.Diagnostic{
 			Code: code, Message: "input does not satisfy " + keyword, Location: inputLocation(parsed, pointer),
 		})

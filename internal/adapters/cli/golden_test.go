@@ -57,7 +57,7 @@ func TestStableV2JSONShapes(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	assertJSONFields(t, stdout, "ledger.initialized", []string{`"schema_version":"2.0.1"`, `"question_id":"q-one"`, `"forecast_id":"f-one"`})
+	assertJSONFields(t, stdout, "ledger.initialized", []string{`"schema_version":"2.1.0"`, `"question_id":"q-one"`, `"forecast_id":"f-one"`})
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "list", "--file", path)
 	if code != 0 || stderr != "" {
 		t.Fatalf("question list code=%d stderr=%q", code, stderr)

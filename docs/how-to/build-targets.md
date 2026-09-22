@@ -1,7 +1,7 @@
 # Build and check forecast targets
 
 <!-- doc-metadata
-coverage: v0.9.1
+coverage: v0.10.0
 reviewed: 2026-09-22
 owner: interface
 generated: false
@@ -10,9 +10,10 @@ prerequisites: manage-public-forecasts.md
 next: ../reference/index.md
 -->
 
-A forecast target is the deterministic byte sequence that later timestamp
-evidence binds. Building a target does not timestamp it and does not change the
-ledger's integrity state.
+A target is the deterministic byte sequence that later timestamp evidence
+binds. Forecast scope binds immutable forecast content. Lifecycle scope binds
+one exact prefix of its activity events. Building either target does not
+timestamp it and does not change integrity state.
 
 Build one selected target:
 
@@ -29,6 +30,25 @@ creates an absent file, accepts an existing byte-identical file as unchanged,
 and refuses different bytes. Use `--all` instead of both selectors to build
 every forecast target. The all mode checks every destination before creating
 the first artifact.
+
+After an activity event is recorded, build the prefix ending at that event:
+
+```sh
+forecast-ledger target build \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --scope lifecycle \
+  --head withdraw-001
+```
+
+Lifecycle targets use
+`proofs/targets/<forecast-id>.lifecycle.<head-event-id>.json`. The
+`forecast-lifecycle/v1` bytes contain the forecast and head IDs, the digest of
+the unchanged `forecast-envelope/v2`, and every lifecycle event through the
+selected head. Later heads get different files; building or retrying one head
+does not overwrite another. Lifecycle scope requires one question, forecast,
+and head and cannot be combined with `--all`.
 
 `--dry-run` reconstructs the bytes, checks paths and collisions, and reports
 deferred writes without creating directories or files. Target commands require
@@ -49,6 +69,9 @@ forecast-ledger target check \
   --forecast f-launch-002
 ```
 
+Add `--scope lifecycle --head withdraw-001` to reconstruct and check a retained
+lifecycle target.
+
 Check reconstructs the exact bytes from the ledger and compares the file and
 SHA-256 digest. If integrity metadata already names a target, scope,
 canonicalization, relative path, algorithm, and digest must also match.
@@ -68,6 +91,13 @@ statement or original sealed commitment. It has no root ledger ID. It excludes
 lifecycle events, mutable integrity state, key hint, revealed key and reveal
 time, question resolution, and unrelated records. A revealed forecast
 continues to use its original sealed target.
+
+The forecast target therefore proves nothing about current activity. A
+lifecycle checkpoint can detect deletion, alteration, or reordering inside its
+covered prefix. A verified older checkpoint is `partial` after new events are
+appended. If every independent observation of an event and its artifacts is
+removed, the remaining ledger cannot prove that the deleted event once
+existed.
 
 A target proves no authorship or time by itself. It is only deterministic input
 for later evidence operations.

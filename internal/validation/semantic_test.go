@@ -20,7 +20,9 @@ func TestAllPublishedV2FixturesPassSemanticValidation(t *testing.T) {
 		"examples/valid/individual-ledger.json",
 		"examples/valid/question-without-forecasts.yaml",
 		"examples/valid/team-ledger.yaml",
+		"tests/conformance/valid/lifecycle-checkpoints.json",
 		"tests/conformance/valid/relationships-and-datetime.json",
+		"tests/conformance/valid/revealed-representation-only.json",
 	} {
 		t.Run(name, func(t *testing.T) {
 			model := loadValidLedger(t, name)
@@ -153,6 +155,41 @@ func TestSemanticValidationChecksLifecycleRelationshipsAndResolution(t *testing.
 		"semantic.relationship_cycle",
 		"semantic.resolution_chronology",
 		"semantic.resolution_outcome",
+	} {
+		if !hasSemanticCode(issues, code) {
+			t.Errorf("missing %s in %#v", code, issues)
+		}
+	}
+}
+
+func TestSemanticValidationChecksLifecycleChronologyAndCheckpointPrefixes(t *testing.T) {
+	model := loadValidLedger(t, "examples/valid/individual-ledger.json")
+	forecast := &model.Questions[1].Forecasts[1]
+	(*forecast.LifecycleEvents)[0].EffectiveAt = "2026-08-20T13:00:00+01:00"
+	(*forecast.LifecycleEvents)[0].RecordedAt = "2026-08-20T13:01:00+01:00"
+	digest := ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("0", 64))}
+	target := func(path ledger.RelativePath) ledger.LifecycleIntegrity {
+		return ledger.LifecycleIntegrity{Pending: &ledger.PendingLifecycleIntegrity{
+			Status:     ledger.IntegrityPending,
+			Target:     ledger.LifecycleTarget{Scope: "forecast-lifecycle/v1", Canonicalization: "RFC8785", ArtifactPath: path, Digest: digest},
+			Timestamps: []ledger.RFC3161Timestamp{},
+		}}
+	}
+	checkpoints := []ledger.ActivityCheckpoint{
+		{ID: "checkpoint-same", HeadEventID: "event-election-reaffirmed", RecordedAt: "2026-08-25T11:02:00+01:00", Integrity: target("proofs/targets/f-election-coalition-002.lifecycle.event-election-reaffirmed.json")},
+		{ID: "checkpoint-same", HeadEventID: "event-election-withdrawn", RecordedAt: "2026-08-19T09:00:00+01:00", Integrity: target("proofs/targets/wrong.json")},
+	}
+	forecast.ActivityCheckpoints = &checkpoints
+	issues, err := ValidateSemantics(model, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{
+		"semantic.lifecycle_forecast_chronology",
+		"semantic.activity_checkpoint_order",
+		"semantic.activity_checkpoint_chronology",
+		"semantic.duplicate_activity_checkpoint_id",
+		"semantic.activity_target_digest",
 	} {
 		if !hasSemanticCode(issues, code) {
 			t.Errorf("missing %s in %#v", code, issues)

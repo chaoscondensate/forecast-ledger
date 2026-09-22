@@ -272,6 +272,31 @@ func BuildForecastLifecycle(model *ledger.Ledger, questionID, forecastID ledger.
 	if input.RecordedAt != nil {
 		recorded = *input.RecordedAt
 	}
+	forecastedTime, err := ParseTimestamp(forecast.ForecastedAt, "forecast.forecasted_at")
+	if err != nil {
+		return ForecastMutation{}, err
+	}
+	forecastRecordedTime, err := ParseTimestamp(forecast.RecordedAt, "forecast.recorded_at")
+	if err != nil {
+		return ForecastMutation{}, err
+	}
+	effectiveTime, err := ParseTimestamp(effective, "effective_at")
+	if err != nil {
+		return ForecastMutation{}, err
+	}
+	recordedTime, err := ParseTimestamp(recorded, "recorded_at")
+	if err != nil {
+		return ForecastMutation{}, err
+	}
+	if effectiveTime.Before(forecastedTime) {
+		return ForecastMutation{}, invalidField("effective_at", "lifecycle effective time must not precede forecasted_at")
+	}
+	if recordedTime.Before(effectiveTime) {
+		return ForecastMutation{}, invalidField("recorded_at", "lifecycle recorded time must not precede effective_at")
+	}
+	if recordedTime.Before(forecastRecordedTime) {
+		return ForecastMutation{}, invalidField("recorded_at", "lifecycle recorded time must not precede forecast recorded_at")
+	}
 	event := ledger.LifecycleEvent{ID: input.ID, Type: eventType, EffectiveAt: effective, RecordedAt: recorded, Reason: cloneString(input.Reason), Provenance: input.Provenance}
 	prospective, err := cloneLedger(model)
 	if err != nil {
@@ -292,6 +317,5 @@ func BuildForecastLifecycle(model *ledger.Ledger, questionID, forecastID ledger.
 	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
 		return ForecastMutation{}, err
 	}
-	_ = forecast
 	return ForecastMutation{Ledger: prospective, Patches: []document.PatchOperation{patch}}, nil
 }

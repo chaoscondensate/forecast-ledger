@@ -1,0 +1,237 @@
+{
+  "schema": "forecast-lifecycle-test-vector/v1",
+  "question_id": "q-lifecycle-vector",
+  "question_revision": {
+    "id": "qr-lifecycle-vector-1",
+    "effective_at": "2026-09-01T09:00:00Z",
+    "recorded_at": "2026-09-01T09:00:05Z",
+    "title": "Will the example event occur?",
+    "resolution_criteria": "Resolve YES if the example event occurs.",
+    "expected_resolution_at": "2026-12-31T23:59:59Z",
+    "outcome_space": {
+      "kind": "binary"
+    },
+    "domain": {
+      "kind": "binary"
+    }
+  },
+  "forecast": {
+    "id": "f-lifecycle-vector-1",
+    "question_revision_id": "qr-lifecycle-vector-1",
+    "forecasted_at": "2026-09-02T10:00:00Z",
+    "recorded_at": "2026-09-02T10:00:05Z",
+    "visibility": "public",
+    "representations": [
+      {
+        "kind": "probability",
+        "outcome": true,
+        "probability": "0.65"
+      }
+    ],
+    "lifecycle_events": [
+      {
+        "id": "event-withdrawn",
+        "type": "withdrawn",
+        "effective_at": "2026-09-03T10:00:00Z",
+        "recorded_at": "2026-09-03T10:00:05Z",
+        "reason": "Evidence review started."
+      },
+      {
+        "id": "event-reaffirmed",
+        "type": "reaffirmed",
+        "effective_at": "2026-09-04T10:00:00Z",
+        "recorded_at": "2026-09-04T10:00:05Z",
+        "reason": "The review confirmed the forecast."
+      }
+    ],
+    "integrity": {
+      "status": "unanchored",
+      "note": "Vector fixture."
+    }
+  },
+  "checkpoints": [
+    {
+      "name": "withdrawal",
+      "head_event_id": "event-withdrawn",
+      "expected": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"441f23c7befd6fc29be5c0369053771db5961824d576e81c8658a2c81c645067\"},\"forecast_id\":\"f-lifecycle-vector-1\",\"head_event_id\":\"event-withdrawn\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-03T10:00:00Z\",\"id\":\"event-withdrawn\",\"reason\":\"Evidence review started.\",\"recorded_at\":\"2026-09-03T10:00:05Z\",\"type\":\"withdrawn\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "6494b4d78a2a59e7e3a9292756725e0e7b61da74682c43bc45025386ffcb56bf"
+      }
+    },
+    {
+      "name": "reaffirmation",
+      "head_event_id": "event-reaffirmed",
+      "expected": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"441f23c7befd6fc29be5c0369053771db5961824d576e81c8658a2c81c645067\"},\"forecast_id\":\"f-lifecycle-vector-1\",\"head_event_id\":\"event-reaffirmed\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-03T10:00:00Z\",\"id\":\"event-withdrawn\",\"reason\":\"Evidence review started.\",\"recorded_at\":\"2026-09-03T10:00:05Z\",\"type\":\"withdrawn\"},{\"effective_at\":\"2026-09-04T10:00:00Z\",\"id\":\"event-reaffirmed\",\"reason\":\"The review confirmed the forecast.\",\"recorded_at\":\"2026-09-04T10:00:05Z\",\"type\":\"reaffirmed\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "be4440f5ac52f518301d73223c218a686930a42dde48ecf9cdbf723594450952"
+      }
+    }
+  ],
+  "tamper_cases": [
+    {
+      "name": "prefix-alteration",
+      "forecast": {
+        "id": "f-lifecycle-vector-1",
+        "question_revision_id": "qr-lifecycle-vector-1",
+        "forecasted_at": "2026-09-02T10:00:00Z",
+        "recorded_at": "2026-09-02T10:00:05Z",
+        "visibility": "public",
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "lifecycle_events": [
+          {
+            "id": "event-withdrawn",
+            "type": "withdrawn",
+            "effective_at": "2026-09-03T10:00:00Z",
+            "recorded_at": "2026-09-03T10:00:05Z",
+            "reason": "Altered reason."
+          },
+          {
+            "id": "event-reaffirmed",
+            "type": "reaffirmed",
+            "effective_at": "2026-09-04T10:00:00Z",
+            "recorded_at": "2026-09-04T10:00:05Z",
+            "reason": "The review confirmed the forecast."
+          }
+        ],
+        "integrity": {
+          "status": "unanchored",
+          "note": "Vector fixture."
+        }
+      },
+      "head_event_id": "event-withdrawn",
+      "covered_checkpoint": "withdrawal",
+      "expected_candidate": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"441f23c7befd6fc29be5c0369053771db5961824d576e81c8658a2c81c645067\"},\"forecast_id\":\"f-lifecycle-vector-1\",\"head_event_id\":\"event-withdrawn\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-03T10:00:00Z\",\"id\":\"event-withdrawn\",\"reason\":\"Altered reason.\",\"recorded_at\":\"2026-09-03T10:00:05Z\",\"type\":\"withdrawn\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "9267dd5289c9a713b8259bbd9612aa3bea303223fe066b21ac9a9d255c19b2af"
+      }
+    },
+    {
+      "name": "event-deletion",
+      "forecast": {
+        "id": "f-lifecycle-vector-1",
+        "question_revision_id": "qr-lifecycle-vector-1",
+        "forecasted_at": "2026-09-02T10:00:00Z",
+        "recorded_at": "2026-09-02T10:00:05Z",
+        "visibility": "public",
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "lifecycle_events": [
+          {
+            "id": "event-reaffirmed",
+            "type": "reaffirmed",
+            "effective_at": "2026-09-04T10:00:00Z",
+            "recorded_at": "2026-09-04T10:00:05Z",
+            "reason": "The review confirmed the forecast."
+          }
+        ],
+        "integrity": {
+          "status": "unanchored",
+          "note": "Vector fixture."
+        }
+      },
+      "head_event_id": "event-reaffirmed",
+      "covered_checkpoint": "reaffirmation",
+      "expected_candidate": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"441f23c7befd6fc29be5c0369053771db5961824d576e81c8658a2c81c645067\"},\"forecast_id\":\"f-lifecycle-vector-1\",\"head_event_id\":\"event-reaffirmed\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-04T10:00:00Z\",\"id\":\"event-reaffirmed\",\"reason\":\"The review confirmed the forecast.\",\"recorded_at\":\"2026-09-04T10:00:05Z\",\"type\":\"reaffirmed\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "9c16c5a1c8395cebf4a0e1a2dab5566c986ec13c15dfef46fd1decc49ec39491"
+      }
+    },
+    {
+      "name": "reordered-events",
+      "forecast": {
+        "id": "f-lifecycle-vector-1",
+        "question_revision_id": "qr-lifecycle-vector-1",
+        "forecasted_at": "2026-09-02T10:00:00Z",
+        "recorded_at": "2026-09-02T10:00:05Z",
+        "visibility": "public",
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "lifecycle_events": [
+          {
+            "id": "event-reaffirmed",
+            "type": "reaffirmed",
+            "effective_at": "2026-09-04T10:00:00Z",
+            "recorded_at": "2026-09-04T10:00:05Z",
+            "reason": "The review confirmed the forecast."
+          },
+          {
+            "id": "event-withdrawn",
+            "type": "withdrawn",
+            "effective_at": "2026-09-03T10:00:00Z",
+            "recorded_at": "2026-09-03T10:00:05Z",
+            "reason": "Evidence review started."
+          }
+        ],
+        "integrity": {
+          "status": "unanchored",
+          "note": "Vector fixture."
+        }
+      },
+      "head_event_id": "event-reaffirmed",
+      "covered_checkpoint": "reaffirmation",
+      "expected_candidate": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"441f23c7befd6fc29be5c0369053771db5961824d576e81c8658a2c81c645067\"},\"forecast_id\":\"f-lifecycle-vector-1\",\"head_event_id\":\"event-reaffirmed\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-04T10:00:00Z\",\"id\":\"event-reaffirmed\",\"reason\":\"The review confirmed the forecast.\",\"recorded_at\":\"2026-09-04T10:00:05Z\",\"type\":\"reaffirmed\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "9c16c5a1c8395cebf4a0e1a2dab5566c986ec13c15dfef46fd1decc49ec39491"
+      }
+    },
+    {
+      "name": "wrong-forecast-binding",
+      "forecast": {
+        "id": "f-wrong-binding",
+        "question_revision_id": "qr-lifecycle-vector-1",
+        "forecasted_at": "2026-09-02T10:00:00Z",
+        "recorded_at": "2026-09-02T10:00:05Z",
+        "visibility": "public",
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "lifecycle_events": [
+          {
+            "id": "event-withdrawn",
+            "type": "withdrawn",
+            "effective_at": "2026-09-03T10:00:00Z",
+            "recorded_at": "2026-09-03T10:00:05Z",
+            "reason": "Evidence review started."
+          },
+          {
+            "id": "event-reaffirmed",
+            "type": "reaffirmed",
+            "effective_at": "2026-09-04T10:00:00Z",
+            "recorded_at": "2026-09-04T10:00:05Z",
+            "reason": "The review confirmed the forecast."
+          }
+        ],
+        "integrity": {
+          "status": "unanchored",
+          "note": "Vector fixture."
+        }
+      },
+      "head_event_id": "event-withdrawn",
+      "covered_checkpoint": "withdrawal",
+      "expected_candidate": {
+        "canonical_target": "{\"forecast_envelope_sha256\":{\"algorithm\":\"sha-256\",\"value\":\"a62f667658d1bdc9225151dc3178586d7228a445413f63eb02b3b56fc7c0aa0b\"},\"forecast_id\":\"f-wrong-binding\",\"head_event_id\":\"event-withdrawn\",\"lifecycle_events\":[{\"effective_at\":\"2026-09-03T10:00:00Z\",\"id\":\"event-withdrawn\",\"reason\":\"Evidence review started.\",\"recorded_at\":\"2026-09-03T10:00:05Z\",\"type\":\"withdrawn\"}],\"question_id\":\"q-lifecycle-vector\",\"schema\":\"forecast-lifecycle/v1\"}",
+        "sha256": "315962334a732ef3051222eed4f8ac5f37a8e8c6aae539382e90c7b4ab1b9adf"
+      }
+    }
+  ]
+}

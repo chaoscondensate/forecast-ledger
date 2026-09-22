@@ -145,11 +145,11 @@ func contracts() map[service.OperationName]toolContract {
 		service.OperationForecastWithdraw:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastExpire:        {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastReaffirm:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "all", "dry_run"), Required: file},
-		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "all"), Required: file},
-		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTimestampStatus:       {Allowed: append(file, "question", "forecast"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTimestampVerify:       {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "scope", "head", "all", "dry_run"), Required: file},
+		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "scope", "head", "all"), Required: file},
+		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "scope", "head", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationTimestampStatus:       {Allowed: append(file, "question", "forecast", "scope", "head"), Required: []string{"file", "question", "forecast"}},
+		service.OperationTimestampVerify:       {Allowed: append(file, "question", "forecast", "scope", "head", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationVerificationRun:       {Allowed: append(file, "question", "forecast", "check_sources"), Required: file},
 		service.OperationPublicationBuild:      {Allowed: append(file, "output", "dry_run"), Required: []string{"file", "output"}},
 		service.OperationPublicationVerify:     {Allowed: append(file, "manifest"), Required: []string{"file", "manifest"}},
@@ -271,6 +271,8 @@ func scalarProperty(name string) map[string]any {
 		return map[string]any{"type": "boolean"}
 	case "forecaster_kind":
 		return map[string]any{"type": "string", "enum": []string{"individual", "team"}, "default": "individual"}
+	case "scope":
+		return map[string]any{"type": "string", "enum": []string{"forecast", "lifecycle"}, "default": "forecast"}
 	default:
 		return map[string]any{"type": "string", "minLength": 1}
 	}

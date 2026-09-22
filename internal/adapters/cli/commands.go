@@ -1142,7 +1142,7 @@ func forecastListAction(ctx context.Context, command *urfavecli.Command) error {
 		if index > 0 {
 			lines.WriteByte('\n')
 		}
-		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%s", item.ID, item.QuestionRevisionID, item.ForecastedAt, item.Visibility, item.IntegrityStatus, compactPublicJSON(item.RepresentationKinds))
+		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%s\t%s", item.ID, item.QuestionRevisionID, item.ForecastedAt, item.Visibility, item.IntegrityStatus, compactPublicJSON(item.Activity), compactPublicJSON(item.RepresentationKinds))
 	}
 	message := lines.String()
 	if message == "" {
@@ -1307,7 +1307,7 @@ func targetCommand() *urfavecli.Command {
 }
 
 func targetLeaf(name, usage string, readOnly bool) *urfavecli.Command {
-	flags := []urfavecli.Flag{fileFlag(false), &urfavecli.StringFlag{Name: "question", Usage: "Question ID"}, &urfavecli.StringFlag{Name: "forecast", Usage: "Forecast ID"}, &urfavecli.BoolFlag{Name: "all", Usage: "Select every forecast"}}
+	flags := []urfavecli.Flag{fileFlag(false), &urfavecli.StringFlag{Name: "question", Usage: "Question ID"}, &urfavecli.StringFlag{Name: "forecast", Usage: "Forecast ID"}, &urfavecli.BoolFlag{Name: "all", Usage: "Select every forecast"}, &urfavecli.StringFlag{Name: "scope", Value: "forecast", Usage: "Target scope: forecast or lifecycle"}, &urfavecli.StringFlag{Name: "head", Usage: "Lifecycle head event ID"}}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger target %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
 	command.Before = requireTargetSelection
 	return command
@@ -1319,12 +1319,13 @@ func targetBuildAction(ctx context.Context, command *urfavecli.Command) error {
 	defer cancel()
 	all := command.Bool("all")
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
+	scope, head := service.TargetScope(command.String("scope")), ledger.Slug(command.String("head"))
 	var result service.TargetOperationResult
 	var err error
 	if runtime.DryRun {
-		result, err = service.PlanTargetBuild(operationContext, command.String("file"), all, questionID, forecastID)
+		result, err = service.PlanTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head)
 	} else {
-		result, err = service.CommitTargetBuild(operationContext, command.String("file"), all, questionID, forecastID)
+		result, err = service.CommitTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head)
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
@@ -1336,7 +1337,7 @@ func targetCheckAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	result, err := service.InspectTargets(operationContext, command.String("file"), command.Bool("all"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")))
+	result, err := service.InspectTargetsScoped(operationContext, command.String("file"), service.TargetScope(command.String("scope")), command.Bool("all"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), ledger.Slug(command.String("head")))
 	if err != nil {
 		return err
 	}
@@ -1356,13 +1357,17 @@ func formatTargetInspection(mode presentation.Mode, result service.TargetOperati
 		}
 		reasons := strings.Join(target.ReasonCodes, ",")
 		if mode == presentation.ModePlain {
-			fmt.Fprintf(&output, "%s\t%s\t%s\t%s\t%s\t%s\t%s", target.QuestionID, target.ForecastID, target.State, reasons, target.Path, target.SHA256, target.ActualSHA256)
+			fmt.Fprintf(&output, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s", target.QuestionID, target.ForecastID, target.Scope, target.HeadEventID, target.State, reasons, target.Path, target.SHA256, target.ActualSHA256)
 			if target.Guidance != "" {
 				fmt.Fprintf(&output, "\t%s", target.Guidance)
 			}
 			continue
 		}
-		fmt.Fprintf(&output, "Target: %s / %s\n  State: %s\n  Path: %s\n  Expected SHA-256: %s", target.QuestionID, target.ForecastID, target.State, target.Path, target.SHA256)
+		fmt.Fprintf(&output, "Target: %s / %s\n  Scope: %s", target.QuestionID, target.ForecastID, target.Scope)
+		if target.HeadEventID != "" {
+			fmt.Fprintf(&output, "\n  Head event: %s", target.HeadEventID)
+		}
+		fmt.Fprintf(&output, "\n  State: %s\n  Path: %s\n  Expected SHA-256: %s", target.State, target.Path, target.SHA256)
 		if target.ActualSHA256 != "" {
 			fmt.Fprintf(&output, "\n  Actual SHA-256: %s", target.ActualSHA256)
 		}
@@ -1389,7 +1394,7 @@ func timestampCommand() *urfavecli.Command {
 }
 
 func timestampLeaf(name, usage string, readOnly, stampOptions bool) *urfavecli.Command {
-	flags := []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag()}
+	flags := []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), &urfavecli.StringFlag{Name: "scope", Value: "forecast", Usage: "Evidence scope: forecast or lifecycle"}, &urfavecli.StringFlag{Name: "head", Usage: "Lifecycle head event ID"}}
 	if stampOptions {
 		flags = append(flags, &urfavecli.BoolFlag{Name: "offline", Usage: "Open no network connection"})
 		flags = append(flags,
@@ -1399,7 +1404,22 @@ func timestampLeaf(name, usage string, readOnly, stampOptions bool) *urfavecli.C
 		)
 	}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger timestamp %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
+	command.Before = requireTimestampScope
 	return command
+}
+
+func requireTimestampScope(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
+	scope, head := command.String("scope"), command.String("head")
+	if scope != "forecast" && scope != "lifecycle" {
+		return ctx, app.NewError(app.CodeUsage, "--scope must be forecast or lifecycle", nil)
+	}
+	if scope == "lifecycle" && head == "" {
+		return ctx, app.NewError(app.CodeUsage, "--scope lifecycle requires --head", nil)
+	}
+	if scope == "forecast" && head != "" {
+		return ctx, app.NewError(app.CodeUsage, "--head requires --scope lifecycle", nil)
+	}
+	return ctx, nil
 }
 
 func timestampStampAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1408,6 +1428,7 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	defer cancel()
 	result, err := service.CommitTimestampStamp(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampStampOptions{
 		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAProvider: command.String("tsa-provider"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: commandEffects(command),
+		Scope: service.TargetScope(command.String("scope")), HeadEventID: ledger.Slug(command.String("head")),
 	})
 	if err != nil && result.FailureCode == "" {
 		return withRecovery(err, result.Recovery)
@@ -1424,7 +1445,7 @@ func timestampStatusAction(ctx context.Context, command *urfavecli.Command) erro
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	result, err := service.TimestampStatusFor(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")))
+	result, err := service.TimestampStatusForScoped(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TargetScope(command.String("scope")), ledger.Slug(command.String("head")))
 	if err != nil {
 		return err
 	}
@@ -1440,7 +1461,7 @@ func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) erro
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: commandEffects(command)})
+	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: commandEffects(command), Scope: service.TargetScope(command.String("scope")), HeadEventID: ledger.Slug(command.String("head"))})
 	if err != nil && result.FailureCode == "" {
 		return err
 	}
@@ -1646,9 +1667,9 @@ func formatQuestionView(mode presentation.Mode, view service.QuestionView) strin
 			output.WriteByte('\n')
 		}
 		if mode == presentation.ModePlain {
-			fmt.Fprintf(&output, "forecast\t%s\t%s\t%s\t%s", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, compactPublicJSON(forecast.Summary.RepresentationKinds))
+			fmt.Fprintf(&output, "forecast\t%s\t%s\t%s\t%s\t%s", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, compactPublicJSON(forecast.Summary.Activity), compactPublicJSON(forecast.Summary.RepresentationKinds))
 		} else {
-			fmt.Fprintf(&output, "Forecast: %s (revision %s, %s, %s)", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus)
+			fmt.Fprintf(&output, "Forecast: %s (revision %s, %s, forecast integrity %s, activity %s)", forecast.Summary.ID, forecast.Summary.QuestionRevisionID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus, forecast.Summary.Activity.Coverage)
 		}
 	}
 	return output.String()
@@ -1658,7 +1679,7 @@ func formatForecastView(mode presentation.Mode, view service.ForecastView) strin
 	fields := [][2]string{
 		{"id", string(view.Summary.ID)}, {"question_revision_id", string(view.Summary.QuestionRevisionID)}, {"forecasted_at", string(view.Summary.ForecastedAt)}, {"recorded_at", string(view.Summary.RecordedAt)},
 		{"visibility", string(view.Summary.Visibility)}, {"integrity_status", string(view.Summary.IntegrityStatus)},
-		{"integrity", compactPublicJSON(view.Integrity)},
+		{"activity", compactPublicJSON(view.Summary.Activity)}, {"integrity", compactPublicJSON(view.Integrity)},
 	}
 	if view.Representations != nil {
 		fields = append(fields, [2]string{"representations", compactPublicJSON(view.Representations)})
@@ -1680,6 +1701,12 @@ func formatForecastView(mode presentation.Mode, view service.ForecastView) strin
 	}
 	if view.Commitment != nil {
 		fields = append(fields, [2]string{"commitment", compactPublicJSON(view.Commitment)})
+	}
+	if view.LifecycleEvents != nil {
+		fields = append(fields, [2]string{"lifecycle_events", compactPublicJSON(*view.LifecycleEvents)})
+	}
+	if view.ActivityCheckpoints != nil {
+		fields = append(fields, [2]string{"activity_checkpoints", compactPublicJSON(*view.ActivityCheckpoints)})
 	}
 	var output strings.Builder
 	writeDisplayFields(&output, mode, fields)
@@ -1718,11 +1745,15 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 
 func formatTimestampVerification(mode presentation.Mode, result service.TimestampVerifyResult) string {
 	if mode == presentation.ModePlain {
-		return fmt.Sprintf("state\t%s\nverification\t%s\t%s\ntimestamps\t%s",
-			result.State, result.Verification.State, strings.Join(result.Verification.ReasonCodes, ","), compactPublicJSON(result.Entries))
+		return fmt.Sprintf("scope\t%s\nhead_event_id\t%s\nstate\t%s\nverification\t%s\t%s\ntimestamps\t%s",
+			result.Scope, result.HeadEventID, result.State, result.Verification.State, strings.Join(result.Verification.ReasonCodes, ","), compactPublicJSON(result.Entries))
 	}
 	var output strings.Builder
-	fmt.Fprintf(&output, "State: %s\nVerification: %s", result.State, result.Verification.State)
+	fmt.Fprintf(&output, "Scope: %s", result.Scope)
+	if result.HeadEventID != "" {
+		fmt.Fprintf(&output, "\nHead event: %s", result.HeadEventID)
+	}
+	fmt.Fprintf(&output, "\nState: %s\nVerification: %s", result.State, result.Verification.State)
 	if len(result.Verification.ReasonCodes) > 0 {
 		fmt.Fprintf(&output, " (%s)", strings.Join(result.Verification.ReasonCodes, ", "))
 	}
@@ -1732,11 +1763,15 @@ func formatTimestampVerification(mode presentation.Mode, result service.Timestam
 
 func formatTimestampArtifact(mode presentation.Mode, result service.TimestampArtifactResult) string {
 	if mode == presentation.ModePlain {
-		return fmt.Sprintf("state\t%s\nselection\t%s\t%s\nrequests\t%d\nattempts\t%s\ntimestamps\t%s",
-			result.State, result.SelectionMode, result.SelectedProvider, result.RequestSummary.RequestCount, compactPublicJSON(result.Attempts), compactPublicJSON(result.Entries))
+		return fmt.Sprintf("scope\t%s\nhead_event_id\t%s\nstate\t%s\nselection\t%s\t%s\nrequests\t%d\nattempts\t%s\ntimestamps\t%s",
+			result.Scope, result.HeadEventID, result.State, result.SelectionMode, result.SelectedProvider, result.RequestSummary.RequestCount, compactPublicJSON(result.Attempts), compactPublicJSON(result.Entries))
 	}
 	var output strings.Builder
-	fmt.Fprintf(&output, "State: %s", result.State)
+	fmt.Fprintf(&output, "Scope: %s", result.Scope)
+	if result.HeadEventID != "" {
+		fmt.Fprintf(&output, "\nHead event: %s", result.HeadEventID)
+	}
+	fmt.Fprintf(&output, "\nState: %s", result.State)
 	if result.SelectionMode != "" {
 		fmt.Fprintf(&output, "\nSelection: %s", result.SelectionMode)
 	}
@@ -1876,6 +1911,17 @@ func requireTargetSelection(ctx context.Context, command *urfavecli.Command) (co
 	all := command.Bool("all")
 	question := command.String("question")
 	forecast := command.String("forecast")
+	scope := command.String("scope")
+	head := command.String("head")
+	if scope != "forecast" && scope != "lifecycle" {
+		return ctx, app.NewError(app.CodeUsage, "--scope must be forecast or lifecycle", nil)
+	}
+	if scope == "lifecycle" && (all || question == "" || forecast == "" || head == "") {
+		return ctx, app.NewError(app.CodeUsage, "--scope lifecycle requires --question, --forecast, and --head and cannot use --all", nil)
+	}
+	if scope == "forecast" && head != "" {
+		return ctx, app.NewError(app.CodeUsage, "--head requires --scope lifecycle", nil)
+	}
 	if all && (question != "" || forecast != "") {
 		return ctx, app.NewError(app.CodeUsage, "--all cannot be combined with --question or --forecast", nil)
 	}

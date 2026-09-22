@@ -45,6 +45,8 @@ type toolInput struct {
 	TSAProvider            string          `json:"tsa_provider,omitempty"`
 	TSAURL                 string          `json:"tsa_url,omitempty"`
 	CABundle               string          `json:"ca_bundle,omitempty"`
+	Scope                  string          `json:"scope,omitempty"`
+	Head                   string          `json:"head,omitempty"`
 	All                    bool            `json:"all,omitempty"`
 	DryRun                 bool            `json:"dry_run,omitempty"`
 	Confirm                bool            `json:"confirm,omitempty"`
@@ -107,11 +109,11 @@ func decodeToolArguments(arguments json.RawMessage, maxBytes int, def service.Op
 			return toolInput{}, app.WithDetails(app.NewError(app.CodeUsage, "tool argument is required", nil), map[string]any{"field": name})
 		}
 	}
-	var input toolInput
-	decoder := json.NewDecoder(bytes.NewReader(arguments))
-	if err := decoder.Decode(&input); err != nil {
-		return toolInput{}, app.NewError(app.CodeUsage, "tool arguments have invalid types", err)
+	envelope := make(map[string]json.RawMessage, len(raw))
+	for name, value := range raw {
+		envelope[name] = value
 	}
+	var requestBytes json.RawMessage
 	if def.RequestSchema != "" && def.RequestMode != service.RequestSecret {
 		fields, err := requestSchemaFields(def.RequestSchema)
 		if err != nil {
@@ -121,13 +123,24 @@ func decodeToolArguments(arguments json.RawMessage, maxBytes int, def service.Op
 		for name := range fields {
 			if value, present := raw[name]; present {
 				request[name] = value
+				delete(envelope, name)
 			}
 		}
-		input.Request, err = json.Marshal(request)
+		requestBytes, err = json.Marshal(request)
 		if err != nil {
 			return toolInput{}, app.NewError(app.CodeInternal, "direct MCP request cannot be assembled", err)
 		}
 	}
+	envelopeBytes, err := json.Marshal(envelope)
+	if err != nil {
+		return toolInput{}, app.NewError(app.CodeInternal, "MCP tool envelope cannot be assembled", err)
+	}
+	var input toolInput
+	decoder := json.NewDecoder(bytes.NewReader(envelopeBytes))
+	if err := decoder.Decode(&input); err != nil {
+		return toolInput{}, app.NewError(app.CodeUsage, "tool arguments have invalid types", err)
+	}
+	input.Request = requestBytes
 	return input, nil
 }
 
@@ -313,28 +326,28 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		return result, err
 	case service.OperationTargetBuild:
 		if input.DryRun {
-			result, err := service.PlanTargetBuild(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+			result, err := service.PlanTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))
 			return result, err
 		}
-		result, err := service.CommitTargetBuild(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+		result, err := service.CommitTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))
 		return result, err
 	case service.OperationTargetCheck:
-		result, err := service.InspectTargets(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+		result, err := service.InspectTargetsScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))
 		if err != nil {
 			return nil, err
 		}
 		return result, nil
 	case service.OperationTimestampStamp:
-		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAProvider: input.TSAProvider, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects})
+		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAProvider: input.TSAProvider, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects, Scope: service.TargetScope(input.Scope), HeadEventID: ledger.Slug(input.Head)})
 		if err != nil && result.FailureCode == "" {
 			return result, err
 		}
 		return result, nil
 	case service.OperationTimestampStatus:
-		result, err := service.TimestampStatusFor(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+		result, err := service.TimestampStatusForScoped(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TargetScope(input.Scope), ledger.Slug(input.Head))
 		return result, err
 	case service.OperationTimestampVerify:
-		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Effects: s.effects})
+		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Effects: s.effects, Scope: service.TargetScope(input.Scope), HeadEventID: ledger.Slug(input.Head)})
 		return result, err
 	case service.OperationVerificationRun:
 		result, err := service.VerifyLedgerEvidence(ctx, file, service.VerificationOptions{Offline: s.config.Mode.Offline, CheckSources: input.CheckSources, QuestionID: ledger.Slug(input.Question), ForecastID: ledger.Slug(input.Forecast)})
@@ -750,9 +763,9 @@ func mergeInitialForecastPrivate(target *service.InitialForecastInput, private s
 		return
 	}
 	target.Representations = append([]ledger.ForecastRepresentation(nil), private.Representations...)
-	target.Rationale = &private.Rationale
-	target.KeyFactors = &private.KeyFactors
-	target.Comment = &private.Comment
+	target.Rationale = private.Rationale
+	target.KeyFactors = private.KeyFactors
+	target.Comment = private.Comment
 }
 
 func errorToolResult(operation service.OperationName, err error) *sdk.CallToolResult {

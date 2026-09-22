@@ -13,17 +13,17 @@ import (
 func TestPinnedV2ReleaseIdentity(t *testing.T) {
 	t.Parallel()
 
-	if Version != "2.0.1" || Commit != "55b1431d379128e1d75b9c30a3874398cea9ff0f" || AnnotatedTagObject != "ac69f718de92f2c087b44b1b02d325ba37945db6" {
+	if Version != "2.1.0" || Commit != "d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4" || AnnotatedTagObject != "6d74d483f7cb177470ba77f4fcb4063fe04f4003" {
 		t.Fatalf("unexpected upstream identity %q %q %q", Version, Commit, AnnotatedTagObject)
 	}
-	if ReleaseArchiveSHA256 != "bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41" {
+	if ReleaseArchiveSHA256 != "f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17" {
 		t.Fatalf("unexpected release archive digest %q", ReleaseArchiveSHA256)
 	}
-	if ReleaseChecksumsSHA256 != "fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6" {
+	if ReleaseChecksumsSHA256 != "6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b" {
 		t.Fatalf("unexpected release checksums digest %q", ReleaseChecksumsSHA256)
 	}
-	if ForecastSealProtocol != "forecast-seal/v2" || ForecastTargetProfile != "forecast-envelope/v2" {
-		t.Fatalf("unexpected active cryptographic profiles %q %q", ForecastSealProtocol, ForecastTargetProfile)
+	if ForecastSealProtocol != "forecast-seal/v2" || ForecastTargetProfile != "forecast-envelope/v2" || LifecycleTargetProfile != "forecast-lifecycle/v1" {
+		t.Fatalf("unexpected active cryptographic profiles %q %q %q", ForecastSealProtocol, ForecastTargetProfile, LifecycleTargetProfile)
 	}
 }
 
@@ -31,19 +31,28 @@ func TestEveryRetainedV2UpstreamFileDigest(t *testing.T) {
 	t.Parallel()
 
 	expected := map[string]string{
-		"LICENSE":            "7084b3fb14e3a306691af23e58ab0ccfa336b202853740f5e1ea0ebab39cacf2",
-		"docs/data-model.md": "ad3f80da79ccae28453a06bcb135ecd69dde2f752f48eb8b7aadf10b292eb72a",
-		"docs/forecast-verification-workflows.md":                  "12735d2d33b21c22a62fb02ba919712d585aae122e7f9bf6fecb87c9dccacb30",
-		"examples/valid/empty-ledger.json":                         "2be6a175b7bb06c44b661b9133c8987554bfd061cb906aee4cf42f0091f82de2",
-		"examples/valid/individual-ledger.json":                    "0c3cc6588c4a8d14a0dcf5481b2983bfe5da79f51a8988e17de0fe7c7734bfc2",
-		"examples/valid/question-without-forecasts.yaml":           "b440e8ca967cdacef321dd5be9a47f3a1abcfdf92376e7cb29d3391b913ce7b3",
-		"examples/valid/team-ledger.yaml":                          "075d21d6a0353683c092ef8a76ae44abf0a2bc3bced18787d75c426185e3247a",
-		"schema/forecast-ledger.schema.json":                       SchemaSHA256,
-		"tests/conformance/valid/relationships-and-datetime.json":  "a3b1ba78c212eda277c0c08e76bc9703368b2cfe3031024dc1af8ac04f6bc056",
-		"tests/invalid-cases.json":                                 "fe7a68952565ab1ed7d22fe3a9e330216b01f3ccda2068e2f2c5fdda6bf81c1a",
-		"tests/vectors/forecast-envelope-v2-public-lifecycle.json": "03ad733808e3b0809af0d6a7d8e4e3f9d39906b79e3318fb9b2f95ad4d1cdc99",
-		"tests/vectors/forecast-envelope-v2-sealed-lifecycle.json": "3b03922755895fba91d2d19cbafa11ba5a232ca91b38f46bbc269688e8ee3b3d",
-		"tests/vectors/forecast-seal-v2.json":                      "7cd814473f3e84617660e704f1aea8dc48e4b4a32cc86b93fd46c1649a4728d5",
+		"LICENSE":                                                   "7084b3fb14e3a306691af23e58ab0ccfa336b202853740f5e1ea0ebab39cacf2",
+		"docs/cryptographic-verification.md":                        "6783377ac3e66742367773e4674f4c271cdb04a4bd0da593e70bde4d73997096",
+		"docs/data-model.md":                                        "b995d4a2f7789a744013d7cd36c2ec66f9de933b811f0e286a561c4a6331041a",
+		"docs/forecast-verification-workflows.md":                   "4faaf71fbfc5b8d7cf9033d8c2bd1e6da6ff2c6f319965b3c7018435242e002e",
+		"docs/releases/v2.1.0.md":                                   "c37f13093145516d2dabd00455fd98f370227789dca7bb65ce0d93c1dd349973",
+		"examples/valid/empty-ledger.json":                          "57fd04a9b5020df49aaa9a6211557f5e72e745c35aed5a261d4da3ee9d960820",
+		"examples/valid/individual-ledger.json":                     "827eaf3337c3ac1060353672948fed519ba639f844851e625585b4b76d8b27ab",
+		"examples/valid/question-without-forecasts.yaml":            "57d7306e756e458604cbc494b4440f23120ea82369a1e1be264771dbd07860b9",
+		"examples/valid/team-ledger.yaml":                           "edd008ff3ecc8eb0d111c86a29c660e32a080ce16b4d859d924af939904bf67b",
+		"schema/forecast-ledger.schema.json":                        SchemaSHA256,
+		"tests/conformance/valid/lifecycle-checkpoints.json":        "c6137dc595e268a3e73cd81cb913b61b3c0a943364f191905028f3aee316a128",
+		"tests/conformance/valid/relationships-and-datetime.json":   "7fac440e78ebd003786e853f38062d81697b87c5ee91de80db577f167d2794dc",
+		"tests/conformance/valid/revealed-representation-only.json": "96b2ed4f70a140b384e7d40a13f62081f6439b05b61317481480044079cbec5b",
+		"tests/invalid-cases.json":                                  "a763383505dfec2be1f76ca1cb5d358f7ce7d433e031630708bde5ef160ebc70",
+		"tests/vectors/forecast-envelope-v2-public-lifecycle.json":  "86de57752b213272e3c50c53c68e5528b77a867fa227400cbdc7a8921152557d",
+		"tests/vectors/forecast-envelope-v2-sealed-lifecycle.json":  "d91d27ab08eb1b499cc1e2dcddb2c0517194d76adf548fdf48a15d44b1057cd4",
+		"tests/vectors/forecast-lifecycle-v1.json":                  "afee5ca4928b564355b57b301be74d3bce3399d063562512b71303a16a5c0bc4",
+		"tests/vectors/forecast-seal-v2-presence.json":              "5447c18880497d8366163acf847dcbca510093ada6111f80aa23e3585ad0467d",
+		"tests/vectors/forecast-seal-v2.json":                       "9247e3d89d4ae39b6c7f97eb6023ba91e6c958f059d3c3c4cd9b2ea2603c054f",
+		"tools/build_targets.py":                                    "fe7c72bbb99bf7f74fe4d310e3a85a70d17d86097b96c8d6c631b5ae92802b5a",
+		"tools/forecast_crypto.py":                                  "b5ef1ed51ec0fbfbe1f0c8e4d04732fe267972a698886dd4bbac316cabaa930e",
+		"tools/validate.py":                                         "52d512692d610b43314e4b3702898902108f4eea1014a90adee0c3fd78baa84c",
 	}
 	sourceRecord, err := fs.ReadFile(Conformance(), "SOURCE.md")
 	if err != nil {

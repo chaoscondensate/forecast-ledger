@@ -37,7 +37,7 @@ func BuildInitialSealedLedgerAt(ctx context.Context, root *ledger.Ledger, input 
 		return result, err
 	}
 	revisionID := question.CurrentRevisionID
-	sealed, err := forecastcrypto.Seal(ctx, question.ID, revisionID, private.ID, privateBundle(private, revisionID, recordedAt), "forecast-key:"+string(private.ID), effects.Random)
+	sealed, err := forecastcrypto.Seal(ctx, question.ID, revisionID, private.ID, privateBundle(private), "forecast-key:"+string(private.ID), effects.Random)
 	if err != nil {
 		return result, app.NewError(app.CodeIO, "sealed forecast could not be created", err)
 	}
@@ -75,7 +75,7 @@ func BuildQuestionAddSealed(ctx context.Context, model *ledger.Ledger, input Nor
 	if err != nil {
 		return result, err
 	}
-	sealed, err := forecastcrypto.Seal(ctx, question.ID, question.CurrentRevisionID, private.ID, privateBundle(private, question.CurrentRevisionID, recordedAt), "forecast-key:"+string(private.ID), effects.Random)
+	sealed, err := forecastcrypto.Seal(ctx, question.ID, question.CurrentRevisionID, private.ID, privateBundle(private), "forecast-key:"+string(private.ID), effects.Random)
 	if err != nil {
 		return result, app.NewError(app.CodeIO, "sealed forecast could not be created", err)
 	}
@@ -148,12 +148,14 @@ func validateInitialSealed(question ledger.Question, index *ledger.Index, privat
 	if private.SupersedesForecastID != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast.supersedes_forecast_id", "a question's first forecast cannot supersede another forecast")
 	}
-	if len(private.Representations) == 0 || private.Rationale == nil || private.KeyFactors == nil || private.Comment == nil {
-		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast", "a sealed forecast requires representations, rationale, key_factors, and comment")
+	if len(private.Representations) == 0 {
+		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast.representations", "at least one forecast representation is required")
 	}
-	for i, factor := range *private.KeyFactors {
-		if strings.TrimSpace(factor) == "" {
-			return ledger.Question{}, InitialForecastInput{}, "", invalidField(fmt.Sprintf("initial_forecast.key_factors.%d", i), "key factor must not be empty")
+	if private.KeyFactors != nil {
+		for i, factor := range *private.KeyFactors {
+			if strings.TrimSpace(factor) == "" {
+				return ledger.Question{}, InitialForecastInput{}, "", invalidField(fmt.Sprintf("initial_forecast.key_factors.%d", i), "key factor must not be empty")
+			}
 		}
 	}
 	forecastedAt, recordedAt := DefaultForecastTimes(private.ForecastedAt, private.RecordedAt, observedAt)
@@ -164,8 +166,8 @@ func validateInitialSealed(question ledger.Question, index *ledger.Index, privat
 	return question, private, recordedAt, nil
 }
 
-func privateBundle(input InitialForecastInput, revisionID ledger.Slug, recordedAt ledger.Timestamp) forecastcrypto.PrivateBundle {
-	return forecastcrypto.PrivateBundle{QuestionRevisionID: revisionID, ForecastedAt: input.ForecastedAt, RecordedAt: recordedAt, Representations: append([]ledger.ForecastRepresentation(nil), input.Representations...), Rationale: *input.Rationale, KeyFactors: append([]string(nil), (*input.KeyFactors)...), Comment: *input.Comment}
+func privateBundle(input InitialForecastInput) forecastcrypto.PrivateBundle {
+	return forecastcrypto.PrivateBundle{Representations: append([]ledger.ForecastRepresentation(nil), input.Representations...), Rationale: cloneString(input.Rationale), KeyFactors: cloneStrings(input.KeyFactors), Comment: cloneString(input.Comment)}
 }
 
 func placeholderCommitment(id ledger.Slug) ledger.SealedCommitment {

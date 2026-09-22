@@ -119,17 +119,17 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v2.0.1 contract permits zero questions and questions
+The embedded Forecast Ledger v2.1.0 contract permits zero questions and questions
 with zero forecasts. All ordinary non-secret authoring is available only through
 flags or direct MCP properties. Protected private forecast bundles use the
 purpose-named `--secret-input` or `--initial-secret-input` channels and never
 enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
 for empty-first, combined, dry-run, team, and sealed-key workflows.
 
-The runtime accepts exactly v2.0.1. It rejects v2.0.0 before locks, keys,
+The runtime accepts exactly v2.1.0. It rejects v2.0.1 before locks, keys,
 artifacts, entropy, or network activity and does not include a converter or
-compatibility reader. Interpret historical v2.0.0 evidence against the
-[retained upstream v2.0.0 source](https://github.com/chaoscondensate/schema/tree/1d3b186a15136bc5aff38647cb59fbef475dbe55),
+compatibility reader. Interpret historical v2.0.1 evidence against the
+[exact upstream v2.0.1 source](https://github.com/chaoscondensate/schema/tree/55b1431d379128e1d75b9c30a3874398cea9ff0f),
 not with this runtime.
 
 Root display and current forecaster metadata can later be changed with a closed
@@ -208,7 +208,10 @@ forecast-ledger forecast reveal \
 ```
 
 Read [Seal and reveal forecasts](docs/how-to/seal-and-reveal-forecasts.md)
-before handling private material or protected keys.
+before handling private material or protected keys. The protected bundle may
+contain only `representations`; rationale, key factors, and comment are
+independently optional, and an absent field remains distinct from an explicit
+empty value.
 
 Build or check the exact canonical bytes used by later evidence:
 
@@ -221,6 +224,18 @@ forecast-ledger target check \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002
+```
+
+After appending an activity event, retain a separate target for its exact
+prefix by selecting the lifecycle scope and head:
+
+```sh
+forecast-ledger target build \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --scope lifecycle \
+  --head withdraw-001
 ```
 
 See [Build and check forecast targets](docs/how-to/build-targets.md) for the
@@ -240,6 +255,10 @@ forecast-ledger timestamp stamp \
 forecast-ledger timestamp status --file ledger.yaml --question q-launch --forecast f-launch-002
 forecast-ledger timestamp verify --file ledger.yaml --question q-launch --forecast f-launch-002
 ```
+
+The same three timestamp commands accept `--scope lifecycle --head <event-id>`.
+They retain independent evidence for that exact activity prefix and append or
+update its checkpoint without changing the forecast target.
 
 Omitting TSA options selects the current one-entry catalog: FreeTSA at its exact
 HTTPS endpoint. The embedded FreeTSA CA is copied to `trust/rfc3161/` beside the

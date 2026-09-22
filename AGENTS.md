@@ -16,20 +16,20 @@ content is English and should use short, plain terms.
 
 When sources disagree, use this order:
 
-1. The exact embedded Forecast Ledger v2.0.1 contract and its published
+1. The exact embedded Forecast Ledger v2.1.0 contract and its published
    conformance fixtures.
 2. Published English documentation and retained exact-commit v2 source material.
 3. Accepted OpenSpec artifacts in this repository.
 4. Older Research material, which is background only.
 
 The authoritative upstream commit is
-`55b1431d379128e1d75b9c30a3874398cea9ff0f`. The annotated tag object is
-`ac69f718de92f2c087b44b1b02d325ba37945db6`, and the embedded schema SHA-256 is
-`5ceeeca7b2b3e46884c116aeb4f20998daf619569c0191728f574c245a4a595b`.
+`d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4`. The annotated tag object is
+`6d74d483f7cb177470ba77f4fcb4063fe04f4003`, and the embedded schema SHA-256 is
+`cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107`.
 The release archive SHA-256 is
-`bfe00b166efdef229848afd6d623eeb965507f314482e59b9c0663bb87ff7a41`,
+`f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17`,
 and the published `SHA256SUMS` asset SHA-256 is
-`fa4c72bc5f4f27dd936e95cf9ad61fdee7c1d12ecb17ca847ac00b919c8664d6`.
+`6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b`.
 Never fetch a floating tag at build or runtime. Do not edit vendored contract or
 fixture bytes by hand. A schema update must change the exact commit, tag object,
 release archive digest, checksum-asset digest, schema digest, attribution,

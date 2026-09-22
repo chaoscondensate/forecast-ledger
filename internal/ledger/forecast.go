@@ -197,6 +197,13 @@ type LifecycleEvent struct {
 	Provenance  *Provenance        `json:"provenance,omitempty" yaml:"provenance,omitempty"`
 }
 
+type ActivityCheckpoint struct {
+	ID          Slug               `json:"id" yaml:"id"`
+	HeadEventID Slug               `json:"head_event_id" yaml:"head_event_id"`
+	RecordedAt  Timestamp          `json:"recorded_at" yaml:"recorded_at"`
+	Integrity   LifecycleIntegrity `json:"integrity" yaml:"integrity"`
+}
+
 type Forecast struct {
 	ID                   Slug                      `json:"id" yaml:"id"`
 	QuestionRevisionID   Slug                      `json:"question_revision_id" yaml:"question_revision_id"`
@@ -211,6 +218,7 @@ type Forecast struct {
 	SupersedesForecastID *Slug                     `json:"supersedes_forecast_id,omitempty" yaml:"supersedes_forecast_id,omitempty"`
 	Provenance           *Provenance               `json:"provenance,omitempty" yaml:"provenance,omitempty"`
 	LifecycleEvents      *[]LifecycleEvent         `json:"lifecycle_events,omitempty" yaml:"lifecycle_events,omitempty"`
+	ActivityCheckpoints  *[]ActivityCheckpoint     `json:"activity_checkpoints,omitempty" yaml:"activity_checkpoints,omitempty"`
 	Commitment           *Commitment               `json:"commitment,omitempty" yaml:"commitment,omitempty"`
 	Integrity            Integrity                 `json:"integrity" yaml:"integrity"`
 }

@@ -149,6 +149,13 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 					timestamps = *forecast.Integrity.Failed.Timestamps
 				}
 			}
+			lifecyclePending, lifecycleErr := collectLifecyclePublicationFiles(files, root, loaded.Model, question, forecast)
+			if lifecycleErr != nil {
+				return PublicationBuildResult{}, lifecycleErr
+			}
+			if lifecyclePending {
+				evidenceState = "pending"
+			}
 			if target == nil {
 				continue
 			}
@@ -233,6 +240,77 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 	return result, nil
 }
 
+func collectLifecyclePublicationFiles(files map[string]PublicationFile, root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast) (bool, error) {
+	if forecast.ActivityCheckpoints == nil {
+		return false, nil
+	}
+	pending := false
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		var target *ledger.LifecycleTarget
+		var timestamps []ledger.RFC3161Timestamp
+		switch {
+		case checkpoint.Integrity.Pending != nil:
+			target, timestamps, pending = &checkpoint.Integrity.Pending.Target, checkpoint.Integrity.Pending.Timestamps, true
+		case checkpoint.Integrity.Verified != nil:
+			target, timestamps = &checkpoint.Integrity.Verified.Target, checkpoint.Integrity.Verified.Timestamps
+		case checkpoint.Integrity.Failed != nil:
+			target = checkpoint.Integrity.Failed.Target
+			if checkpoint.Integrity.Failed.Timestamps != nil {
+				timestamps = *checkpoint.Integrity.Failed.Timestamps
+			}
+		}
+		if target == nil {
+			continue
+		}
+		artifact, err := BuildLifecycleTarget(model, question.ID, forecast.ID, checkpoint.HeadEventID)
+		if err != nil || target.Scope != artifact.Scope || target.Canonicalization != TargetCanonicalization || target.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+			return pending, app.NewError(app.CodeVerification, "recorded lifecycle target metadata does not match its checkpoint", err)
+		}
+		actual, err := readConfinedArtifact(root, string(target.ArtifactPath), maxTargetBytes)
+		if err != nil || !bytes.Equal(actual, artifact.Bytes) {
+			return pending, app.NewError(app.CodeVerification, "lifecycle target cannot be packaged because its bytes do not match", err)
+		}
+		if err := addPublicationFile(files, publicationFile(publication.RoleTarget, string(target.ArtifactPath), actual)); err != nil {
+			return pending, err
+		}
+		for _, timestamp := range timestamps {
+			requestBytes, err := readConfinedArtifact(root, string(timestamp.RequestPath), maxTimestampRequestBytes)
+			if err != nil {
+				return pending, err
+			}
+			if _, err := rfc3161.ParseRequest(requestBytes, artifact.Bytes, rfc3161.DefaultLimits()); err != nil {
+				return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 request has an invalid target binding", nil)
+			}
+			responseBytes, err := readConfinedArtifact(root, string(timestamp.ResponsePath), maxTimestampResponseBytes)
+			if err != nil {
+				return pending, err
+			}
+			if err := rfc3161.ParseResponse(responseBytes, rfc3161.DefaultLimits()); err != nil {
+				return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 response is malformed", nil)
+			}
+			if err := addPublicationFile(files, publicationFile(publication.RoleRequest, string(timestamp.RequestPath), requestBytes)); err != nil {
+				return pending, err
+			}
+			if err := addPublicationFile(files, publicationFile(publication.RoleResponse, string(timestamp.ResponsePath), responseBytes)); err != nil {
+				return pending, err
+			}
+			if timestamp.CABundlePath != nil {
+				caBytes, err := readConfinedArtifact(root, string(*timestamp.CABundlePath), maxTimestampCABundleBytes)
+				if err != nil {
+					return pending, err
+				}
+				if err := rfc3161.ValidateCABundle(caBytes, rfc3161.DefaultLimits()); err != nil {
+					return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 CA bundle is invalid", nil)
+				}
+				if err := addPublicationFile(files, publicationFile(publication.RoleCABundle, string(*timestamp.CABundlePath), caBytes)); err != nil {
+					return pending, err
+				}
+			}
+		}
+	}
+	return pending, nil
+}
+
 func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath string) (PublicationVerifyResult, error) {
 	resolvedLedger, err := storage.ResolveLedgerPath(ledgerPath, true)
 	if err != nil {
@@ -311,7 +389,8 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 			timing := verifyPackageTiming(ctx, root, loaded.Model, question, forecast, content)
 			reveal := verifyRevealLayer(question, forecast, content)
 			outcome := verifyOutcomeLayer(ctx, question, VerificationOptions{Offline: true})
-			result.Evidence = append(result.Evidence, ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID, Layers: []VerificationLayer{content, timing, reveal, outcome}})
+			activity := verifyPackageActivity(ctx, root, loaded.Model, question, forecast)
+			result.Evidence = append(result.Evidence, ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID, Layers: []VerificationLayer{content, activity, timing, reveal, outcome}})
 		}
 	}
 	if ctx != nil && ctx.Err() != nil {
@@ -320,6 +399,65 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	temporaryReport := VerificationReport{Forecasts: result.Evidence}
 	result.Overall, result.FailureCode = aggregateVerification(temporaryReport)
 	return result, nil
+}
+
+func verifyPackageActivity(ctx context.Context, root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast) VerificationLayer {
+	activity := deriveActivity(forecast)
+	evidence := activityEvidence(activity)
+	layer := VerificationLayer{Name: "activity", Evidence: evidence, Limitations: []string{"Activity evidence cannot prove completeness after every independent observation is removed."}}
+	if forecast.ActivityCheckpoints == nil || len(*forecast.ActivityCheckpoints) == 0 {
+		layer.State, layer.ReasonCodes = LayerNotApplicable, []string{"activity.unbound"}
+		return layer
+	}
+	hasVerified, hasPending := false, false
+	checkpointResults := make([]map[string]any, 0, len(*forecast.ActivityCheckpoints))
+	for _, checkpoint := range *forecast.ActivityCheckpoints {
+		artifact, err := BuildLifecycleTarget(model, question.ID, forecast.ID, checkpoint.HeadEventID)
+		if err != nil {
+			return failedLayerWithEvidence(layer.Name, "activity.target_build_failed", evidence)
+		}
+		declaredTarget := lifecycleIntegrityTarget(checkpoint.Integrity)
+		if declaredTarget == nil || declaredTarget.Scope != artifact.Scope || declaredTarget.Canonicalization != TargetCanonicalization || declaredTarget.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+			return failedLayerWithEvidence(layer.Name, "activity.target_metadata_mismatch", evidence)
+		}
+		row := map[string]any{"checkpoint_id": checkpoint.ID, "head_event_id": checkpoint.HeadEventID, "target_path": declaredTarget.ArtifactPath, "target_sha256": artifact.SHA256}
+		data, err := readConfinedArtifact(root, string(declaredTarget.ArtifactPath), maxTargetBytes)
+		if err != nil {
+			row["state"] = ActivityNotChecked
+			checkpointResults = append(checkpointResults, row)
+			evidence["checkpoints"] = checkpointResults
+			layer.State, layer.ReasonCodes = LayerNotChecked, []string{"activity.declared_evidence_missing"}
+			return layer
+		}
+		if !bytes.Equal(data, artifact.Bytes) {
+			return failedLayerWithEvidence(layer.Name, "activity.target_mismatch", evidence)
+		}
+		var timestamps []ledger.RFC3161Timestamp
+		if checkpoint.Integrity.Pending != nil {
+			timestamps = checkpoint.Integrity.Pending.Timestamps
+			row["state"] = ledger.IntegrityPending
+		} else if checkpoint.Integrity.Verified != nil {
+			timestamps = checkpoint.Integrity.Verified.Timestamps
+			row["state"] = ledger.IntegrityVerified
+		} else {
+			evidence["checkpoints"] = checkpointResults
+			return failedLayerWithEvidence(layer.Name, "activity.imported_failed", evidence)
+		}
+		results := inspectTimestampEntries(ctx, root, artifact.Bytes, timestamps)
+		row["timestamps"] = results
+		checkpointResults = append(checkpointResults, row)
+		for _, result := range results {
+			if result.CheckState == LayerFail {
+				evidence["checkpoints"] = checkpointResults
+				return failedLayerWithEvidence(layer.Name, "activity.timestamp_mismatch", evidence)
+			}
+			hasVerified = hasVerified || result.CheckState == LayerPass && result.State == ledger.RFC3161Verified
+			hasPending = hasPending || result.CheckState != LayerPass || result.State == ledger.RFC3161Pending
+		}
+	}
+	evidence["checkpoints"] = checkpointResults
+	layer.State, layer.ReasonCodes = classifyActivityEvidence(activity, hasVerified, hasPending, false)
+	return layer
 }
 
 func verifyPackageContent(root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast) VerificationLayer {

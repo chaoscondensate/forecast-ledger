@@ -493,10 +493,7 @@
       },
       "required": [
         "question_revision_id",
-        "representations",
-        "rationale",
-        "key_factors",
-        "comment"
+        "representations"
       ],
       "type": "object"
     },

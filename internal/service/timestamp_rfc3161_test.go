@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,7 +91,7 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 		}
 	}
 	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
-	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[0].State != LayerPass || report.Forecasts[0].Layers[1].State != LayerPass {
+	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[0].State != LayerPass || report.Forecasts[0].Layers[1].State != LayerNotApplicable || report.Forecasts[0].Layers[2].State != LayerPass {
 		t.Fatalf("lifecycle evidence verification = %#v, %v", report, err)
 	}
 	loaded, err = LoadAndValidateLedger(t.Context(), ledgerPath, nil)
@@ -107,13 +108,13 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 	*timestamps[0].SerialNumber = originalSerials[0] + "0"
 	writeLedgerModel(t, ledgerPath, loaded.Model)
 	report, err = VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
-	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[1].State != LayerPass {
+	if err != nil || report.Overall != VerificationPass || report.Forecasts[0].Layers[2].State != LayerPass {
 		t.Fatalf("one-of-two timestamp verification = %#v, %v", report, err)
 	}
 	*timestamps[1].SerialNumber = originalSerials[1] + "0"
 	writeLedgerModel(t, ledgerPath, loaded.Model)
 	report, err = VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
-	if err != nil || report.Overall != VerificationFail || report.Forecasts[0].Layers[1].State != LayerFail {
+	if err != nil || report.Overall != VerificationFail || report.Forecasts[0].Layers[2].State != LayerFail {
 		t.Fatalf("all metadata mismatch verification = %#v, %v", report, err)
 	}
 	*timestamps[0].SerialNumber, *timestamps[1].SerialNumber = originalSerials[0], originalSerials[1]
@@ -128,6 +129,120 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 	packageResult, err := VerifyPublicationPackage(t.Context(), packageLedger, filepath.Join(packageRoot, "manifest.json"))
 	if err != nil || packageResult.Overall != VerificationPass || transport.requests != 2 {
 		t.Fatalf("package verify = %#v, %v; requests=%d", packageResult, err, transport.requests)
+	}
+}
+
+func TestLifecycleTimestampPendingCommitAppendsOneExactHeadCheckpoint(t *testing.T) {
+	directory := t.TempDir()
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	mutation, err := BuildForecastLifecycle(testPublicInitialLedger(t), "q-one", "f-one", ledger.LifecycleWithdrawn, LifecycleInput{ID: "event-withdrawn", EffectiveAt: "2026-02-01T00:00:00Z"}, "2026-02-01T00:00:01Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLedgerModel(t, ledgerPath, mutation.Ledger)
+	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := BuildLifecycleTarget(mutation.Ledger, "q-one", "f-one", "event-withdrawn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsaURL := "https://tsa.example.test/stamp"
+	requestPath, _, err := timestampEvidencePathsForArtifact(artifact, tsaURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestBytes, _, err := rfc3161.CreateRequest(artifact.Bytes, bytes.NewReader(bytes.Repeat([]byte{0x31}, 32)), rfc3161.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestAbsolute := filepath.Join(directory, filepath.FromSlash(string(requestPath)))
+	if err := os.MkdirAll(filepath.Dir(requestAbsolute), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(requestAbsolute, requestBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	options := TimestampStampOptions{
+		Scope: TargetScopeLifecycle, HeadEventID: "event-withdrawn", TSAURL: tsaURL, CABundlePath: "tsa.pem",
+		Effects:    Effects{Clock: fixedTestClock{value: time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}},
+		HTTPClient: testTimestampHTTPClient(&countingRoundTripper{response: timestampFixture(t, "response.tsr")}),
+	}
+	result, stampErr := CommitTimestampStamp(t.Context(), ledgerPath, "q-one", "f-one", options)
+	if app.ErrorCodeOf(stampErr) != app.CodePending || result.Scope != TargetScopeLifecycle || result.HeadEventID != "event-withdrawn" {
+		t.Fatalf("lifecycle pending stamp = %#v, %v", result, stampErr)
+	}
+	loaded, err := LoadAndValidateLedger(t.Context(), ledgerPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := loaded.Model.Questions[0].Forecasts[0].ActivityCheckpoints
+	if checkpoints == nil || len(*checkpoints) != 1 || (*checkpoints)[0].HeadEventID != "event-withdrawn" || (*checkpoints)[0].Integrity.Pending == nil {
+		t.Fatalf("checkpoint = %#v", checkpoints)
+	}
+	if !strings.Contains(string((*checkpoints)[0].Integrity.Pending.Timestamps[0].RequestPath), "f-one.lifecycle.event-withdrawn") {
+		t.Fatalf("request path = %s", (*checkpoints)[0].Integrity.Pending.Timestamps[0].RequestPath)
+	}
+	_, retryErr := CommitTimestampStamp(t.Context(), ledgerPath, "q-one", "f-one", options)
+	if app.ErrorCodeOf(retryErr) != app.CodePending {
+		t.Fatalf("retry error = %v", retryErr)
+	}
+	loaded, err = LoadAndValidateLedger(t.Context(), ledgerPath, nil)
+	if err != nil || len(*loaded.Model.Questions[0].Forecasts[0].ActivityCheckpoints) != 1 {
+		t.Fatalf("retry checkpoint count: %v", err)
+	}
+	packagePath := filepath.Join(directory, "package")
+	publication, err := CommitPublicationBuild(t.Context(), ledgerPath, packagePath, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFragments := []string{
+		"proofs/targets/f-one.lifecycle.event-withdrawn.json",
+		"proofs/timestamps/f-one.lifecycle.event-withdrawn/",
+		"tsa.pem",
+	}
+	for _, fragment := range wantFragments {
+		found := false
+		for _, file := range publication.Files {
+			if strings.Contains(file.Path, fragment) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("lifecycle publication is missing %q: %#v", fragment, publication.Files)
+		}
+	}
+	targetPath := filepath.Join(directory, "proofs", "targets", "f-one.lifecycle.event-withdrawn.json")
+	if err := os.Remove(targetPath); err != nil {
+		t.Fatal(err)
+	}
+	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-one", ForecastID: "f-one", Offline: true})
+	if err != nil || report.Overall != VerificationIncomplete || len(report.Forecasts) != 1 || report.Forecasts[0].Layers[1].State != LayerNotChecked || !containsString(report.Forecasts[0].Layers[1].ReasonCodes, "activity.declared_evidence_missing") {
+		t.Fatalf("missing lifecycle target verification = %#v, %v", report, err)
+	}
+}
+
+func TestLifecycleTimestampCancellationCreatesNoEvidence(t *testing.T) {
+	directory := t.TempDir()
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	mutation, err := BuildForecastLifecycle(testPublicInitialLedger(t), "q-one", "f-one", ledger.LifecycleWithdrawn, LifecycleInput{ID: "event-withdrawn", EffectiveAt: "2026-02-01T00:00:00Z"}, "2026-02-01T00:00:01Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLedgerModel(t, ledgerPath, mutation.Ledger)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = CommitTimestampStamp(ctx, ledgerPath, "q-one", "f-one", TimestampStampOptions{Scope: TargetScopeLifecycle, HeadEventID: "event-withdrawn"})
+	if app.ErrorCodeOf(err) != app.CodeInterrupted {
+		t.Fatalf("canceled lifecycle timestamp error = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(directory, "proofs")); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("canceled lifecycle timestamp created artifacts: %v", statErr)
+	}
+	loaded, err := LoadAndValidateLedger(t.Context(), ledgerPath, nil)
+	if err != nil || loaded.Model.Questions[0].Forecasts[0].ActivityCheckpoints != nil {
+		t.Fatalf("canceled lifecycle timestamp changed ledger: %#v, %v", loaded, err)
 	}
 }
 
@@ -199,7 +314,7 @@ func TestRFC3161DryRunOfflineOutageAndPendingRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
-	if err != nil || report.Overall != VerificationPending || report.Forecasts[0].Layers[1].State != LayerPending {
+	if err != nil || report.Overall != VerificationPending || report.Forecasts[0].Layers[2].State != LayerPending {
 		t.Fatalf("missing retained response = %#v, %v", report, err)
 	}
 	if err := os.WriteFile(filepath.Join(directory, filepath.FromSlash(string(responsePath))), responseBytes, 0o644); err != nil {

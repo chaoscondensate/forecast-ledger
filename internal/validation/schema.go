@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	contractID = "https://raw.githubusercontent.com/chaoscondensate/schema/v2.0.1/schema/forecast-ledger.schema.json"
+	contractID = "https://raw.githubusercontent.com/chaoscondensate/schema/v2.1.0/schema/forecast-ledger.schema.json"
 	draft2020  = "https://json-schema.org/draft/2020-12/schema"
 )
 

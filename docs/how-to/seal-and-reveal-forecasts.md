@@ -1,7 +1,7 @@
 # Seal and reveal forecasts
 
 <!-- doc-metadata
-coverage: v0.9.1
+coverage: v0.10.0
 reviewed: 2026-09-22
 owner: interface
 generated: false
@@ -21,11 +21,13 @@ representations:
   - kind: probability
     outcome: true
     probability: "0.65"
-rationale: Private reasoning.
-key_factors:
-  - A private observation.
-comment: Private working note.
 ```
+
+`representations` is the only required private property. Add `rationale`,
+`key_factors`, or `comment` independently when needed. Presence is
+authenticated: omitting `comment` is different from `comment: ""`, and
+omitting `key_factors` is different from `key_factors: []`. A present key
+factor must be non-empty.
 
 ```sh
 chmod 600 private-forecast.yaml
@@ -53,11 +55,11 @@ retained and recovery output identifies its safe display name. `--dry-run`
 validates input and destinations without generating a salt, key, or nonce.
 
 The `forecast-seal/v2` plaintext authenticates the question ID, exact question
-revision ID, forecast ID, random salt, representations, rationale, key factors,
-and comment. Associated data also authenticates the scheme and commitment
-digest. A separate `forecast-envelope/v2` target binds the full question
-revision and public forecast record. After reveal publishes the key, anyone
-with the retained ciphertext can recover the private bundle.
+revision ID, forecast ID, random salt, representations, and the presence and
+value of each optional private field. Associated data also authenticates the
+scheme and commitment digest. A separate `forecast-envelope/v2` target binds
+the full question revision and public forecast record. After reveal publishes
+the key, anyone with the retained ciphertext can recover the private bundle.
 
 Reveal only with explicit approval:
 
@@ -72,11 +74,12 @@ forecast-ledger forecast reveal \
 
 Reveal verifies the protected key file, AEAD, commitment digest, protocol,
 IDs, exact canonical plaintext, typed mirror, and original sealed target before
-changing the ledger. It publishes the representations, rationale, factors,
-comment, and key required by schema v2 while retaining ciphertext, commitment, public fields,
-integrity, target, and timestamp evidence. Normal and JSON results never print
-the key or private fields. Repeating reveal with the correct key is unchanged.
-Use `--revealed-at` for an explicit reproducible RFC 3339 time.
+changing the ledger. It publishes representations, only the optional fields
+that were present in the authenticated bundle, and the key required by schema
+v2 while retaining ciphertext, commitment, public fields, integrity, target,
+and timestamp evidence. Normal and JSON results never print the key or private
+fields. Repeating reveal with the correct key is unchanged. Use `--revealed-at`
+for an explicit reproducible RFC 3339 time.
 
 The key hint is public, non-authoritative metadata; it never locates or reads a
 key. Repair it without changing seal or target bytes:

@@ -39,7 +39,7 @@ func BuildSealedForecastAppend(ctx context.Context, model *ledger.Ledger, questi
 	if err != nil {
 		return result, err
 	}
-	bundle := forecastcrypto.PrivateBundle{QuestionRevisionID: revision.ID, ForecastedAt: normalized.ForecastedAt, RecordedAt: recordedAt, Representations: append([]ledger.ForecastRepresentation(nil), normalized.Representations...), Rationale: normalized.Rationale, KeyFactors: append([]string(nil), normalized.KeyFactors...), Comment: normalized.Comment}
+	bundle := forecastcrypto.PrivateBundle{Representations: append([]ledger.ForecastRepresentation(nil), normalized.Representations...), Rationale: cloneString(normalized.Rationale), KeyFactors: cloneStrings(normalized.KeyFactors), Comment: cloneString(normalized.Comment)}
 	sealed, err := forecastcrypto.Seal(ctx, questionID, revision.ID, forecastID, bundle, "forecast-key:"+string(forecastID), effects.Random)
 	if err != nil {
 		return result, app.NewError(app.CodeIO, "sealed forecast could not be created", err)
@@ -70,8 +70,7 @@ func prepareSealedForecastAppend(model *ledger.Ledger, questionID, forecastID le
 	if len(input.Representations) == 0 {
 		return 0, ledger.Question{}, ledger.QuestionRevision{}, "", input, invalidField("representations", "at least one forecast representation is required")
 	}
-	factors := input.KeyFactors
-	if err := validateOptionalKeyFactors(&factors); err != nil {
+	if err := validateOptionalKeyFactors(input.KeyFactors); err != nil {
 		return 0, ledger.Question{}, ledger.QuestionRevision{}, "", input, err
 	}
 	if err := validateForecastChronology(&revision, forecastedAt, recordedAt); err != nil {
@@ -135,10 +134,8 @@ func BuildForecastReveal(model *ledger.Ledger, questionID, forecastID ledger.Slu
 	}
 	updated := &prospective.Questions[questionPosition].Forecasts[forecastPosition]
 	representations := append([]ledger.ForecastRepresentation(nil), opened.Bundle.Representations...)
-	rationale := opened.Bundle.Rationale
-	factors := append([]string(nil), opened.Bundle.KeyFactors...)
-	comment := opened.Bundle.Comment
-	updated.Visibility, updated.Representations, updated.Rationale, updated.KeyFactors, updated.Comment = ledger.VisibilityRevealed, &representations, &rationale, &factors, &comment
+	updated.Visibility, updated.Representations = ledger.VisibilityRevealed, &representations
+	updated.Rationale, updated.KeyFactors, updated.Comment = cloneString(opened.Bundle.Rationale), cloneStrings(opened.Bundle.KeyFactors), cloneString(opened.Bundle.Comment)
 	updated.Commitment = &ledger.Commitment{Revealed: &ledger.RevealedCommitment{Scheme: sealed.Scheme, CommitmentHash: sealed.CommitmentHash, Encryption: sealed.Encryption, KeyHint: sealed.KeyHint, RevealedAt: revealedAt, RevealedKey: opened.KeyHex}}
 	if err := ValidateProspectiveLedgerModel(prospective); err != nil {
 		return ForecastMutation{}, err
@@ -152,12 +149,24 @@ func BuildForecastReveal(model *ledger.Ledger, questionID, forecastID ledger.Slu
 	}
 	base := "/questions/" + strconv.Itoa(questionPosition) + "/forecasts/" + strconv.Itoa(forecastPosition)
 	patchValue := func(value any) any { normalized, _ := jsonPatchValue(value); return normalized }
-	return ForecastMutation{Ledger: prospective, Patches: []document.PatchOperation{
+	patches := []document.PatchOperation{
 		replacePatch(base+"/visibility", ledger.VisibilityRevealed),
 		{Kind: document.PatchAdd, Pointer: base + "/representations", Value: patchValue(representations)},
-		{Kind: document.PatchAdd, Pointer: base + "/rationale", Value: rationale}, {Kind: document.PatchAdd, Pointer: base + "/key_factors", Value: patchValue(factors)}, {Kind: document.PatchAdd, Pointer: base + "/comment", Value: comment},
-		{Kind: document.PatchAdd, Pointer: base + "/commitment/revealed_at", Value: string(revealedAt)}, {Kind: document.PatchAdd, Pointer: base + "/commitment/revealed_key", Value: string(opened.KeyHex)},
-	}}, nil
+	}
+	if opened.Bundle.Rationale != nil {
+		patches = append(patches, document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/rationale", Value: *opened.Bundle.Rationale})
+	}
+	if opened.Bundle.KeyFactors != nil {
+		patches = append(patches, document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/key_factors", Value: patchValue(*opened.Bundle.KeyFactors)})
+	}
+	if opened.Bundle.Comment != nil {
+		patches = append(patches, document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/comment", Value: *opened.Bundle.Comment})
+	}
+	patches = append(patches,
+		document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/commitment/revealed_at", Value: string(revealedAt)},
+		document.PatchOperation{Kind: document.PatchAdd, Pointer: base + "/commitment/revealed_key", Value: string(opened.KeyHex)},
+	)
+	return ForecastMutation{Ledger: prospective, Patches: patches}, nil
 }
 
 func BuildForecastKeyHintUpdate(model *ledger.Ledger, questionID, forecastID ledger.Slug, keyHint string) (ForecastMutation, error) {
@@ -233,9 +242,6 @@ func originalSealedCommitment(forecast ledger.Forecast) (ledger.SealedCommitment
 }
 
 func validateRevealedBundle(question ledger.Question, forecast ledger.Forecast, bundle forecastcrypto.PrivateBundle) error {
-	if bundle.QuestionRevisionID != forecast.QuestionRevisionID || bundle.ForecastedAt != forecast.ForecastedAt || bundle.RecordedAt != forecast.RecordedAt {
-		return app.NewError(app.CodeVerification, "authenticated forecast binding does not match the public record", nil)
-	}
 	var revision *ledger.QuestionRevision
 	for i := range question.Revisions {
 		if question.Revisions[i].ID == forecast.QuestionRevisionID {
@@ -246,29 +252,21 @@ func validateRevealedBundle(question ledger.Question, forecast ledger.Forecast, 
 	if revision == nil {
 		return app.NewError(app.CodeVerification, "bound question revision is missing", nil)
 	}
-	factors := bundle.KeyFactors
-	if err := validateOptionalKeyFactors(&factors); err != nil {
+	if len(bundle.Representations) == 0 {
+		return app.NewError(app.CodeVerification, "authenticated forecast has no representations", nil)
+	}
+	if err := validateOptionalKeyFactors(bundle.KeyFactors); err != nil {
 		return err
 	}
-	return validateForecastChronology(revision, bundle.ForecastedAt, bundle.RecordedAt)
+	return validateForecastChronology(revision, forecast.ForecastedAt, forecast.RecordedAt)
 }
 
 func revealedMirrorMatches(forecast ledger.Forecast, bundle forecastcrypto.PrivateBundle) bool {
-	if forecast.Representations == nil || forecast.Rationale == nil || forecast.KeyFactors == nil || forecast.Comment == nil {
+	if forecast.Representations == nil {
 		return false
 	}
-	left, _ := json.Marshal(struct {
-		Representations []ledger.ForecastRepresentation
-		Rationale       string
-		KeyFactors      []string
-		Comment         string
-	}{*forecast.Representations, *forecast.Rationale, *forecast.KeyFactors, *forecast.Comment})
-	right, _ := json.Marshal(struct {
-		Representations []ledger.ForecastRepresentation
-		Rationale       string
-		KeyFactors      []string
-		Comment         string
-	}{bundle.Representations, bundle.Rationale, bundle.KeyFactors, bundle.Comment})
+	left, _ := json.Marshal(forecastcrypto.PrivateBundle{Representations: *forecast.Representations, Rationale: forecast.Rationale, KeyFactors: forecast.KeyFactors, Comment: forecast.Comment})
+	right, _ := json.Marshal(bundle)
 	return reflect.DeepEqual(left, right)
 }
 

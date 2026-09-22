@@ -38,6 +38,12 @@ func TestEmbeddedSchemaCompilesAndValidatesBothFormats(t *testing.T) {
 		{name: "tests/conformance/valid/relationships-and-datetime.json", format: "relationships-json", parse: func(input string) (*document.Document, error) {
 			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
 		}},
+		{name: "tests/conformance/valid/lifecycle-checkpoints.json", format: "lifecycle-checkpoints-json", parse: func(input string) (*document.Document, error) {
+			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
+		}},
+		{name: "tests/conformance/valid/revealed-representation-only.json", format: "revealed-representation-only-json", parse: func(input string) (*document.Document, error) {
+			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
+		}},
 	}
 	fixtureFS := contractschema.Conformance()
 	for _, fixture := range fixtures {

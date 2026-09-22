@@ -46,7 +46,9 @@ root. They do not accept a generic nested request object or a public side-loaded
 file. `ledger_init` and `question_add` may omit initial-forecast properties.
 A sealed initial forecast uses purpose-named `initial_secret_input_file` and
 requires `key_file`; `forecast_seal` similarly uses `secret_input_file`.
-Inline secret forecast material is rejected.
+Inline secret forecast material is rejected. Each protected document requires
+`representations`; `rationale`, `key_factors`, and `comment` are independently
+optional and preserve absent versus explicitly empty values.
 
 MCP timestamps remain exact RFC 3339 strings. The service defaults an omitted
 `forecasted_at` for public, sealed, and initial forecasts to one captured
@@ -70,13 +72,19 @@ output-root class, for example `packages:evidence/ledger/ledger.yaml` and
 `packages:evidence/manifest.json`. This keeps the package's `ledger/`,
 `proofs/`, and `trust/` siblings under one explicit non-overlapping root.
 
-`timestamp_stamp` requires only `file`, `question`, and `forecast`. Omission of
-TSA fields selects `auto`, currently the one-entry FreeTSA catalog. Optional
-`tsa_provider` accepts `auto` or `freetsa`. A custom `tsa_url` and
+Target and timestamp tools accept closed `scope` values `forecast` or
+`lifecycle`. Forecast is the default and rejects `head`. Lifecycle requires one
+`head` event ID and does not support target `all`. The same typed requests back
+the CLI and MCP adapters.
+
+`timestamp_stamp` otherwise requires only `file`, `question`, and `forecast`.
+Omission of TSA fields selects `auto`, currently the one-entry FreeTSA catalog.
+Optional `tsa_provider` accepts `auto` or `freetsa`. A custom `tsa_url` and
 ledger-relative `ca_bundle` must be supplied together and remain public
 HTTPS-only. The tool creates an RFC 3161 SHA-256 request and retains all bytes
 needed for later local verification. Repeating the call with a different
 authority appends independent evidence; it does not replace earlier entries.
-MCP resources expose these artifacts with resource kind `timestamp`.
+Lifecycle requests append or update the exact-head activity checkpoint. MCP
+resources expose these artifacts with resource kind `timestamp`.
 
 [Run the MCP server](../how-to/run-mcp.md) · [Reference index](index.md)
