@@ -92,4 +92,4 @@
 - [x] 10.1 Run `gofmt -w cmd internal`, `go mod verify`, focused package tests, `go test ./...`, `go vet ./...`, and `go tool govulncheck ./...` with the pinned toolchain.
 - [x] 10.2 Run strict OpenSpec validation, conformance fixtures, exact contract-pin checks, generated-file cleanliness, secret scanning, license/notice checks, package verification, and deterministic release tests.
 - [x] 10.3 Run native macOS, Linux, and Windows workflows for CLI/MCP behavior, protected permissions, filesystem recovery, RFC 3161 fixtures, lifecycle evidence, packaging, SBOMs, and artifact names.
-- [ ] 10.4 Prepare the next breaking pre-1.0 release notes and compatibility warning, verify candidate archives and checksums from a clean checkout, and publish only after every retained contract identity and artifact digest agrees.
+- [x] 10.4 Prepare the next breaking pre-1.0 release notes and compatibility warning, verify candidate archives and checksums from a clean checkout, and publish only after every retained contract identity and artifact digest agrees.
