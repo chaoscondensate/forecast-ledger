@@ -291,6 +291,11 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 	}
 	artifact, _ := BuildForecastTarget(loaded.Model, question.ID, forecast.ID)
 	entries := integrityTimestamps(forecast.Integrity)
+	if len(entries) == 0 {
+		layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.no_evidence"}
+		layer.Evidence = map[string]any{"target_path": artifact.RelativePath, "target_binding": "pass", "timestamps": []TimestampEntryResult{}}
+		return layer
+	}
 	results := inspectTimestampEntries(ctx, filepath.Dir(loaded.Path), artifact.Bytes, entries)
 	hasPending, hasLate := false, false
 	evidence := map[string]any{"target_path": artifact.RelativePath, "target_binding": "pass", "timestamps": results}

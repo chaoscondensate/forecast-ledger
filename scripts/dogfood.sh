@@ -254,8 +254,12 @@ if find "$package" -type f -name '*.key' -print -quit | grep -q .; then
   echo "publication package contains a key file" >&2
   exit 1
 fi
-if find "$package" -type f -name 'f-one.json' -path '*/proofs/targets/*' -print -quit | grep -q .; then
-  echo "publication package discovered an adjacent unreferenced target" >&2
+if ! find "$package" -type f -name 'f-one.json' -path '*/proofs/targets/*' -print -quit | grep -q .; then
+  echo "publication package omitted the retained target" >&2
+  exit 1
+fi
+if find "$package" -type f -name 'f-public-002.json' -path '*/proofs/targets/*' -print -quit | grep -q .; then
+  echo "publication package invented an unretained target" >&2
   exit 1
 fi
 if awk 'length($0) > 300 && $0 !~ /"ciphertext"[[:space:]]*:/ { exit 1 }' "$ledger"; then

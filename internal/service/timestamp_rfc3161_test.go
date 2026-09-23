@@ -23,6 +23,37 @@ import (
 
 const testTimestampCAPath = "trust/tsa.pem"
 
+func TestRetainedTargetWithoutTimestampRemainsIncomplete(t *testing.T) {
+	directory, ledgerPath := timestampLedgerFixture(t)
+	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
+	if err != nil || report.Overall != VerificationIncomplete || report.FailureCode != app.CodeIncomplete {
+		t.Fatalf("retained target verification = %#v, %v", report, err)
+	}
+	timing := report.Forecasts[0].Layers[2]
+	if timing.State != LayerNotChecked || !containsString(timing.ReasonCodes, "timing.no_evidence") {
+		t.Fatalf("retained target timing = %#v", timing)
+	}
+
+	packageRoot := filepath.Join(directory, "package")
+	if _, err := CommitPublicationBuild(t.Context(), ledgerPath, packageRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	result, err := VerifyPublicationPackage(t.Context(), filepath.Join(packageRoot, "ledger", filepath.Base(ledgerPath)), filepath.Join(packageRoot, "manifest.json"))
+	if err != nil || result.Overall != VerificationIncomplete || result.FailureCode != app.CodeIncomplete {
+		t.Fatalf("retained target package verification = %#v, %v", result, err)
+	}
+	var packageTiming VerificationLayer
+	for _, forecast := range result.Evidence {
+		if forecast.QuestionID == "q-election-coalition" && forecast.ForecastID == "f-election-coalition-001" {
+			packageTiming = forecast.Layers[2]
+			break
+		}
+	}
+	if packageTiming.State != LayerNotChecked || !containsString(packageTiming.ReasonCodes, "timing.no_evidence") {
+		t.Fatalf("retained target package timing = %#v", packageTiming)
+	}
+}
+
 func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
 	ca := timestampFixture(t, "root.pem")

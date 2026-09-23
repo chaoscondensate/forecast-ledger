@@ -416,6 +416,8 @@ func verifyPackageTiming(ctx context.Context, root string, model *ledger.Ledger,
 		timestamps = forecast.Integrity.Pending.Timestamps
 	} else if forecast.Integrity.Verified != nil {
 		timestamps = forecast.Integrity.Verified.Timestamps
+	} else if forecast.Integrity.Retained != nil {
+		return VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.no_evidence"}, Evidence: map[string]any{"timestamps": []TimestampEntryResult{}}, Limitations: timestampLimitations()}
 	} else {
 		return failedLayer("existence_timing", "timing.imported_failed", nil)
 	}
