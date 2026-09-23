@@ -21,10 +21,10 @@ import (
 	targetbytes "github.com/chaoscondensate/forecast-ledger/internal/target"
 )
 
-func TestForecastTargetMatchesPublishedV210LifecycleVectors(t *testing.T) {
+func TestForecastTargetMatchesPublishedV220LifecycleVectors(t *testing.T) {
 	for _, name := range []string{
-		"forecast-envelope-v2-public-lifecycle.json",
-		"forecast-envelope-v2-sealed-lifecycle.json",
+		"forecast-envelope-v3-public-lifecycle.json",
+		"forecast-envelope-v3-sealed-lifecycle.json",
 	} {
 		t.Run(name, func(t *testing.T) {
 			data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/"+name)
@@ -68,8 +68,8 @@ func TestForecastTargetMatchesPublishedV210LifecycleVectors(t *testing.T) {
 	}
 }
 
-func TestLifecycleTargetMatchesPublishedV210Vectors(t *testing.T) {
-	data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+func TestLifecycleTargetMatchesPublishedV220Vectors(t *testing.T) {
+	data, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v2.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestLifecycleTargetBuildAndCheckUseHeadSpecificNonOverwritingPaths(t *testi
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	writeLedgerModel(t, path, second.Ledger)
 	for _, head := range []ledger.Slug{"event-withdrawn", "event-reaffirmed"} {
-		result, err := CommitTargetBuildScoped(t.Context(), path, TargetScopeLifecycle, false, "q-one", "f-one", head)
+		result, err := CommitTargetBuildScoped(t.Context(), path, TargetScopeLifecycle, false, "q-one", "f-one", head, ledger.Slug("checkpoint-"+string(head)), "2026-02-03T00:00:00Z")
 		if err != nil || len(result.Targets) != 1 || result.Targets[0].HeadEventID != head || result.Targets[0].Scope != LifecycleTargetSchema {
 			t.Fatalf("build %s = %#v, %v", head, result, err)
 		}
@@ -175,9 +175,9 @@ func TestLifecycleTargetCheckHonorsPortableDeclaredArtifactPaths(t *testing.T) {
 	if err := os.Remove(filepath.Join(directory, filepath.FromSlash(string(declared.ArtifactPath)))); err != nil {
 		t.Fatal(err)
 	}
-	rebuilt, err := CommitTargetBuildScoped(t.Context(), ledgerPath, TargetScopeLifecycle, false, model.Questions[0].ID, forecast.ID, first.HeadEventID)
-	if err != nil || len(rebuilt.Targets) != 1 || rebuilt.Targets[0].Path != declared.ArtifactPath || rebuilt.Targets[0].State != storage.DeterministicCreated {
-		t.Fatalf("portable lifecycle target rebuild = %#v, %v", rebuilt, err)
+	rebuilt, err := CommitTargetBuildScoped(t.Context(), ledgerPath, TargetScopeLifecycle, false, model.Questions[0].ID, forecast.ID, first.HeadEventID, "checkpoint-rebuilt", "2026-09-05T00:00:00Z")
+	if app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("missing indexed lifecycle target must block mutation = %#v, %v", rebuilt, err)
 	}
 }
 
@@ -504,7 +504,7 @@ func TestTargetBuildCheckIdempotencyCollisionAndDryRun(t *testing.T) {
 	if _, err := CheckTargets(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); app.ErrorCodeOf(err) != app.CodeVerification {
 		t.Fatalf("tampered check error = %v", err)
 	}
-	if _, err := CommitTargetBuild(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); app.ErrorCodeOf(err) != app.CodeConflict {
+	if _, err := CommitTargetBuild(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); app.ErrorCodeOf(err) != app.CodeVerification {
 		t.Fatalf("tampered build error = %v", err)
 	}
 }
@@ -565,7 +565,7 @@ func TestTargetBuildAllPreflightsBeforeCreatingAnything(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "proofs", "targets", "f-quarterly-revenue-001.json"), []byte("collision"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CommitTargetBuild(context.Background(), path, true, "", ""); app.ErrorCodeOf(err) != app.CodeConflict {
+	if _, err := CommitTargetBuild(context.Background(), path, true, "", ""); app.ErrorCodeOf(err) != app.CodeInvalidData {
 		t.Fatalf("all collision error = %v", err)
 	}
 	entries, err := os.ReadDir(filepath.Join(directory, "proofs", "targets"))

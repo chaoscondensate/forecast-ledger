@@ -71,3 +71,6 @@ and relationship authoring is unusable on the documented default YAML format.
   lifecycle how-tos, reference pages, security/evidence limits, documentation
   baseline, changelog, release instructions, and the maintained command and
   contract inventories.
+> Superseded for current implementation by
+> `reset-cryptographic-profiles-and-evidence-store`. The v2.2 runtime does not
+> retain the profile identities described here.

@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json
+$schema: https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json
+schema_version: 2.2.0
+ledger_id: example-research-team
+title: Example Research Team Forecast Ledger
+description: A team ledger containing a cryptographically revealed v2 forecast.
+created_at: "2026-08-01T09:00:00+01:00"
+default_timezone: Europe/London
+
+forecaster:
+  id: example-research-team
+  kind: team
+  name: Example Research Team
+  contact:
+    website: https://example.org/research-team
+  members:
+  - id: alex-example
+    name: Alex Example
+    role: Lead forecaster
+  - id: sam-example
+    name: Sam Example
+    role: Domain specialist
+
+platforms: {}
+
+questions:
+- id: q-example-binary
+  status: resolved
+  created_at: "2026-08-01T09:00:00+01:00"
+  current_revision_id: qr-example-binary-1
+  revisions:
+  - id: qr-example-binary-1
+    effective_at: "2026-08-01T09:00:00+01:00"
+    recorded_at: "2026-08-01T09:00:00+01:00"
+    title: Will the example regulatory decision be published by 2026-09-30?
+    resolution_criteria: Resolve YES if the regulator publishes a final decision before 2026-10-01T00:00:00Z; otherwise resolve NO.
+    forecasting_opens_at: "2026-08-01T09:00:00+01:00"
+    expected_resolution_at: "2026-09-30T23:59:59Z"
+    outcome_space:
+      kind: binary
+    domain:
+      kind: binary
+  tags: [regulation]
+  forecasts:
+  - id: f-example-binary-001
+    question_revision_id: qr-example-binary-1
+    forecasted_at: "2026-08-25T10:00:00+01:00"
+    recorded_at: "2026-08-25T10:01:00+01:00"
+    visibility: revealed
+    representations:
+    - kind: probability
+      outcome: true
+      probability: "0.65"
+    rationale: The base rate and two independent indicators point in the same direction.
+    key_factors:
+    - base rate
+    - leading indicator
+    comment: Reveal after the outcome is public.
+    commitment:
+      scheme: forecast-seal/v3
+      commitment_hash:
+        algorithm: sha-256
+        value: 5161219b40111d63c1197fd08222059064f649bd5edec2943fd8697817662655
+      encryption:
+        algorithm: chacha20-poly1305
+        nonce: zMzMzMzMzMzMzMzM
+        ciphertext: roAhwEbtR6TtFzwLUjJXMyYv6rBzfcYAsE89+I+YOQB5NW6J4EWHUMoFsXQccMg27QeiH46VLspsBTdThXXe+hGiXMjx//W+7zZGlrxlgmvD4cjwWBe+Kxn/dJez1CpsdlGCFNYFv/kkZ2gQ0yEtHPpmb+Y0EDN6CEWX2JL7NNEPdpLYX+NIGCgZ6ewTx1NQEc536KjZIx3Th+ldYLXcax/3N+kALW+m5XGDc5N2YpcB7QSWybTCb5brBvNN+rF6l3MzE9RjQL+IA6oA0OMGPd+ml53NT34EovmYbdytHpyyh3YKw37sGwi6dbtcGe5efn/8/ERUfh032Q+hyK+gUSFxQb+FXcu8LEYvho4MAe9KYoeq6i4QEMYNYQvUDTtOfpYcW1j6D8frKtENYkMDIqi2vEAuYOhwlF4bGwHtG37u8cBHCJnzgpJ83i/UerjlJayu98fVxr3v3LisHg7WWl4FHDibuR6E3Z+iJRwKznxJ2KUVLD/GL+8LmckFhG2wKoQRl4HAFraX3qG0WS/GLK4An9L4jngK8W5kjZ8rpeLVRXW2GizcNGPfhkR4wutY5iCNRniFMAfzl6wfjRsaiC63f47myuH7gBvzT27fu1S88+zFQxiLOa6dSAU+V5L1meOKLg90uaoCm43jNDfRNNFhzvXiyoJs1eVWGA==
+      key_hint: secret-manager://forecast-ledger/f-example-binary-001
+      revealed_at: '2026-10-01T09:00:00+01:00'
+      revealed_key: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    integrity:
+      status: unanchored
+      note: The commitment is valid, but this example intentionally has no external timestamp receipt.
+  resolution:
+    status: resolved
+    question_revision_id: qr-example-binary-1
+    outcome: true
+    outcome_known_at: "2026-09-30T15:00:00+01:00"
+    recorded_at: "2026-09-30T15:05:00+01:00"
+    sources:
+    - title: Example regulatory decision
+      publisher: Example Regulator
+      url: https://example.org/regulator/final-decision
+      published_at: "2026-09-30T15:00:00+01:00"
+      retrieved_at: "2026-09-30T15:04:00+01:00"

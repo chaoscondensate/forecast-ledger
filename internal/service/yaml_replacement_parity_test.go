@@ -375,7 +375,10 @@ func TestTimestampIntegrityReplacementHasJSONAndYAMLParity(t *testing.T) {
 	var results []TimestampArtifactResult
 	for _, path := range []string{jsonPath, yamlPath} {
 		directory := filepath.Dir(path)
-		if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+		if _, err := CommitTargetBuild(t.Context(), path, false, "q-election-coalition", "f-election-coalition-001"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "root.pem"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		absoluteRequest := filepath.Join(directory, filepath.FromSlash(string(requestPath)))
@@ -387,7 +390,7 @@ func TestTimestampIntegrityReplacementHasJSONAndYAMLParity(t *testing.T) {
 		}
 		transport := &countingRoundTripper{response: timestampFixture(t, "response.tsr")}
 		result, err := CommitTimestampStamp(t.Context(), path, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{
-			TSAURL: tsaURL, CABundlePath: "tsa.pem",
+			TSAURL: tsaURL, CABundlePath: testTimestampCAPath,
 			Effects:    Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}},
 			HTTPClient: testTimestampHTTPClient(transport),
 		})

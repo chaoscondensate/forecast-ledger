@@ -414,6 +414,7 @@
             "enum": [
               "ledger",
               "target",
+              "evidence_index",
               "timestamp_request",
               "timestamp_response",
               "timestamp_trust",

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-22
+reviewed: 2026-09-23
 owner: security
 generated: false
 security-critical: true
@@ -32,8 +32,13 @@ ledger protects its forecast bundle only while the key
 and private input remain separate. Reveal is irreversible publication of the
 private fields and requires explicit approval.
 
-The v2 seal and target bind the forecast to one exact question revision. Keep
-the protected `forecast-key/v2` file with the matching question, revision, and
+The sealed nonce and ciphertext are public commitment material and are returned
+by forecast inspection in CLI, JSON, MCP tools, and resources. They are not
+secrets. Raw keys, salts, decrypted plaintext, private fields, credentials,
+protected paths, and unrestricted parser or crypto errors remain redacted.
+
+The v3 seal and target bind the forecast to one exact question revision. Keep
+the protected `forecast-key/v3` file with the matching question, revision, and
 forecast IDs; a key from another record must fail. The target contains the full
 bound revision, so changing wording or domain requires a new revision and a new
 forecast rather than editing old evidence.
@@ -43,7 +48,7 @@ expiry, and reaffirmation change the derived active state without invalidating
 the original target or its timestamp. Consumers must check both evidence
 validity and current activity instead of treating either as the other.
 
-An activity checkpoint binds `forecast-lifecycle/v1` bytes for one exact event
+An activity checkpoint binds `forecast-lifecycle/v2` bytes for one exact event
 prefix to retained RFC 3161 evidence. It can detect changes or deletion inside
 that covered prefix. A later event makes older verified coverage partial; it
 does not invalidate the older proof. No local format can prove that a deleted
@@ -99,13 +104,21 @@ evidence and never replaced during later verification. Preserve that bundle, the
 response, and the target together. A valid signature proves only that the named
 authority issued the token for the digest at its asserted generation time.
 
+Managed evidence is closed to `proofs/` and `trust/` and is reconciled against
+`proofs/evidence-index.json`. Unindexed files make the result incomplete;
+changed bytes, unrelated index entries, or bindings fail verification. A valid
+detached lifecycle target is reported as
+`activity.retained_evidence_unreferenced`, not as an unbound stream. Deleting
+every event, checkpoint, index entry, artifact, and external copy still removes
+the evidence that the event once existed.
+
 A valid document or package manifest is a structural conclusion. Overall
 verification `pass` additionally requires at least one applicable
 forecast-evidence layer; empty selections return `no_evidence`.
 
-Publication copies only the exact ledger and referenced timestamp artifacts. Always
-inspect the new package before sharing it, because an exact ledger may contain
-fields intentionally disclosed by an earlier reveal.
+Publication copies the exact ledger, canonical index, and every indexed
+artifact. Always inspect the new package before sharing it, because an exact
+ledger may contain fields intentionally disclosed by an earlier reveal.
 
 Do not put keys, credentials, private ledgers, or unrevealed forecast material
 in public issues. Suspected vulnerabilities belong in

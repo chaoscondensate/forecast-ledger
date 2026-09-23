@@ -8,24 +8,25 @@ import (
 )
 
 const (
-	Version                = "2.1.0"
-	Commit                 = "d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4"
-	AnnotatedTagObject     = "6d74d483f7cb177470ba77f4fcb4063fe04f4003"
-	SchemaSHA256           = "cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107"
-	ReleaseArchiveSHA256   = "f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17"
-	ReleaseChecksumsSHA256 = "6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b"
-	ForecastSealProtocol   = "forecast-seal/v2"
-	ForecastTargetProfile  = "forecast-envelope/v2"
-	LifecycleTargetProfile = "forecast-lifecycle/v1"
+	Version                = "2.2.0"
+	SchemaID               = "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json"
+	Commit                 = "ae02de9ebca3eb2ae87c480596bf620bdcdced11"
+	AnnotatedTagObject     = "8feb323ce895a6a197183c4eb857a55463648873"
+	SchemaSHA256           = "6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e"
+	ReleaseArchiveSHA256   = "e8f92450e7e73eb559e762878dd4188156968cdad6328c03ea94d6b0c01ff419"
+	ReleaseChecksumsSHA256 = "7e1d79e6d8bd4df20a5877ef51c17f149cec7619d49ddfa2fff82899034989a0"
+	ForecastSealProtocol   = "forecast-seal/v3"
+	ForecastTargetProfile  = "forecast-envelope/v3"
+	LifecycleTargetProfile = "forecast-lifecycle/v2"
 )
 
-//go:embed upstream/forecast-ledger/v2.1.0/schema/forecast-ledger.schema.json
+//go:embed upstream/forecast-ledger/v2.2.0/schema/forecast-ledger.schema.json
 var contract []byte
 
-//go:embed upstream/forecast-ledger/v2.1.0/LICENSE
+//go:embed upstream/forecast-ledger/v2.2.0/LICENSE
 var license []byte
 
-//go:embed upstream/forecast-ledger/v2.1.0
+//go:embed upstream/forecast-ledger/v2.2.0
 var upstream embed.FS
 
 // Contract returns an independent copy of the active v2 schema bytes.
@@ -38,11 +39,11 @@ func License() []byte {
 	return clone(license)
 }
 
-// Conformance returns the complete retained v2.1.0 upstream release subtree.
+// Conformance returns the complete retained v2.2.0 upstream release subtree.
 // Paths retain their upstream layout, for example examples/valid and
 // tests/vectors.
 func Conformance() fs.FS {
-	return mustSub(upstream, "upstream/forecast-ledger/v2.1.0")
+	return mustSub(upstream, "upstream/forecast-ledger/v2.2.0")
 }
 
 // ValidExamples returns the v2 valid-example directory.

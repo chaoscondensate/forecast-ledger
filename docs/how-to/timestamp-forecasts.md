@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-30
+reviewed: 2026-09-23
 owner: security
 generated: false
 security-critical: true
@@ -31,6 +31,9 @@ The CLI never downloads trust at runtime and never uses operating-system roots.
 
 ## Stamp
 
+Stamp consumes an already retained target. Run `target build` first; stamp does
+not create or adopt a standalone target.
+
 ```sh
 forecast-ledger timestamp stamp \
   --file ledger.yaml \
@@ -54,13 +57,14 @@ Stamp creates a bounded SHA-256 request with a fresh positive nonce and asks
 the TSA to include its signing certificate. It stops after the first locally
 verified built-in response and retains:
 
-- `proofs/targets/f-launch-002.json` — the exact canonical target;
 - `proofs/timestamps/f-launch-002/<tsa-id>/request.tsq` — the DER request;
 - `proofs/timestamps/f-launch-002/<tsa-id>/response.tsr` — the DER response; and
-- the exact ledger-relative PEM CA bundle. Built-in trust is materialized at
+- `proofs/evidence-index.json` entries for the request, response, and trust; and
+- the exact ledger-relative PEM CA bundle under `trust/`. Built-in trust is materialized at
   `trust/rfc3161/<provider>-<sha256>.pem`.
 
-To timestamp an exact activity prefix, select its head:
+To timestamp an exact activity prefix, first build its checkpoint target with
+the explicit checkpoint ID and recording time, then select its head:
 
 ```sh
 forecast-ledger timestamp stamp \
@@ -74,9 +78,9 @@ forecast-ledger timestamp stamp \
 Lifecycle evidence uses
 `proofs/targets/f-launch-002.lifecycle.withdraw-001.json` and
 `proofs/timestamps/f-launch-002.lifecycle.withdraw-001/<tsa-id>/...`. A
-successful or retained-pending attempt appends the exact-head activity
-checkpoint, or updates that checkpoint on retry, through the same atomic
-journal as its resources. Evidence for other heads is preserved.
+successful or retained-pending attempt updates the existing exact-head activity
+checkpoint through the same atomic journal as its indexed resources. Evidence
+for other heads is preserved.
 
 `<tsa-id>` is a stable short digest of the exact TSA URL. A custom URL must be
 public HTTPS without credentials, query, fragment, or a non-default port.

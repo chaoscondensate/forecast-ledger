@@ -53,7 +53,7 @@ They can change current activity without changing previously retained target
 bytes or timestamp evidence.
 
 An activity checkpoint names one event head and a separate
-`forecast-lifecycle/v1` target. That target contains the full ordered event
+`forecast-lifecycle/v2` target. That target contains the full ordered event
 prefix through the head and the digest of the unchanged forecast envelope.
 Checkpoints must cover successively longer prefixes. Older verified coverage
 remains valid but becomes partial when a later event is appended.

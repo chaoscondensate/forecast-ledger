@@ -61,3 +61,6 @@ release checks. The immutable forecast target remains lifecycle-free; the new
 lifecycle binding is a separate evidence scope. Existing contract-version
 files are rejected before side effects under the repository's single-contract
 policy.
+> Superseded for current implementation by
+> `reset-cryptographic-profiles-and-evidence-store`. This proposal documents
+> the historical v2.1 contract only.

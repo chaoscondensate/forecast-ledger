@@ -52,6 +52,12 @@ func loadAndValidateLedgerForEvidence(ctx context.Context, filename string) (*Lo
 	return loadAndValidateLedger(ctx, filename, nil, "", false)
 }
 
+// LoadAndValidateLedgerForEvidence is the adapter-safe form for operations
+// that classify evidence availability and mismatches in their own results.
+func LoadAndValidateLedgerForEvidence(ctx context.Context, filename string) (*LoadedLedger, error) {
+	return loadAndValidateLedgerForEvidence(ctx, filename)
+}
+
 // LoadAndValidateLedgerWithArtifactRoot is used for portable packages whose
 // byte-exact ledger lives under ledger/ while its stable proofs/ paths are
 // rooted at the package directory.

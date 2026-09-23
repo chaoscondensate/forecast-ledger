@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-30
+reviewed: 2026-09-23
 owner: interface
 generated: false
 security-critical: true
@@ -74,17 +74,21 @@ output-root class, for example `packages:evidence/ledger/ledger.yaml` and
 
 Target and timestamp tools accept closed `scope` values `forecast` or
 `lifecycle`. Forecast is the default and rejects `head`. Lifecycle requires one
-`head` event ID and does not support target `all`. The same typed requests back
-the CLI and MCP adapters.
+`head` event ID and does not support target `all`. A lifecycle `target_build`
+also requires explicit `checkpoint` and `recorded_at` fields so it can retain
+the new checkpoint together with the target and evidence index. The same typed
+requests back the CLI and MCP adapters.
 
-`timestamp_stamp` otherwise requires only `file`, `question`, and `forecast`.
+`timestamp_stamp` otherwise requires `file`, `question`, and `forecast`.
 Omission of TSA fields selects `auto`, currently the one-entry FreeTSA catalog.
 Optional `tsa_provider` accepts `auto` or `freetsa`. A custom `tsa_url` and
-ledger-relative `ca_bundle` must be supplied together and remain public
-HTTPS-only. The tool creates an RFC 3161 SHA-256 request and retains all bytes
-needed for later local verification. Repeating the call with a different
-authority appends independent evidence; it does not replace earlier entries.
-Lifecycle requests append or update the exact-head activity checkpoint. MCP
-resources expose these artifacts with resource kind `timestamp`.
+`ca_bundle` under the managed `trust/` subtree must be supplied together and
+remain public HTTPS-only. Before stamping, `target_build` must have retained the
+exact target and evidence-index entry. The tool creates an RFC 3161 SHA-256
+request and retains all bytes needed for later local verification. Repeating
+the call with a different authority appends independent evidence; it does not
+replace earlier entries. A lifecycle stamp consumes the retained exact-head
+checkpoint; it does not create an implicit checkpoint. MCP resources expose
+these artifacts with resource kind `timestamp`.
 
 [Run the MCP server](../how-to/run-mcp.md) · [Reference index](index.md)

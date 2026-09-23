@@ -53,3 +53,6 @@ None. The repository has no archived main capability specs yet. This change supe
 - Adds upstream Python/Go validator parity, byte-level seal/target/key fixtures, official RFC 3161 differential tests, CLI/MCP parity tests, crash/rollback tests, fuzzing, and release gates.
 - Adds executable regressions for the v0.2.2 dogfooding findings and requires the affected help, README, command reference, MCP descriptions, and packaged-platform evidence to remain current.
 - Updates README, command reference, tutorials, security guidance, MCP setup, evidence limitations, and implementation status as each command becomes available.
+> The command-surface history remains useful, but its publication v2 and
+> declaration-only evidence requirements are superseded by
+> `reset-cryptographic-profiles-and-evidence-store`.

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-31
+reviewed: 2026-09-23
 owner: security
 generated: false
 security-critical: true
@@ -22,6 +22,14 @@ the exact journal name and expected digest. The recovered bytes must parse and
 pass the same schema, semantic, and retained-artifact validation as an ordinary
 write. A journal left after replacement is cleaned only after the current
 ledger is validated.
+
+Target and timestamp operations also keep a resource journal for their target,
+request, response, trust, evidence-index, and ledger effects. A failure before
+any replacement removes only newly created, operation-owned public files. If a
+crash journal records an index or ledger replacement, automatic cleanup keeps
+every material file and the journal rather than guessing a rollback across
+those identities. Back up that directory and reconcile the recorded before and
+after SHA-256 values before retrying.
 
 If the ledger changed, the temporary file is missing or changed, the journal is
 malformed, or the prospective ledger is invalid, the command returns a

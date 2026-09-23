@@ -58,7 +58,7 @@ func TestUnsupportedSchemaIsRejectedBeforeMutationSideEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unsupported := bytes.Replace(raw, []byte(`"schema_version": "2.1.0"`), []byte(`"schema_version": "2.0.1"`), 1)
+	unsupported := bytes.Replace(raw, []byte(`"schema_version": "2.2.0"`), []byte(`"schema_version": "2.1.0"`), 1)
 	if bytes.Equal(unsupported, raw) {
 		t.Fatal("unsupported-version fixture was not created")
 	}

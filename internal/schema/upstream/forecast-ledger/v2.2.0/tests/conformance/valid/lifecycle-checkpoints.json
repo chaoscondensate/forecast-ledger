@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json",
+  "schema_version": "2.2.0",
+  "ledger_id": "lifecycle-checkpoint-fixture",
+  "created_at": "2026-09-01T09:00:00Z",
+  "default_timezone": "UTC",
+  "forecaster": {
+    "id": "example-forecaster",
+    "kind": "individual",
+    "name": "Example Forecaster"
+  },
+  "platforms": {},
+  "questions": [
+    {
+      "id": "q-lifecycle-vector",
+      "status": "open",
+      "created_at": "2026-09-01T09:00:00Z",
+      "current_revision_id": "qr-lifecycle-vector-1",
+      "revisions": [
+        {
+          "id": "qr-lifecycle-vector-1",
+          "effective_at": "2026-09-01T09:00:00Z",
+          "recorded_at": "2026-09-01T09:00:05Z",
+          "title": "Will the example event occur?",
+          "resolution_criteria": "Resolve YES if the example event occurs.",
+          "expected_resolution_at": "2026-12-31T23:59:59Z",
+          "outcome_space": {
+            "kind": "binary"
+          },
+          "domain": {
+            "kind": "binary"
+          }
+        }
+      ],
+      "forecasts": [
+        {
+          "id": "f-lifecycle-vector-1",
+          "question_revision_id": "qr-lifecycle-vector-1",
+          "forecasted_at": "2026-09-02T10:00:00Z",
+          "recorded_at": "2026-09-02T10:00:05Z",
+          "visibility": "public",
+          "representations": [
+            {
+              "kind": "probability",
+              "outcome": true,
+              "probability": "0.65"
+            }
+          ],
+          "lifecycle_events": [
+            {
+              "id": "event-withdrawn",
+              "type": "withdrawn",
+              "effective_at": "2026-09-03T10:00:00Z",
+              "recorded_at": "2026-09-03T10:00:05Z",
+              "reason": "Evidence review started."
+            },
+            {
+              "id": "event-reaffirmed",
+              "type": "reaffirmed",
+              "effective_at": "2026-09-04T10:00:00Z",
+              "recorded_at": "2026-09-04T10:00:05Z",
+              "reason": "The review confirmed the forecast."
+            }
+          ],
+          "activity_checkpoints": [
+            {
+              "id": "checkpoint-withdrawal",
+              "head_event_id": "event-withdrawn",
+              "recorded_at": "2026-09-03T10:00:06Z",
+              "integrity": {
+                "status": "retained",
+                "target": {
+                  "scope": "forecast-lifecycle/v2",
+                  "canonicalization": "RFC8785",
+                  "artifact_path": "tests/vectors/targets/forecast-lifecycle-v2-withdrawn.json",
+                  "digest": {
+                    "algorithm": "sha-256",
+                    "value": "ac44035e919163f36c4815ed8e6927493ed5037cc9d560fc86262f1aae9406c4"
+                  }
+                }
+              }
+            },
+            {
+              "id": "checkpoint-reaffirmation",
+              "head_event_id": "event-reaffirmed",
+              "recorded_at": "2026-09-04T10:00:06Z",
+              "integrity": {
+                "status": "retained",
+                "target": {
+                  "scope": "forecast-lifecycle/v2",
+                  "canonicalization": "RFC8785",
+                  "artifact_path": "tests/vectors/targets/forecast-lifecycle-v2-reaffirmed.json",
+                  "digest": {
+                    "algorithm": "sha-256",
+                    "value": "82df2e6642b33724f07e498b81775b031b4f52b66736d76f8374baa126277fcc"
+                  }
+                }
+              }
+            }
+          ],
+          "integrity": {
+            "status": "unanchored",
+            "note": "Vector fixture."
+          }
+        }
+      ]
+    }
+  ]
+}

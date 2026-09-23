@@ -86,3 +86,6 @@ all conformance, negative, property, fuzz, golden, parity, and documentation
 tests. The active command-surface, timestamp-failover, and documentation
 changes must be reconciled so they no longer reintroduce v1 field shapes or
 claims.
+> Superseded for current implementation by
+> `reset-cryptographic-profiles-and-evidence-store`. This artifact remains only
+> as historical rationale for the pre-v2.2 surface.

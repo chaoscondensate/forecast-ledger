@@ -57,7 +57,7 @@ func TestStableV2JSONShapes(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	assertJSONFields(t, stdout, "ledger.initialized", []string{`"schema_version":"2.1.0"`, `"question_id":"q-one"`, `"forecast_id":"f-one"`})
+	assertJSONFields(t, stdout, "ledger.initialized", []string{`"schema_version":"2.2.0"`, `"question_id":"q-one"`, `"forecast_id":"f-one"`})
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "list", "--file", path)
 	if code != 0 || stderr != "" {
 		t.Fatalf("question list code=%d stderr=%q", code, stderr)
@@ -70,7 +70,7 @@ func TestStableV2JSONShapes(t *testing.T) {
 	assertJSONFields(t, stdout, "forecast.list", []string{`"question_revision_id":"qr-one"`, `"representation_kinds":["probability"]`})
 }
 
-func TestTargetBuildJSONUsesV2Projection(t *testing.T) {
+func TestTargetBuildJSONUsesV3Projection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestTargetBuildJSONUsesV2Projection(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("target code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	assertJSONFields(t, stdout, "target.built", []string{`"sha256":"e232db4b3ef9609976f34a6abc70a56faf39e6811f6f5d2a17655afc039aa391"`, `"size":1152`})
+	assertJSONFields(t, stdout, "target.built", []string{`"sha256":"0d87e2e54c4884298b224a20c5cba49fab3f6e7d36943e7dd193a17f0ab0814d"`, `"size":1152`})
 }
 
 func TestJSONErrorSchemaExitCodesAndCancellation(t *testing.T) {

@@ -34,3 +34,6 @@ Forecast Ledger schema `1.2.0` replaces OpenTimestamps with RFC 3161 and makes t
 - Changes the timestamp CLI/MCP surface, application contracts, ledger model, semantic validation, publication manifest roles, generated input/result schemas, build information, and release compatibility statement.
 - Replaces the vendored upstream contract and fixtures together and updates `AGENTS.md`, README, maintained documentation, CHANGELOG, CI, and the still-active command-surface and documentation OpenSpec artifacts so they do not continue planning or publishing OTS behavior.
 - Existing v1.1.0 ledgers and `.ots` receipts become unsupported input. No migration or compatibility tooling is provided.
+> Its RFC 3161 choice remains historical context, but publication and evidence
+> storage requirements are superseded by
+> `reset-cryptographic-profiles-and-evidence-store`.

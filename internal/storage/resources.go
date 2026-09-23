@@ -23,6 +23,7 @@ type ResourceKind string
 const (
 	ResourceLedger            ResourceKind = "ledger"
 	ResourceTarget            ResourceKind = "target"
+	ResourceEvidenceIndex     ResourceKind = "evidence_index"
 	ResourceTimestampRequest  ResourceKind = "timestamp_request"
 	ResourceTimestampResponse ResourceKind = "timestamp_response"
 	ResourceTimestampTrust    ResourceKind = "timestamp_trust"
@@ -55,13 +56,14 @@ const (
 )
 
 type ResourceEntry struct {
-	Kind     ResourceKind     `json:"kind"`
-	Type     ResourceType     `json:"type"`
-	Path     string           `json:"path"`
-	Owned    bool             `json:"owned"`
-	Rollback ResourceRollback `json:"rollback"`
-	State    ResourceState    `json:"state"`
-	SHA256   string           `json:"sha256,omitempty"`
+	Kind         ResourceKind     `json:"kind"`
+	Type         ResourceType     `json:"type"`
+	Path         string           `json:"path"`
+	Owned        bool             `json:"owned"`
+	Rollback     ResourceRollback `json:"rollback"`
+	State        ResourceState    `json:"state"`
+	BeforeSHA256 string           `json:"before_sha256,omitempty"`
+	SHA256       string           `json:"after_sha256,omitempty"`
 }
 
 type resourceJournal struct {
@@ -101,6 +103,9 @@ func NewResourcePlan(journalPath, operation string, resources []ResourceEntry) (
 			return nil, err
 		}
 	}
+	if err := validateResourceSequence(entries); err != nil {
+		return nil, err
+	}
 	return &ResourcePlan{
 		journalPath: resolvedJournal,
 		journal: resourceJournal{
@@ -113,6 +118,23 @@ func NewResourcePlan(journalPath, operation string, resources []ResourceEntry) (
 func (p *ResourcePlan) Begin() error {
 	if p == nil {
 		return app.NewError(app.CodeInternal, "resource plan is nil", nil)
+	}
+	emptyDigest := ResourceDigest(nil)
+	for _, entry := range p.journal.Resources {
+		if entry.BeforeSHA256 == "" {
+			continue
+		}
+		info, err := os.Lstat(entry.Path)
+		if errors.Is(err, fs.ErrNotExist) && entry.BeforeSHA256 == emptyDigest {
+			continue
+		}
+		if err != nil || isLinkOrReparse(info) || !info.Mode().IsRegular() {
+			return app.NewError(app.CodeConflict, "resource before identity cannot be validated", err)
+		}
+		digest, err := fileSHA256(entry.Path)
+		if err != nil || digest != entry.BeforeSHA256 {
+			return app.NewError(app.CodeConflict, "resource changed before its plan began", err)
+		}
 	}
 	encoded, err := encodeResourceJournal(p.journal)
 	if err != nil {
@@ -187,6 +209,41 @@ func RecoverResourcePlan(ctx context.Context, journalPath string) (ResourceRecov
 	journal, err := readResourceJournal(resolvedJournal)
 	if err != nil {
 		return report, err
+	}
+	allCommitted := len(journal.Resources) > 0
+	for _, entry := range journal.Resources {
+		allCommitted = allCommitted && entry.State == ResourceCommitted
+	}
+	if allCommitted {
+		for _, entry := range journal.Resources {
+			info, statErr := os.Lstat(entry.Path)
+			if statErr != nil || isLinkOrReparse(info) {
+				return report, app.NewError(app.CodeConflict, "committed resource identity cannot be validated", statErr)
+			}
+			if entry.Type == ResourceDirectory {
+				if !info.IsDir() {
+					return report, app.NewError(app.CodeConflict, "committed resource changed type", nil)
+				}
+			} else if !info.Mode().IsRegular() {
+				return report, app.NewError(app.CodeConflict, "committed resource changed type", nil)
+			} else if entry.SHA256 != "" {
+				digest, digestErr := fileSHA256(entry.Path)
+				if digestErr != nil || digest != entry.SHA256 {
+					return report, app.NewError(app.CodeConflict, "committed resource changed after replacement", digestErr)
+				}
+			}
+			report.Retained = append(report.Retained, entry.Path)
+		}
+		sort.Strings(report.Retained)
+		if err := removeJournalAndSync(resolvedJournal, filepath.Dir(resolvedJournal)); err != nil {
+			return report, err
+		}
+		return report, nil
+	}
+	for _, entry := range journal.Resources {
+		if entry.State == ResourceReplaced || entry.State == ResourceCommitted {
+			return report, app.NewError(app.CodeConflict, "resource recovery preserved a partially committed replacement for explicit recovery", nil)
+		}
 	}
 	entries := append([]ResourceEntry(nil), journal.Resources...)
 	sort.SliceStable(entries, func(i, j int) bool {
@@ -302,6 +359,9 @@ func readResourceJournal(path string) (resourceJournal, error) {
 			return journal, app.NewError(app.CodeConflict, "resource recovery path is invalid", pathErr)
 		}
 	}
+	if err := validateResourceSequence(journal.Resources); err != nil {
+		return journal, app.NewError(app.CodeConflict, "resource recovery ordering is invalid", err)
+	}
 	return journal, nil
 }
 
@@ -354,7 +414,7 @@ func replaceResourceJournal(path string, journal resourceJournal) error {
 
 func validateResourceEntry(entry ResourceEntry) error {
 	switch entry.Kind {
-	case ResourceLedger, ResourceTarget, ResourceTimestampRequest, ResourceTimestampResponse, ResourceTimestampTrust, ResourceKey, ResourcePackage:
+	case ResourceLedger, ResourceTarget, ResourceEvidenceIndex, ResourceTimestampRequest, ResourceTimestampResponse, ResourceTimestampTrust, ResourceKey, ResourcePackage:
 	default:
 		return app.NewError(app.CodeInvalidData, "resource plan kind is invalid", nil)
 	}
@@ -378,6 +438,32 @@ func validateResourceEntry(entry ResourceEntry) error {
 	}
 	if entry.SHA256 != "" && !validDigest(entry.SHA256) {
 		return app.NewError(app.CodeInvalidData, "resource digest is not lowercase SHA-256", nil)
+	}
+	if entry.BeforeSHA256 != "" && !validDigest(entry.BeforeSHA256) {
+		return app.NewError(app.CodeInvalidData, "resource before digest is not lowercase SHA-256", nil)
+	}
+	return nil
+}
+
+func validateResourceSequence(entries []ResourceEntry) error {
+	indexPosition, ledgerPosition := -1, -1
+	for position, entry := range entries {
+		if entry.Kind == ResourceEvidenceIndex {
+			indexPosition = position
+		}
+		if entry.Kind == ResourceLedger {
+			ledgerPosition = position
+		}
+	}
+	if indexPosition >= 0 && ledgerPosition >= 0 {
+		if indexPosition > ledgerPosition || entries[indexPosition].BeforeSHA256 == "" || entries[ledgerPosition].BeforeSHA256 == "" {
+			return app.NewError(app.CodeInvalidData, "evidence index replacement must precede the ledger and record both before identities", nil)
+		}
+		for _, position := range []int{indexPosition, ledgerPosition} {
+			if entries[position].State == ResourceReplaced && entries[position].SHA256 == "" {
+				return app.NewError(app.CodeInvalidData, "replaced evidence resources must record exact after identities", nil)
+			}
+		}
 	}
 	return nil
 }

@@ -113,7 +113,11 @@ func BuildForecastReveal(model *ledger.Ledger, questionID, forecastID ledger.Slu
 	}
 	opened, err := forecastcrypto.Open(keyFile, questionID, forecast.QuestionRevisionID, forecastID, sealed)
 	if err != nil {
-		return ForecastMutation{}, app.NewError(app.CodeVerification, "sealed forecast authentication failed", err)
+		reason := string(forecastcrypto.FailureStageOf(err))
+		if reason == "" {
+			reason = "reveal.commitment_malformed"
+		}
+		return ForecastMutation{}, app.WithDetails(app.NewError(app.CodeVerification, "sealed forecast could not be authenticated", nil), map[string]any{"reason": reason})
 	}
 	if err := validateRevealedBundle(question, forecast, opened.Bundle); err != nil {
 		return ForecastMutation{}, app.NewError(app.CodeVerification, "authenticated bundle does not match the selected forecast", err)

@@ -1,0 +1,18 @@
+{
+  "schema": "forecast-evidence-index-test-vector/v1",
+  "allow_empty": true,
+  "index": {
+    "schema": "forecast-evidence-index/v1",
+    "ledger_id": "empty-example-ledger",
+    "contract": {
+      "schema_id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json",
+      "schema_version": "2.2.0",
+      "schema_sha256": "6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e"
+    },
+    "entries": []
+  },
+  "expected": {
+    "canonical_json": "{\"contract\":{\"schema_id\":\"https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json\",\"schema_sha256\":\"6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e\",\"schema_version\":\"2.2.0\"},\"entries\":[],\"ledger_id\":\"empty-example-ledger\",\"schema\":\"forecast-evidence-index/v1\"}",
+    "sha256": "ae3f1aad91cb0588c062ebcd65f810ec068343c01207496d9d531674964f5485"
+  }
+}

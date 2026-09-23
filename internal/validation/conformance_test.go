@@ -33,8 +33,8 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 	if err := decoder.Decode(&cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 32 {
-		t.Fatalf("got %d invalid cases, want 32", len(cases))
+	if len(cases) != 39 {
+		t.Fatalf("got %d invalid cases, want 39", len(cases))
 	}
 	expectedSemanticCode := map[string]string{
 		"outcome-space-domain-mismatch":               "semantic.domain_kind",

@@ -174,7 +174,7 @@ func resultSchema() map[string]any {
 				"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}, "details": map[string]any{"type": "object"},
 			})},
 			"effects": map[string]any{"type": "array", "items": closedRecord([]string{"kind", "action", "status"}, map[string]any{
-				"kind":   map[string]any{"enum": []string{"ledger", "target", "timestamp_request", "timestamp_response", "timestamp_trust", "key", "package", "network"}},
+				"kind":   map[string]any{"enum": []string{"ledger", "target", "evidence_index", "timestamp_request", "timestamp_response", "timestamp_trust", "key", "package", "network"}},
 				"action": map[string]any{"enum": []string{"read", "create", "replace", "remove", "contact"}},
 				"status": map[string]any{"enum": []string{"planned", "deferred", "completed", "unchanged"}},
 				"root":   map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}, "source_id": map[string]any{"type": "string"},

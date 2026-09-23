@@ -99,7 +99,7 @@ func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
 		Representations: []ledger.ForecastRepresentation{{Probability: &ledger.ProbabilityRepresentation{Kind: ledger.RepresentationProbability, Outcome: true, Probability: "0.625"}}},
 		Integrity: ledger.Integrity{Pending: &ledger.PendingIntegrity{
 			Status: ledger.IntegrityPending,
-			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v2", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
+			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v3", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
 		}},
 	}
 	redacted, err := Redact(data)

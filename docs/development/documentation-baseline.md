@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-09-22
+reviewed: 2026-09-23
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-09-22
+Reviewed: 2026-09-23
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -51,7 +51,7 @@ The following commands have connected application services:
 | `forecast-ledger group ...`, `relationship ...` | Manages groups, memberships, and acyclic conditional relationships with guarded removal. | None |
 | `forecast-ledger question add|revise|update|list|show|resolve|ambiguous|void|dispute|not-applicable ...` | Creates immutable typed revisions, applies question-level patches, reads redacted summaries, and records approved v2 terminal states. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal|withdraw|expire|reaffirm ...`, `forecast key-hint update ...` | Appends revision-bound public or sealed forecasts and activity events, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
-| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v2` bytes or one `forecast-lifecycle/v1` event prefix at deterministic ledger-relative paths. | None |
+| `forecast-ledger target build|check ...` | Retains or checks exact `forecast-envelope/v3` bytes or one `forecast-lifecycle/v2` event prefix with the canonical evidence index. | None |
 | `forecast-ledger timestamp stamp|status|verify ...` | Acquires or locally checks RFC 3161 evidence for forecast or exact-head lifecycle targets; lifecycle stamp records the checkpoint atomically. | Selected TSA only for stamp; none for status or verify |
 | `forecast-ledger verify --file <path> ...` | Reports document, content-binding, activity, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
 | `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package containing the exact RFC 3161 artifacts and verifies it locally. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None |
@@ -96,12 +96,12 @@ or upgrade to `v0.6.1`.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `2.1.0` |
-| Schema commit | `d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4` |
-| Annotated tag object | `6d74d483f7cb177470ba77f4fcb4063fe04f4003` |
-| Release archive SHA-256 | `f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17` |
-| `SHA256SUMS` SHA-256 | `6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b` |
-| Embedded schema SHA-256 | `cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107` |
+| Forecast Ledger schema | `2.2.0` |
+| Schema commit | `ae02de9ebca3eb2ae87c480596bf620bdcdced11` |
+| Annotated tag object | `8feb323ce895a6a197183c4eb857a55463648873` |
+| Release archive SHA-256 | `e8f92450e7e73eb559e762878dd4188156968cdad6328c03ea94d6b0c01ff419` |
+| `SHA256SUMS` SHA-256 | `7e1d79e6d8bd4df20a5877ef51c17f149cec7619d49ddfa2fff82899034989a0` |
+| Embedded schema SHA-256 | `6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
@@ -110,8 +110,9 @@ Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
 never a floating tag. Documents with any other schema version receive an
 `unsupported_schema_version` warning and are rejected before side effects.
-There is no v2.0.1 runtime contract, converter, or compatibility reader;
-historical v2.0.1 evidence remains interpretable from its exact upstream tag.
+There is no v2.1.0 runtime contract, converter, or compatibility reader;
+historical v2.1.0 evidence remains interpretable with the v0.10.0 binary and
+its exact pinned source.
 
 ### Platforms and release artifacts
 
@@ -121,7 +122,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.10.0` contains those six archives and eight native Linux packages:
+Release `v0.11.0` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -249,7 +250,7 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**.
-  `v0.10.0` is published through the explicit release workflow; stable `0.x`
+  `v0.11.0` is published through the explicit release workflow; stable `0.x`
   packaging does not imply feature completeness, independent audit, or formal
   verification.
 - No independent security or cryptographic audit is recorded. A pinned

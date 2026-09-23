@@ -18,16 +18,44 @@ import (
 )
 
 const (
-	SealScheme        = "forecast-seal/v2"
-	KeyFileSchema     = "forecast-key/v2"
+	SealScheme        = "forecast-seal/v3"
+	KeyFileSchema     = "forecast-key/v3"
 	EncryptionProfile = "chacha20-poly1305"
 )
+
+type FailureStage string
+
+const (
+	StageKeyFileInvalid            FailureStage = "reveal.key_file_invalid"
+	StageKeyFileBindingFailed      FailureStage = "reveal.key_file_binding_failed"
+	StageCommitmentMalformed       FailureStage = "reveal.commitment_malformed"
+	StageAlgorithmUnsupported      FailureStage = "reveal.algorithm_unsupported"
+	StageNonceEncodingInvalid      FailureStage = "reveal.nonce_encoding_invalid"
+	StageCiphertextEncodingInvalid FailureStage = "reveal.ciphertext_encoding_invalid"
+	StageAuthenticationFailed      FailureStage = "reveal.authentication_failed"
+	StageCommitmentDigestMismatch  FailureStage = "reveal.commitment_digest_mismatch"
+	StageBundleProfileMismatch     FailureStage = "reveal.bundle_profile_mismatch"
+)
+
+type Failure struct{ Stage FailureStage }
+
+func (e *Failure) Error() string { return string(e.Stage) }
+
+func failure(stage FailureStage) error { return &Failure{Stage: stage} }
+
+func FailureStageOf(err error) FailureStage {
+	var typed *Failure
+	if errors.As(err, &typed) {
+		return typed.Stage
+	}
+	return ""
+}
 
 type EntropySource interface {
 	ReadFull(context.Context, []byte) error
 }
 
-// PrivateBundle is the closed forecast-seal/v2 private value disclosed by a
+// PrivateBundle is the closed forecast-seal/v3 private value disclosed by a
 // reveal. Optional fields are pointers so an absent property remains distinct
 // from a present empty string or array.
 type PrivateBundle struct {
@@ -96,7 +124,7 @@ func Seal(ctx context.Context, questionID, revisionID, forecastID ledger.Slug, b
 		return result, fmt.Errorf("initialize sealing cipher: %w", err)
 	}
 	ciphertext := cipher.Seal(nil, nonce, plaintext, aad)
-	keyFile, err := EncodeKeyFile(questionID, revisionID, forecastID, key)
+	keyFile, err := EncodeKeyFile(questionID, revisionID, forecastID, ledger.Hex32(digestHex), key)
 	if err != nil {
 		return result, err
 	}
@@ -119,16 +147,20 @@ type KeyFile struct {
 	QuestionID         string `json:"question_id"`
 	QuestionRevisionID string `json:"question_revision_id"`
 	ForecastID         string `json:"forecast_id"`
+	CommitmentSHA256   string `json:"commitment_sha256"`
 	KeyHex             string `json:"key_hex"`
 }
 
-func EncodeKeyFile(questionID, revisionID, forecastID ledger.Slug, key []byte) ([]byte, error) {
+func EncodeKeyFile(questionID, revisionID, forecastID ledger.Slug, commitmentSHA256 ledger.Hex32, key []byte) ([]byte, error) {
 	if len(key) != chacha20poly1305.KeySize {
 		return nil, errors.New("key must contain exactly 32 bytes")
 	}
+	if !validHex32(string(commitmentSHA256)) {
+		return nil, errors.New("commitment digest must be lowercase SHA-256 hex")
+	}
 	encoded, err := canonicalJSON(KeyFile{
 		Schema: KeyFileSchema, QuestionID: string(questionID), QuestionRevisionID: string(revisionID),
-		ForecastID: string(forecastID), KeyHex: hex.EncodeToString(key),
+		ForecastID: string(forecastID), CommitmentSHA256: string(commitmentSHA256), KeyHex: hex.EncodeToString(key),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("canonicalize key file: %w", err)
@@ -136,42 +168,45 @@ func EncodeKeyFile(questionID, revisionID, forecastID ledger.Slug, key []byte) (
 	return append(encoded, '\n'), nil
 }
 
-func DecodeKeyFile(data []byte, questionID, revisionID, forecastID ledger.Slug) (KeyFile, error) {
+func DecodeKeyFile(data []byte, questionID, revisionID, forecastID ledger.Slug, commitmentSHA256 ledger.Hex32) (KeyFile, error) {
 	var result KeyFile
 	if len(data) == 0 || len(data) > 4096 || data[len(data)-1] != '\n' || bytes.Contains(data[:len(data)-1], []byte{'\n'}) {
-		return result, errors.New("key file must be bounded and end in exactly one LF")
+		return result, failure(StageKeyFileInvalid)
 	}
 	parsed, err := document.ParseJSON(bytes.NewReader(data[:len(data)-1]), document.Limits{MaxBytes: 4096, MaxDepth: 8, MaxNodes: 16, MaxScalarBytes: 256})
 	if err != nil {
-		return result, fmt.Errorf("key file is not valid JSON: %w", err)
+		return result, failure(StageKeyFileInvalid)
 	}
 	canonicalBytes, err := canonical.Marshal(parsed.Root.Any())
 	if err != nil || !bytes.Equal(canonicalBytes, data[:len(data)-1]) {
-		return result, errors.New("key file is not canonical")
+		return result, failure(StageKeyFileInvalid)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data[:len(data)-1]))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
-		return KeyFile{}, fmt.Errorf("key file shape is invalid: %w", err)
+		return KeyFile{}, failure(StageKeyFileInvalid)
 	}
 	decoded, err := hex.DecodeString(result.KeyHex)
 	defer clear(decoded)
-	if result.Schema != KeyFileSchema || result.QuestionID != string(questionID) || result.QuestionRevisionID != string(revisionID) || result.ForecastID != string(forecastID) || err != nil || len(decoded) != chacha20poly1305.KeySize || result.KeyHex != hex.EncodeToString(decoded) {
-		return KeyFile{}, errors.New("key file binding is invalid")
+	if err != nil || len(decoded) != chacha20poly1305.KeySize || result.KeyHex != hex.EncodeToString(decoded) || !validHex32(result.CommitmentSHA256) {
+		return KeyFile{}, failure(StageKeyFileInvalid)
+	}
+	if result.Schema != KeyFileSchema || result.QuestionID != string(questionID) || result.QuestionRevisionID != string(revisionID) || result.ForecastID != string(forecastID) || result.CommitmentSHA256 != string(commitmentSHA256) {
+		return KeyFile{}, failure(StageKeyFileBindingFailed)
 	}
 	return result, nil
 }
 
 func Open(keyFileBytes []byte, questionID, revisionID, forecastID ledger.Slug, commitment ledger.SealedCommitment) (OpenResult, error) {
 	var result OpenResult
-	keyFile, err := DecodeKeyFile(keyFileBytes, questionID, revisionID, forecastID)
+	keyFile, err := DecodeKeyFile(keyFileBytes, questionID, revisionID, forecastID, commitment.CommitmentHash.Value)
 	if err != nil {
-		return result, fmt.Errorf("verify key file: %w", err)
+		return result, err
 	}
 	key, err := hex.DecodeString(keyFile.KeyHex)
 	if err != nil || len(key) != chacha20poly1305.KeySize {
 		clear(key)
-		return result, errors.New("key file contains an invalid key")
+		return result, failure(StageKeyFileInvalid)
 	}
 	defer clear(key)
 	bundle, plaintext, err := openWithKey(key, questionID, revisionID, forecastID, commitment)
@@ -196,21 +231,24 @@ type sealedPlaintext struct {
 func openWithKey(key []byte, questionID, revisionID, forecastID ledger.Slug, commitment ledger.SealedCommitment) (PrivateBundle, []byte, error) {
 	var empty PrivateBundle
 	if len(key) != chacha20poly1305.KeySize {
-		return empty, nil, errors.New("revealed key is invalid")
+		return empty, nil, failure(StageKeyFileInvalid)
+	}
+	if !validHex32(string(commitment.CommitmentHash.Value)) {
+		return empty, nil, failure(StageCommitmentMalformed)
 	}
 	if commitment.Scheme != SealScheme || commitment.CommitmentHash.Algorithm != "sha-256" || commitment.Encryption.Algorithm != EncryptionProfile {
-		return empty, nil, errors.New("sealed commitment protocol identifiers are invalid")
+		return empty, nil, failure(StageAlgorithmUnsupported)
 	}
 	nonce, err := base64.StdEncoding.Strict().DecodeString(string(commitment.Encryption.Nonce))
 	if err != nil || len(nonce) != chacha20poly1305.NonceSize {
 		clear(nonce)
-		return empty, nil, errors.New("sealed commitment nonce is invalid")
+		return empty, nil, failure(StageNonceEncodingInvalid)
 	}
 	defer clear(nonce)
 	ciphertext, err := base64.StdEncoding.Strict().DecodeString(string(commitment.Encryption.Ciphertext))
 	if err != nil || len(ciphertext) < chacha20poly1305.Overhead || int64(len(ciphertext)) > document.DefaultLimits.MaxBytes {
 		clear(ciphertext)
-		return empty, nil, errors.New("sealed commitment ciphertext is invalid")
+		return empty, nil, failure(StageCiphertextEncodingInvalid)
 	}
 	defer clear(ciphertext)
 	aad, err := sealAAD(questionID, revisionID, forecastID, string(commitment.CommitmentHash.Value))
@@ -223,51 +261,56 @@ func openWithKey(key []byte, questionID, revisionID, forecastID ledger.Slug, com
 	}
 	plaintext, err := cipher.Open(nil, nonce, ciphertext, aad)
 	if err != nil {
-		return empty, nil, errors.New("sealed forecast authentication failed")
+		return empty, nil, failure(StageAuthenticationFailed)
 	}
 	digest := sha256.Sum256(plaintext)
 	expected, err := hex.DecodeString(string(commitment.CommitmentHash.Value))
 	if err != nil || len(expected) != sha256.Size || subtle.ConstantTimeCompare(digest[:], expected) != 1 {
 		clear(plaintext)
-		return empty, nil, errors.New("sealed forecast commitment digest does not match")
+		return empty, nil, failure(StageCommitmentDigestMismatch)
 	}
 	parsed, err := document.ParseJSON(bytes.NewReader(plaintext), document.DefaultLimits)
 	if err != nil {
 		clear(plaintext)
-		return empty, nil, fmt.Errorf("sealed plaintext is invalid: %w", err)
+		return empty, nil, failure(StageBundleProfileMismatch)
 	}
 	canonicalBytes, err := canonical.Marshal(parsed.Root.Any())
 	if err != nil || !bytes.Equal(canonicalBytes, plaintext) {
 		clear(plaintext)
-		return empty, nil, errors.New("sealed plaintext is not canonical")
+		return empty, nil, failure(StageBundleProfileMismatch)
 	}
 	var sealed sealedPlaintext
 	decoder := json.NewDecoder(bytes.NewReader(plaintext))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&sealed); err != nil {
 		clear(plaintext)
-		return empty, nil, fmt.Errorf("sealed plaintext shape is invalid: %w", err)
+		return empty, nil, failure(StageBundleProfileMismatch)
 	}
 	reencoded, err := canonicalJSON(sealed)
 	if err != nil || !bytes.Equal(reencoded, plaintext) {
 		clear(plaintext)
-		return empty, nil, errors.New("sealed plaintext is not the exact closed forecast-seal/v2 object")
+		return empty, nil, failure(StageBundleProfileMismatch)
 	}
 	salt, saltErr := hex.DecodeString(sealed.Salt)
 	defer clear(salt)
 	if sealed.Schema != SealScheme || sealed.QuestionID != questionID || sealed.QuestionRevisionID != revisionID || sealed.ForecastID != forecastID || len(sealed.Bundle.Representations) == 0 || saltErr != nil || len(salt) != 32 || sealed.Salt != hex.EncodeToString(salt) {
 		clear(plaintext)
-		return empty, nil, errors.New("sealed plaintext binding is invalid")
+		return empty, nil, failure(StageBundleProfileMismatch)
 	}
 	if sealed.Bundle.KeyFactors != nil {
 		for _, factor := range *sealed.Bundle.KeyFactors {
 			if factor == "" {
 				clear(plaintext)
-				return empty, nil, errors.New("sealed plaintext private bundle is invalid")
+				return empty, nil, failure(StageBundleProfileMismatch)
 			}
 		}
 	}
 	return sealed.Bundle, bytes.Clone(plaintext), nil
+}
+
+func validHex32(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == hex.EncodeToString(decoded)
 }
 
 func sealAAD(questionID, revisionID, forecastID ledger.Slug, digest string) ([]byte, error) {

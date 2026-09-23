@@ -1,7 +1,7 @@
 # Seal and reveal forecasts
 
 <!-- doc-metadata
-coverage: v0.10.0
+coverage: v0.11.0
 reviewed: 2026-09-22
 owner: interface
 generated: false
@@ -54,10 +54,10 @@ ledger is updated. If the later ledger update fails, the only key copy is
 retained and recovery output identifies its safe display name. `--dry-run`
 validates input and destinations without generating a salt, key, or nonce.
 
-The `forecast-seal/v2` plaintext authenticates the question ID, exact question
+The `forecast-seal/v3` plaintext authenticates the question ID, exact question
 revision ID, forecast ID, random salt, representations, and the presence and
 value of each optional private field. Associated data also authenticates the
-scheme and commitment digest. A separate `forecast-envelope/v2` target binds
+scheme and commitment digest. A separate `forecast-envelope/v3` target binds
 the full question revision and public forecast record. After reveal publishes
 the key, anyone with the retained ciphertext can recover the private bundle.
 

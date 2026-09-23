@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/document"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/publication"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
 	"github.com/chaoscondensate/forecast-ledger/internal/validation"
@@ -156,6 +158,9 @@ func resolveTimestampSelection(options TimestampStampOptions) (timestampSelectio
 		if err := storage.ValidateRelativePath(options.CABundlePath); err != nil {
 			return timestampSelection{}, app.NewError(app.CodeInvalidData, "--ca-bundle must be a safe ledger-relative PEM file", err)
 		}
+		if !strings.HasPrefix(options.CABundlePath, "trust/") {
+			return timestampSelection{}, app.NewError(app.CodeInvalidData, "--ca-bundle must be inside the managed trust/ directory", nil)
+		}
 		return timestampSelection{Mode: timestampSelectionCustom, Candidates: []timestampCandidate{{ProviderID: "custom", TSAURL: normalized, CABundlePath: ledger.RelativePath(options.CABundlePath)}}}, nil
 	}
 	providerID := options.TSAProvider
@@ -214,6 +219,10 @@ func timestampEvidencePathsForEndpoint(forecastID ledger.Slug, endpoint string) 
 }
 
 func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampStampOptions) (TimestampArtifactResult, error) {
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
+	if err != nil {
+		return TimestampArtifactResult{}, err
+	}
 	selection, err := resolveTimestampSelection(options)
 	if err != nil {
 		return TimestampArtifactResult{}, err
@@ -221,16 +230,19 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 	if options.Offline {
 		return TimestampArtifactResult{}, app.NewError(app.CodeNetworkDisabled, "timestamp stamp requires network access", nil)
 	}
-	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
 	subject, err := timestampPreflightScoped(loaded.Model, questionID, forecastID, options.Scope, options.HeadEventID)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
 	artifact := subject.Artifact
 	root := filepath.Dir(loaded.Path)
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
+	if err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	if err := timestampReconciliationError(reconciled, selection, artifact); err != nil {
+		return TimestampArtifactResult{}, err
+	}
 	resolver, err := storage.NewPathResolver(root)
 	if err != nil {
 		return TimestampArtifactResult{}, err
@@ -242,7 +254,7 @@ func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID
 	result.SelectionMode = selection.Mode
 	result.Entries = make([]TimestampEntryResult, 0, len(selection.Candidates))
 	result.Attempts = make([]TimestampAttemptResult, 0, len(selection.Candidates))
-	result.Effects = []SideEffect{{Kind: EffectTarget, Action: EffectCreate, Status: deferredOrUnchanged(regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))), Path: string(artifact.RelativePath), Rollback: RollbackCreatedPublic}}
+	result.Effects = []SideEffect{{Kind: EffectEvidenceIndex, Action: EffectReplace, Status: EffectDeferred, Path: publication.EvidenceIndexPath}}
 	for index := range selection.Candidates {
 		candidate := &selection.Candidates[index]
 		caAbsolute, resolveErr := resolver.ResolveForCreate(string(candidate.CABundlePath))
@@ -602,6 +614,17 @@ func timestampPreflightScoped(model *ledger.Ledger, questionID, forecastID ledge
 		return timestampSubject{}, err
 	}
 	subject := timestampSubject{Artifact: artifact, Forecast: forecast}
+	if scope == TargetScopeForecast {
+		target := recordedForecastTarget(model, questionID, forecastID)
+		if target == nil {
+			return timestampSubject{}, app.NewError(app.CodeConflict, "timestamp stamp requires a retained forecast target; run target build first", nil)
+		}
+		if target.Scope != artifact.Scope || target.Canonicalization != TargetCanonicalization || target.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
+			return timestampSubject{}, app.NewError(app.CodeVerification, "recorded forecast target metadata does not match its canonical envelope", nil)
+		}
+		artifact.RelativePath = target.ArtifactPath
+		subject.Artifact = artifact
+	}
 	if scope == TargetScopeLifecycle && forecast.ActivityCheckpoints != nil {
 		for index := range *forecast.ActivityCheckpoints {
 			if (*forecast.ActivityCheckpoints)[index].HeadEventID == headEventID {
@@ -618,6 +641,9 @@ func timestampPreflightScoped(model *ledger.Ledger, questionID, forecastID ledge
 			}
 		}
 	}
+	if scope == TargetScopeLifecycle && subject.LifecycleCheckpoint == nil {
+		return timestampSubject{}, app.NewError(app.CodeConflict, "timestamp stamp requires a retained lifecycle checkpoint; run target build first", nil)
+	}
 	if timestampSubjectFailed(subject) {
 		return timestampSubject{}, app.NewError(app.CodeConflict, "failed integrity is terminal for the selected evidence scope", nil)
 	}
@@ -626,6 +652,8 @@ func timestampPreflightScoped(model *ledger.Ledger, questionID, forecastID ledge
 
 func lifecycleIntegrityTarget(integrity ledger.LifecycleIntegrity) *ledger.LifecycleTarget {
 	switch {
+	case integrity.Retained != nil:
+		return &integrity.Retained.Target
 	case integrity.Pending != nil:
 		return &integrity.Pending.Target
 	case integrity.Verified != nil:
@@ -637,14 +665,95 @@ func lifecycleIntegrityTarget(integrity ledger.LifecycleIntegrity) *ledger.Lifec
 	}
 }
 
+func timestampReconciliationError(result EvidenceReconciliation, selection timestampSelection, artifact TargetArtifact) error {
+	if result.State != ReconciliationIncomplete {
+		return reconciliationError(result)
+	}
+	allowed := make(map[string]struct{}, len(selection.Candidates))
+	for _, candidate := range selection.Candidates {
+		allowed[string(candidate.CABundlePath)] = struct{}{}
+		requestPath, responsePath, err := timestampEvidencePathsForArtifact(artifact, candidate.TSAURL)
+		if err != nil {
+			return err
+		}
+		allowed[string(requestPath)] = struct{}{}
+		allowed[string(responsePath)] = struct{}{}
+	}
+	for _, issue := range result.Issues {
+		if issue.Code != "evidence.unindexed_artifact" {
+			return reconciliationError(result)
+		}
+		if _, ok := allowed[issue.Path]; !ok {
+			return reconciliationError(result)
+		}
+	}
+	return nil
+}
+
+func buildTimestampEvidenceIndex(existing *publication.EvidenceIndex, artifact TargetArtifact, entry TimestampEntryResult, requestBytes, responseBytes, caBytes []byte) ([]byte, error) {
+	if existing == nil || entry.CABundlePath == nil {
+		return nil, app.NewError(app.CodeVerification, "timestamp evidence requires an existing retained target index", nil)
+	}
+	index := *existing
+	index.Entries = append([]publication.EvidenceEntry(nil), existing.Entries...)
+	trustPath := string(*entry.CABundlePath)
+	format := publication.PEMCertificateBundle
+	entries := []publication.EvidenceEntry{
+		{Role: publication.RoleRFC3161Request, Path: string(entry.RequestPath), Size: int64(len(requestBytes)), Digest: publication.Digest{Algorithm: "sha-256", Value: storage.ResourceDigest(requestBytes)}, TargetRef: &publication.TargetReference{TargetPath: string(artifact.RelativePath)}, Request: &publication.RequestBinding{HashAlgorithm: "sha256", MessageImprintSHA256: artifact.SHA256}},
+		{Role: publication.RoleRFC3161Response, Path: string(entry.ResponsePath), Size: int64(len(responseBytes)), Digest: publication.Digest{Algorithm: "sha-256", Value: storage.ResourceDigest(responseBytes)}, Response: &publication.ResponseReferences{TargetPath: string(artifact.RelativePath), RequestPath: string(entry.RequestPath), TrustPath: &trustPath}, TSA: &publication.ResponseBinding{TSAURL: entry.TSAURL}},
+		{Role: publication.RoleX509CABundle, Path: trustPath, Size: int64(len(caBytes)), Digest: publication.Digest{Algorithm: "sha-256", Value: storage.ResourceDigest(caBytes)}, Format: &format},
+	}
+	byPath := make(map[string]publication.EvidenceEntry, len(index.Entries))
+	for _, current := range index.Entries {
+		byPath[current.Path] = current
+	}
+	for _, candidate := range entries {
+		if current, ok := byPath[candidate.Path]; ok {
+			left, _ := json.Marshal(current)
+			right, _ := json.Marshal(candidate)
+			if !bytes.Equal(left, right) {
+				return nil, app.NewError(app.CodeConflict, "evidence index path already has different timestamp metadata", nil)
+			}
+			continue
+		}
+		index.Entries = append(index.Entries, candidate)
+		byPath[candidate.Path] = candidate
+	}
+	publication.SortEvidenceEntries(index.Entries)
+	encoded, err := publication.EncodeEvidenceIndex(index, false)
+	if err != nil {
+		return nil, app.NewError(app.CodeInvalidData, "timestamp evidence index is invalid", err)
+	}
+	return encoded, nil
+}
+
 func commitTimestampEvidence(ctx context.Context, path string, questionID, forecastID ledger.Slug, scope TargetScope, headEventID ledger.Slug, artifact TargetArtifact, entry TimestampEntryResult, requestBytes, responseBytes, caBytes []byte, metadata rfc3161.Metadata, verifiedAt ledger.Timestamp, verified, materializeCA bool, result TimestampArtifactResult) (TimestampArtifactResult, error) {
 	root := filepath.Dir(path)
-	resolver, err := storage.NewPathResolver(root)
+	if entry.CABundlePath == nil {
+		return result, app.NewError(app.CodeInternal, "timestamp CA bundle path is missing", nil)
+	}
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, path)
+	if err != nil {
+		return result, app.NewError(app.CodeConflict, "ledger changed while the timestamp authority request was in flight", err)
+	}
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
 	if err != nil {
 		return result, err
 	}
-	if entry.CABundlePath == nil {
-		return result, app.NewError(app.CodeInternal, "timestamp CA bundle path is missing", nil)
+	selection := timestampSelection{Mode: timestampSelectionNamed, Candidates: []timestampCandidate{{TSAURL: entry.TSAURL, CABundlePath: *entry.CABundlePath}}}
+	if !materializeCA {
+		selection.Mode = timestampSelectionCustom
+	}
+	if err := timestampReconciliationError(reconciled, selection, artifact); err != nil {
+		return result, err
+	}
+	indexBytes, err := buildTimestampEvidenceIndex(reconciled.Index, artifact, entry, requestBytes, responseBytes, caBytes)
+	if err != nil {
+		return result, err
+	}
+	resolver, err := storage.NewPathResolver(root)
+	if err != nil {
+		return result, err
 	}
 	caAbsolute, err := resolver.ResolveForCreate(string(*entry.CABundlePath))
 	if !materializeCA {
@@ -661,32 +770,43 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 	if err != nil {
 		return result, err
 	}
-	targetAbsolute, err := resolver.ResolveForCreate(string(artifact.RelativePath))
+	indexAbsolute, err := resolver.ResolveLabeled(publication.EvidenceIndexPath, true, "evidence index")
 	if err != nil {
 		return result, err
 	}
 	journal := filepath.Join(root, "."+filepath.Base(path)+".timestamp-resources.json")
-	resources := []storage.ResourceEntry{
-		resourceEntry(storage.ResourceTarget, targetAbsolute),
-	}
+	resources := make([]storage.ResourceEntry, 0, 5)
 	if materializeCA {
 		resources = append(resources, resourceEntry(storage.ResourceTimestampTrust, caAbsolute))
 	}
-	resources = append(resources, resourceEntry(storage.ResourceTimestampRequest, requestAbsolute), resourceEntry(storage.ResourceTimestampResponse, responseAbsolute))
+	indexResource := resourceEntry(storage.ResourceEvidenceIndex, indexAbsolute)
+	indexResource.BeforeSHA256 = storage.ResourceDigest(reconciled.Store.IndexBytes)
+	ledgerResource := resourceEntry(storage.ResourceLedger, path)
+	ledgerResource.BeforeSHA256 = storage.ResourceDigest(loaded.Document.Raw)
+	resources = append(resources,
+		resourceEntry(storage.ResourceTimestampRequest, requestAbsolute),
+		resourceEntry(storage.ResourceTimestampResponse, responseAbsolute),
+		indexResource,
+		ledgerResource,
+	)
 	var plan *storage.ResourcePlan
-	finishRetained := func(cause error) (TimestampArtifactResult, error) {
+	indexReplaced := false
+	originalIndex := bytes.Clone(reconciled.Store.IndexBytes)
+	rollback := func(cause error) (TimestampArtifactResult, error) {
 		if plan == nil {
 			return result, cause
 		}
-		if finishErr := plan.Finish(); finishErr != nil {
-			result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp artifacts were retained, but resource journal cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
-			return result, errors.Join(cause, finishErr)
+		if indexReplaced {
+			if _, restoreErr := storage.ReplaceDeterministicFile(indexAbsolute, originalIndex, 0o600, publication.MaxEvidenceIndexBytes); restoreErr != nil {
+				result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp evidence index rollback needs attention.", Paths: []string{filepath.Base(journal)}}
+				return result, errors.Join(cause, restoreErr)
+			}
 		}
-		paths := []string{string(artifact.RelativePath), string(entry.RequestPath), string(entry.ResponsePath)}
-		if materializeCA {
-			paths = append(paths, string(*entry.CABundlePath))
+		if _, recoverErr := storage.RecoverResourcePlan(context.Background(), journal); recoverErr != nil {
+			result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp resource rollback needs attention.", Paths: []string{filepath.Base(journal)}}
+			return result, errors.Join(cause, recoverErr)
 		}
-		result.Recovery = Recovery{State: RecoveryRetained, Message: "Timestamp resources are durable and can be reused by a retry.", Paths: paths, Actions: []string{"retry timestamp stamp"}}
+		result.Recovery = Recovery{State: RecoveryNone}
 		return result, cause
 	}
 	artifacts := os.DirFS(root)
@@ -710,11 +830,12 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 		if target := recordedTargetMetadata(model, artifact); target != nil && (target.scope != artifact.Scope || target.canonicalization != TargetCanonicalization || target.path != artifact.RelativePath || target.digest.Value != ledger.Hex32(artifact.SHA256)) {
 			return nil, app.NewError(app.CodeConflict, "recorded target metadata changed before timestamp commit", nil)
 		}
+		currentIndex, indexErr := readBoundedFile(indexAbsolute, publication.MaxEvidenceIndexBytes)
+		if indexErr != nil || !bytes.Equal(currentIndex, originalIndex) {
+			return nil, app.NewError(app.CodeConflict, "evidence index changed while the timestamp authority request was in flight", indexErr)
+		}
 		if mkdirErr := os.MkdirAll(filepath.Dir(requestAbsolute), 0o755); mkdirErr != nil {
 			return nil, app.NewError(app.CodeIO, "timestamp artifact directory cannot be created", mkdirErr)
-		}
-		if mkdirErr := os.MkdirAll(filepath.Dir(targetAbsolute), 0o755); mkdirErr != nil {
-			return nil, app.NewError(app.CodeIO, "target artifact directory cannot be created", mkdirErr)
 		}
 		if materializeCA {
 			if mkdirErr := os.MkdirAll(filepath.Dir(caAbsolute), 0o755); mkdirErr != nil {
@@ -729,12 +850,12 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 			plan = nil
 			return nil, beginErr
 		}
-		writeItems := []struct {
+		writeItems := make([]struct {
 			path string
 			data []byte
 			mode os.FileMode
 			max  int64
-		}{{targetAbsolute, artifact.Bytes, 0o644, maxTargetBytes}}
+		}, 0, 3)
 		if materializeCA {
 			writeItems = append(writeItems, struct {
 				path string
@@ -757,7 +878,7 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 				max  int64
 			}{responseAbsolute, responseBytes, 0o644, maxTimestampResponseBytes},
 		)
-		for index, item := range writeItems {
+		for _, item := range writeItems {
 			written, writeErr := storage.EnsureDeterministicFile(item.path, item.data, item.mode, item.max)
 			if writeErr != nil {
 				return nil, writeErr
@@ -767,8 +888,14 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 					return nil, markErr
 				}
 			}
-			resources[index].State = storage.ResourceCommitted
-			if markErr := plan.MarkCommitted(item.path); markErr != nil {
+		}
+		indexWrite, writeErr := storage.ReplaceDeterministicFile(indexAbsolute, indexBytes, 0o600, publication.MaxEvidenceIndexBytes)
+		if writeErr != nil {
+			return nil, writeErr
+		}
+		indexReplaced = indexWrite.State == storage.DeterministicReplaced
+		if indexReplaced {
+			if markErr := plan.MarkReplaced(indexAbsolute, indexWrite.SHA256); markErr != nil {
 				return nil, markErr
 			}
 		}
@@ -788,10 +915,16 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 		return patchLifecycleTimestamp(parsed, questionPosition, forecastPosition, forecast, artifact, timestamp, verifiedAt)
 	}})
 	if err != nil {
-		return finishRetained(err)
+		return rollback(err)
 	}
 	if plan == nil {
 		return result, app.NewError(app.CodeInternal, "timestamp resource plan was not committed", nil)
+	}
+	for _, resource := range resources {
+		if err := plan.MarkCommitted(resource.Path); err != nil {
+			result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp evidence was committed, but journal completion needs attention.", Paths: []string{filepath.Base(journal)}}
+			return result, err
+		}
 	}
 	if err := plan.Finish(); err != nil {
 		result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp evidence was committed, but resource journal cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
@@ -807,9 +940,7 @@ func commitTimestampEvidence(ctx context.Context, path string, questionID, forec
 	if !verified {
 		result.Entries[0].CheckState = LayerFail
 	}
-	result.Effects = []SideEffect{
-		{Kind: EffectTarget, Action: EffectCreate, Status: EffectCompleted, Path: string(artifact.RelativePath)},
-	}
+	result.Effects = []SideEffect{{Kind: EffectEvidenceIndex, Action: EffectReplace, Status: EffectCompleted, Path: publication.EvidenceIndexPath}}
 	if materializeCA {
 		result.Effects = append(result.Effects, SideEffect{Kind: EffectTimestampTrust, Action: EffectCreate, Status: EffectCompleted, Path: string(*entry.CABundlePath)})
 	}
@@ -1179,7 +1310,11 @@ func stateFromEntries(entries []TimestampEntryResult) TimestampState {
 
 func resourceEntry(kind storage.ResourceKind, path string) storage.ResourceEntry {
 	owned := !regularFileExists(path)
-	return storage.ResourceEntry{Kind: kind, Type: storage.ResourceFile, Path: path, Owned: owned, Rollback: storage.ResourceRollbackNone, State: storage.ResourcePlanned}
+	rollback := storage.ResourceRollbackNone
+	if owned {
+		rollback = storage.ResourceRollbackRemoveOwned
+	}
+	return storage.ResourceEntry{Kind: kind, Type: storage.ResourceFile, Path: path, Owned: owned, Rollback: rollback, State: storage.ResourcePlanned}
 }
 
 func readOptionalBoundedFile(path string, limit int64) ([]byte, error) {

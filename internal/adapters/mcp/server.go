@@ -145,7 +145,7 @@ func contracts() map[service.OperationName]toolContract {
 		service.OperationForecastWithdraw:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastExpire:        {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastReaffirm:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "scope", "head", "all", "dry_run"), Required: file},
+		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "scope", "head", "checkpoint", "recorded_at", "all", "dry_run"), Required: file},
 		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "scope", "head", "all"), Required: file},
 		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "scope", "head", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationTimestampStatus:       {Allowed: append(file, "question", "forecast", "scope", "head"), Required: []string{"file", "question", "forecast"}},

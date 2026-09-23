@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,7 +54,7 @@ func TestFreeTSAESSV1SHA512FixtureVerifiesLocally(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if metadata.HashAlgorithm != HashAlgorithm || metadata.PolicyOID != "1.2.3.4.1" || metadata.SerialNumber != "139111566" || metadata.GenTime.Format(time.RFC3339) != "2026-09-21T15:24:45Z" {
+	if metadata.HashAlgorithm != HashAlgorithm || metadata.PolicyOID != "1.2.3.4.1" || metadata.SerialNumber != "139625017" || metadata.GenTime.Format(time.RFC3339) != "2026-09-22T22:17:00Z" {
 		t.Fatalf("metadata = %#v", metadata)
 	}
 	if metadata.SignerFingerprint != "32e841a95cc1164101ffde41298ef2fc75c1c4372ef095e88a6bbd47dfb191fc" || metadata.CABundleSHA256 != "2151b61137ffa86bf664691ba67e7da0b19f98c758e3d228d5d8ebf27e044438" {
@@ -125,10 +126,18 @@ func TestFreeTSAFixtureClassifiesESSDigestAndAlgorithmMutations(t *testing.T) {
 }
 
 func TestFixtureAlsoVerifiesWithOpenSSL(t *testing.T) {
-	if _, err := exec.LookPath("openssl"); err != nil {
+	opensslPath, err := exec.LookPath("openssl")
+	if err != nil {
 		t.Skip("OpenSSL is not installed")
 	}
-	command := exec.Command("openssl", "ts", "-verify", "-queryfile", "testdata/request.tsq", "-in", "testdata/response.tsr", "-CAfile", "testdata/root.pem")
+	version, err := exec.Command(opensslPath, "version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("read OpenSSL version: %v: %s", err, version)
+	}
+	if !strings.HasPrefix(string(version), "OpenSSL ") {
+		t.Skipf("independent fixture verification requires OpenSSL, found %q", strings.TrimSpace(string(version)))
+	}
+	command := exec.Command(opensslPath, "ts", "-verify", "-queryfile", "testdata/request.tsq", "-in", "testdata/response.tsr", "-CAfile", "testdata/root.pem")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("OpenSSL verification failed: %v: %s", err, output)
 	}

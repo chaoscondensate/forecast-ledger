@@ -3,6 +3,28 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## Unreleased
+
+## 0.11.0 - 2026-09-23
+
+### Changed
+
+- **Breaking:** accept only the exact Forecast Ledger v2.2.0 contract and reset
+  cryptographic identities to `forecast-seal/v3`, `forecast-key/v3`,
+  `forecast-envelope/v3`, and `forecast-lifecycle/v2`. No v2.1.0 reader,
+  converter, or compatibility bundle is included.
+- Make target build retain ledger metadata, canonical target bytes, and the
+  closed `forecast-evidence-index/v1` sidecar together. Lifecycle target build
+  now requires an explicit checkpoint ID and recording time.
+- Reconcile ledger declarations, index entries, and managed `proofs/` and
+  `trust/` files before mutation, verification, or publication.
+- Replace publication v2 with `forecast-ledger-publication/v3`, including the
+  exact evidence index and every indexed artifact. Empty-evidence packages
+  contain a package-local empty index.
+- Expose sealed nonce and ciphertext as public commitment fields while keeping
+  raw keys, salts, plaintext, private fields, credentials, and protected paths
+  redacted.
+
 ## 0.10.0 - 2026-09-22
 
 ### Changed

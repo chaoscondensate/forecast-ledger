@@ -84,15 +84,15 @@ goreleaser release --snapshot --clean --skip=publish,chocolatey
 ```
 
 For a Forecast Ledger contract update, also run the generated-contract parity
-tests, documentation examples, and removed-surface denylist. For v2.1.0,
-confirm together schema commit `d6ceebe4d42eac9f9e6d6df18167dc0dbf253bd4`,
-annotated tag object `6d74d483f7cb177470ba77f4fcb4063fe04f4003`,
+tests, documentation examples, and removed-surface denylist. For v2.2.0,
+confirm together schema commit `ae02de9ebca3eb2ae87c480596bf620bdcdced11`,
+annotated tag object `8feb323ce895a6a197183c4eb857a55463648873`,
 release archive digest
-`f417a40f1ddd0ef8448a983db8c6836241320cf914987554f077e90d6222ec17`,
+`e8f92450e7e73eb559e762878dd4188156968cdad6328c03ea94d6b0c01ff419`,
 checksum-asset digest
-`6b7437ed7bd1834792039d8a0b360f72e70710eb9a707336ba016fad0874799b`,
+`7e1d79e6d8bd4df20a5877ef51c17f149cec7619d49ddfa2fff82899034989a0`,
 embedded schema digest
-`cb4ba1d3c71c9fd824fb49d2e08defa01a3fa69bd70edd8139ce808d31cd5107`,
+`6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e`,
 attribution, fixtures, reference semantics, every seal presence vector, and all
 forecast/lifecycle target vectors as one identity. Do not publish while any of
 those identities disagree.
@@ -132,7 +132,7 @@ and Linux packages on Ubuntu, and validates the complete artifact matrix again
 on Windows, including Chocolatey package generation. Treat either snapshot
 failure as a release blocker.
 
-Before releasing the v2.1.0 correction, exercise lifecycle chronology,
+Before releasing the v2.2.0 reset, exercise retained-target/index reconciliation,
 checkpoint prefix order, forecast/lifecycle target isolation, exact-head
 timestamp retry and recovery, optional protected-field presence, actionable
 protected-file diagnostics, locks, safe replacement, path confinement, and

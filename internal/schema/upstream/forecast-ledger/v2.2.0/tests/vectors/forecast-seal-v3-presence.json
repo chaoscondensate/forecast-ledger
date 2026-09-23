@@ -1,0 +1,244 @@
+{
+  "schema": "forecast-seal-presence-test-vector/v3",
+  "question_id": "q-seal-presence",
+  "question_revision_id": "qr-seal-presence-1",
+  "forecast_id": "f-seal-presence-1",
+  "key_hint": "secret-manager://forecast-ledger/f-seal-presence-1",
+  "material": {
+    "salt_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "key_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "nonce_hex": "333333333333333333333333"
+  },
+  "cases": [
+    {
+      "name": "representation-only",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ]
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "33340c515b3e873648f719e3d416247d6cccc64264d154f55c5ad5c5836534e0",
+        "ciphertext_base64": "9Go4775177r8oTwOJaHBa76HPkIWNCN0toFBjVHJb4ibmfvXsFkXmpMP6QQRKsX2y780Zd4COnFEl0xZZjit3J96ovkad60l6U42h6MqHWJSjnwmYMKYdG6TndmscPyERZopqXzdv2S/M2T5Lq3jKQ5UTybta5XuuAb6bFjFPYi1ZnG7LoZTSKh5qFoXr7Hk76flDbp4RnmG/g4Ktoo+LWugXiI9X8wW93YXYz6dg5HznIh+TMcJRsx4k4YoGaOz+VThwJqiHxsxRdsWi8Ci1ssm4kzKn6yTYezn7gjmicGfFCXAj1XCTcKAgJEj8xo7rVW7VU+5RSSfIk1B9JQq7IAK643m4mFx+iPfJO+QiwMyNYUYgH4j0+eayVqUNMmk3VLC7Cdh5xgO9ZSyAv/BsrjTu9wEggMwv+09cYGL8Q=="
+      }
+    },
+    {
+      "name": "rationale-only",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": "Evidence supports the event."
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"rationale\":\"Evidence supports the event.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "be25afbfa4fda295aecb6fd14e1ebed60db399cf0bc02442bebefa0f9488febc",
+        "ciphertext_base64": "9Go4775177r8oTwOJaXFcLSaOkAHd20/nJlbyw78d8/Qg+DD4gxHnpJA/w0WY8zp2qhiZ95BbXdCiFNZN2e32otr57QEduB901d9gKMwAGJSjjx6OZXba1qC2I+zPaLDSY4uvkzZvmS/ZXChOOSgNVFLXyL8Z5fkqVLpdFbXYsvlN3iPPMQuR6Mp9xsH8bbe56/qR+p7GG+N/AcF6toqK2u9SS5/ALFIsHELdSSGhKH0p8MgTIxZGpJul4tpRKGk70LqzZzqDBU/Ft0SlMDpg4dIoRiNx+7LP7OJtl31gtLfVzmC2wWfUYPD1NN3rEhvsVWoSFz7FXnaMUZS9JQq7IAK643m4mFx+iPfJO+QiwMyJpgLwix6h7vK2lGHY5fniQCSrmJ9pUxeqIr1AOyNjqV5mZbHuTrReVXg0ichcvMAbHJq63DcE7JLrP/ju4jmdDJGXA916s9lh0Xal5pIrzcvb29VfV4Fwe0="
+      }
+    },
+    {
+      "name": "key-factors-only",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "key_factors": [
+          "base rate"
+        ]
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"key_factors\":[\"base rate\"],\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "ade70f2df7376fbeb43e8c3c7e4c77813311604ca59440b57c2c18d46c8a8440",
+        "ciphertext_base64": "9Go4775177r8oTwOPKHIRr2VOFgNJyQ/47QQzQrhcYqCkeHWsD4ZyJMF+xcWMMzxy6diIJMDPCcdo1oeL2u3ysglrKsYaqAm6kUzgr4nRmxKwzl8NZjXbBHUxYm/eqLDVok1v0LWsirsZXv2Z+qyaxURHz7Dc9evu0S5KxeGP4mPfGHwe8pqDL8+8xRL8rDk/a6mHq0wBD7Evxpd/9s7MWG9dSI2E6lG4y0NdTaewL7ondkhANUeSZM/g59gGqW/5V/Q0Zr5R0p0CMYojtCi1stmoVCIy/zOfa2kukqy1pPLCCXTkkaAHZ/Fk5ow8xo7rVW7VU+5RSSfIk1B9JQq7IAK643m4mFx+iPfJO+QiwMyJpgLwix6h7vK2lGHY5fniQCSrmJ9pUxeqIr1AP+QnecrwMKb6SnaagK+kWBuMfMXKWRi6z7JR+cGoy4GfOpZmXfwil+yfNk4H3s="
+      }
+    },
+    {
+      "name": "comment-only",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "comment": "Private note."
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"comment\":\"Private note.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "1a6b205748aaf1b96a1a26d29a962730a3dd78849f99856a826542e7832ee4cf",
+        "ciphertext_base64": "9Go4775177r8oTwONKvcdL6aLw5YdwdvsJlT2w6yesWElbuRvkFHj5ES7hYWLd3+y695J49PdV5c2kpVKmb7lMhv/LQIZKAu5EUrkuhyRi8d2C9nO5KYM0ecxJ7mPf6TSZk7v0rYsjL8Mzj2bea0cAFZYD6yLJ3ir06oLweTE5S0Nz/wJ8V/RK03vwgU57Hk4KitUPk/GT6Z6A5b7sEgNlG6TmloE+JJ4WUffHqCn6vpncQnC5RXSc5ol5lxAL641UPq1Zb8R1ZzOMETxY6inZs6oBiawrDSIrilule03d2fBzjTzQWfCNGLk5Ej8xo7rVW7VU+5RSSfIk1B9JQq7IAK643m4mFx+iPfJO+QiwMyJpgLwix6h7vK2lGHY5fniQCSrmJ9pUxeqIrmHf/P3PwtxcbUsimGJxa0gGR+JK0QYXZrpSTVE6lPBDXEhMrBkJ8JoJCcFiFv"
+      }
+    },
+    {
+      "name": "rationale-and-key-factors",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": "Evidence supports the event.",
+        "key_factors": [
+          "base rate"
+        ]
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"key_factors\":[\"base rate\"],\"rationale\":\"Evidence supports the event.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "d27d4dd3e5c4b1bbe4811f1795b8497d7df27d2fc9fbb94a86caac612cd62cce",
+        "ciphertext_base64": "9Go4775177r8oTwOPKHIRr2VOFgNJyQ/47QQzQrhcYqCkeHWsD4ZyJMB/wwcLcjz2uQsa7kbJmFClkJZZHGs3ppw/K8ZJbYv7Qw6na8wEG5KgG56M4fIbECL34+ra+eOSIh453jP+S3sf2b2Z+ryN0xGXCH3YpL5pAnnbBuSOJ6/eGDwe5x+VKl3sAgU7aDg7KKkFLxkFybKrUUer4oyBXP/CC09Q/YH83MKTz6Wz/S4noc3C9cXRs9vl5lgB7KzpwCtj93+W1xuE8EYievpiMst8QzW3fjDPPCmrVyk3Z7NQDbdnBWGGYDF2M98nVlv6g35DRHmK3zKMUZStNc2rtRatpGnoTUzrnyNcPOQmB4hZMhWhz9xlLvK2lGHY5fniQCSrmJ9pUxeqIr1AOyNjqV5mZbHuTrReVXg0jQ8YbFSNSY2u2PXAOUV76ux68qjaHASDFJrrc1l1sP/3PuKlOEuVE1f16JIuPe2c9HvqYQfsdmv+OdwYqMihROXP064uZm2/rTe"
+      }
+    },
+    {
+      "name": "rationale-and-comment",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": "Evidence supports the event.",
+        "comment": "Private note."
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"comment\":\"Private note.\",\"rationale\":\"Evidence supports the event.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "b8a7fdf2a8108e970193a7b38a2390cd97b2a52fa45f608cdc3ee31d48032df8",
+        "ciphertext_base64": "9Go4775177r8oTwONKvcdL6aLw5YdwdvsJlT2w6yesWElbuRvkFHi5UJ5AsSL8y9heRTP5UJKmtEnQFPMXKpwZhr/fsebadn7Vo6hb5wRmxK3il4JJLJbF2a0I+jcOCSBMEBpgHfsijhMzj2LbrtJ0JGVC/3eoKv8QmkOwCEI5C1Nz+mM51pDe4r4BcE46Do4qK8BOonFyzGq14K5/UydCy1RTk3UvIX5l8XdHXIz6i3i88lApsLGdpul4RmDPznqB2t0orqXU10CMYojtCi1stm/g6ez/GPIK+zrFy525WMCTaAywGACJre3/9gp11j7w3lCiHhEDeUMQ0C6NZ+vN0Wqs6yoDUuqHfDJPyNmEFie90YyT96h7vK2lGHY5fniQCSrmJ9pUxeqIr1AOyNjqV5mZbHuTrReVXg0jQ8YbFSNSY2u2PXAOUV76ux68qjaHASDFJrvtBliYLk2v6O27ouCABL3bNMqOLodJn9oMoFrY3hdR8CDd0hhi9W6DrTyNu4kg=="
+      }
+    },
+    {
+      "name": "key-factors-and-comment",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "key_factors": [
+          "base rate"
+        ],
+        "comment": "Private note."
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"comment\":\"Private note.\",\"key_factors\":[\"base rate\"],\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "27a9a194b332e63f681e73c3b4c8438ffe1c1f8ef36acf80778263fd2471fafc",
+        "ciphertext_base64": "9Go4775177r8oTwONKvcdL6aLw5YdwdvsJlT2w6yesWElbuRvkFej5g/7QQQN8btzOQsEt4PLnZC2FNdMGf788Y9/L4ad6c07UIrir43Cy4bjnZTLdXRYF2Kk8Hob/yORJo4tE/drz+nPSC7KLzhKk5BH3nqfI7o8Qm7PBuFLZ+5eWymOMo2A/x1pE1E/5/8oumuErp4Vn2b6TRB/op1emj+WS4zXb4U4GUNdTmRiOOr2oZmH8MeGMt0nYRaALX0sBP+jozqT1UwF9oSlNHuj4w1/1+K2/jRJLS5sWal3YbHVn2e0DuaGNGLk9Fg71hv/QinFAztB3DAcBld9Ic3/8Jatsj16XJx+iPfJO+QiwMyJpgLwix6h7vK2lGHY5fniQCSrmJ9pUxeqIr1AOyNjqV5mZbHuTrReVXg0jQ8YbFSNSY2u2PXE/gGrfnov5bze3sBWwwo+Z8miZWhzPaOla96XU1EmDu+bnTAIhn58BeYW7o2Ag=="
+      }
+    },
+    {
+      "name": "all-optional-fields",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": "Evidence supports the event.",
+        "key_factors": [
+          "base rate"
+        ],
+        "comment": "Private note."
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"comment\":\"Private note.\",\"key_factors\":[\"base rate\"],\"rationale\":\"Evidence supports the event.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "bd5804173cdf0fb7c274f45e016d4e10cc7a90c9b50681ad8680320e1ded28a2",
+        "ciphertext_base64": "9Go4775177r8oTwONKvcdL6aLw5YdwdvsJlT2w6yesWElbuRvkFej5g/7QQQN8btzOQsEt4PLnZC2FNdMGf788Y9/LoebK0p6UA6yfB8ITYByClmNZKaekaewZS4a/3BUpM//UbCvijxPyD4f7rnNVFBTibwepr5tESlPVbdF4byfmy8Jco2A7wp/RoH4Kvt57+xX+Q/Wmmc/gRF/4p1LHymT2dwQeEL8GEceTubmbe4woh0QIBOScJAj8YnD76k71Lu0IvQR10/XYoRysfljYU6ow+e3fjMM7j77hv7moHbQGeF1wudI5rVk5owswZ5+QXmSQ76EWbLfR8V54k5rMReqci+vD4fuXeYfK3I1Vxcfs0YyT86xKeIjgHaf9ak3ULG8TApuUxNtZm3ULHIna5qmZbHuTrReVXg0jQ8YbFSNSY2u2PXAOUV76ux68qjaHASDFJrrc12y9C9jqLeyLE9X14IieEc6qf0Ns2t/dRCr42w+OlrflV6+Fxx1UPOzNXB8wkkYwqzh0N7rv7rcfCtDUXXnHzAbDQQ00bti5w="
+      }
+    },
+    {
+      "name": "explicit-empty-optionals",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": "",
+        "key_factors": [],
+        "comment": ""
+      },
+      "expected": {
+        "canonical_plaintext": "{\"bundle\":{\"comment\":\"\",\"key_factors\":[],\"rationale\":\"\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-seal-presence-1\",\"question_id\":\"q-seal-presence\",\"question_revision_id\":\"qr-seal-presence-1\",\"salt\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"schema\":\"forecast-seal/v3\"}",
+        "commitment_sha256": "db24872910c8ab672895785bddd544d150069ee21131c9868507c6a5ddc9bfbe",
+        "ciphertext_base64": "9Go4775177r8oTwONKvcdL6aLw5Yd3Ux+4RX1jT0dcmEn+fAsFlut81C+QQHKsbx3qpza8ZPbSkFikRMNmeqy4Rr768Daqw0qhYEkOg1DS4MjnYqJoXVa1KM2Jeja/fDCtk1qFfXtCvgMzigL73naQFUTyz8b5nksUK/N1bdbs3+IzDwPLVxDe49/QoD4aPy+pShGeonF3rF7g5J9oU/KmugTyUxVL5VsCxcYSKXnrrzl8QbB9JZUZ1s35lgCL37+kPq0JrhTVw/S4oGktHzmIB4vSKJy+vLI7S5sWa+3NKUB2WDkxeWHZ+cwdJ3sU5k/wGnVVykVmbPfwhS/4cq7IAK643m4mFx+iPfJO+QiwMyJpgLwix6h7vK2lGHY5fniQCSrmJ9pUxeqIr1AOyNjqV5mZbHuTrReVXg0jQ8cqxBd3Rv7z+HE+4GuPXyv5jzKjUOTgY78NMxycPx1diRu0E2dgZJwlq2tcWfFQ=="
+      }
+    }
+  ],
+  "invalid_cases": [
+    {
+      "name": "missing-representations",
+      "bundle": {
+        "rationale": "Present but insufficient."
+      },
+      "expected_error": "/representations: required property is missing"
+    },
+    {
+      "name": "unknown-property",
+      "bundle": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "private_note": "forbidden"
+      },
+      "expected_error": "sealed bundle contains unknown properties: private_note"
+    }
+  ],
+  "reveal_cases": [
+    {
+      "name": "invented-empty-rationale",
+      "sealed_case": "representation-only",
+      "revealed_private_fields": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ],
+        "rationale": ""
+      },
+      "expected_error": "/forecast/rationale: presence does not match the decrypted sealed bundle"
+    },
+    {
+      "name": "omitted-authenticated-comment",
+      "sealed_case": "comment-only",
+      "revealed_private_fields": {
+        "representations": [
+          {
+            "kind": "probability",
+            "outcome": true,
+            "probability": "0.65"
+          }
+        ]
+      },
+      "expected_error": "/forecast/comment: presence does not match the decrypted sealed bundle"
+    }
+  ]
+}

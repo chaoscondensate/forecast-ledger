@@ -1,7 +1,7 @@
 # Manage platform records
 
 <!-- doc-metadata
-coverage: v0.10.0
+coverage: v0.11.0
 reviewed: 2026-09-22
 owner: interface
 generated: false
@@ -14,7 +14,7 @@ Platform records describe external or local places associated with questions.
 They do not publish data or contact a service. Every command names the ledger
 with `--file`.
 
-Add a platform under a stable ID. The v2.1.0 contract requires both its name and
+Add a platform under a stable ID. The v2.2.0 contract requires both its name and
 kind, so an ID alone reports those missing flags instead of inventing defaults:
 
 ```sh

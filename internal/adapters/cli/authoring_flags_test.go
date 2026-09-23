@@ -178,7 +178,7 @@ func TestFlagOnlyV2WorkflowJSONAndYAML(t *testing.T) {
 		t.Run(extension, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "ledger"+extension)
 			code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "flags", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
-			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.1.0"`) {
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.2.0"`) {
 				t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 			code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-launch", "--revision-id", "qr-launch-1", "--effective-at", "2026-09-21T10:00:00Z", "--revision-recorded-at", "2026-09-21T10:01:00Z", "--title", "Will it launch?", "--resolution-criteria", "Resolve yes on launch.", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--outcome-kind", "binary")
@@ -321,7 +321,7 @@ func mustRunCLI(t *testing.T, arguments ...string) {
 	}
 }
 
-func TestProtectedV2SealDoesNotLeakPrivateFields(t *testing.T) {
+func TestProtectedV3SealInspectionDoesNotLeakPrivateFields(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "ledger.json")
 	code, _, stderr := runCLI("forecast-ledger", "init", "--file", path, "--ledger-id", "protected", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
@@ -351,6 +351,32 @@ func TestProtectedV2SealDoesNotLeakPrivateFields(t *testing.T) {
 			t.Fatalf("sealed private value %q leaked", secret)
 		}
 	}
+	code, shown, stderr := runCLI("forecast-ledger", "--json", "forecast", "show", "--file", path, "--question", "q-one", "--forecast", "f-sealed")
+	if code != 0 || stderr != "" || !strings.Contains(shown, `"nonce":"`) || !strings.Contains(shown, `"ciphertext":"`) {
+		t.Fatalf("sealed show code=%d stdout=%q stderr=%q", code, shown, stderr)
+	}
+	keyBytes, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyDocument map[string]any
+	if err := json.Unmarshal(keyBytes, &keyDocument); err != nil {
+		t.Fatal(err)
+	}
+	keyHex, _ := keyDocument["key_hex"].(string)
+	for _, secret := range []string{"secret-rationale", "private-factor", "secret-comment", keyHex} {
+		if secret != "" && strings.Contains(shown, secret) {
+			t.Fatalf("forecast show leaked protected value %q", secret)
+		}
+	}
+	code, _, stderr = runCLI("forecast-ledger", "--json", "forecast", "reveal", "--file", path, "--question", "q-one", "--forecast", "f-sealed", "--key-file", keyPath, "--revealed-at", "2026-09-23T00:00:00Z", "--yes")
+	if code != 0 || stderr != "" {
+		t.Fatalf("reveal code=%d stderr=%q", code, stderr)
+	}
+	code, shown, stderr = runCLI("forecast-ledger", "--json", "forecast", "show", "--file", path, "--question", "q-one", "--forecast", "f-sealed")
+	if code != 0 || stderr != "" || !strings.Contains(shown, `"revealed_key_redacted":true`) || !strings.Contains(shown, `"nonce":"`) || !strings.Contains(shown, `"ciphertext":"`) || strings.Contains(shown, keyHex) {
+		t.Fatalf("revealed show code=%d stdout=%q stderr=%q", code, shown, stderr)
+	}
 }
 
 func TestVersionFormattingAndStableJSON(t *testing.T) {
@@ -359,7 +385,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := writeVersionInfo(&plain, info, presentation.ModePlain, false); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.1.0") {
+	if !strings.Contains(plain.String(), "Forecast Ledger schema: 2.2.0") {
 		t.Fatalf("plain version is stale:\n%s", plain.String())
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "version", "--json")
@@ -370,7 +396,7 @@ func TestVersionFormattingAndStableJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Schema.Version != "2.1.0" || decoded.Schema != info.Schema {
+	if decoded.Schema.Version != "2.2.0" || decoded.Schema != info.Schema {
 		t.Fatalf("version JSON = %#v", decoded)
 	}
 }

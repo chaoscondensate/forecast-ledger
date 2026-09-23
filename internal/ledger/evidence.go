@@ -59,6 +59,7 @@ type IntegrityStatus string
 
 const (
 	IntegrityUnanchored IntegrityStatus = "unanchored"
+	IntegrityRetained   IntegrityStatus = "retained"
 	IntegrityPending    IntegrityStatus = "pending"
 	IntegrityVerified   IntegrityStatus = "verified"
 	IntegrityFailed     IntegrityStatus = "failed"
@@ -66,6 +67,7 @@ const (
 
 type Integrity struct {
 	Unanchored *UnanchoredIntegrity
+	Retained   *RetainedIntegrity
 	Pending    *PendingIntegrity
 	Verified   *VerifiedIntegrity
 	Failed     *FailedIntegrity
@@ -74,6 +76,11 @@ type Integrity struct {
 type UnanchoredIntegrity struct {
 	Status IntegrityStatus `json:"status" yaml:"status"`
 	Note   *string         `json:"note,omitempty" yaml:"note,omitempty"`
+}
+
+type RetainedIntegrity struct {
+	Status IntegrityStatus `json:"status" yaml:"status"`
+	Target ForecastTarget  `json:"target" yaml:"target"`
 }
 
 type PendingIntegrity struct {
@@ -102,9 +109,15 @@ type FailedIntegrity struct {
 // checkpoint exists only after a target has been retained or an attempted
 // verification has failed.
 type LifecycleIntegrity struct {
+	Retained *RetainedLifecycleIntegrity
 	Pending  *PendingLifecycleIntegrity
 	Verified *VerifiedLifecycleIntegrity
 	Failed   *FailedLifecycleIntegrity
+}
+
+type RetainedLifecycleIntegrity struct {
+	Status IntegrityStatus `json:"status" yaml:"status"`
+	Target LifecycleTarget `json:"target" yaml:"target"`
 }
 
 type PendingLifecycleIntegrity struct {
@@ -130,7 +143,7 @@ type FailedLifecycleIntegrity struct {
 }
 
 func (v LifecycleIntegrity) MarshalJSON() ([]byte, error) {
-	return marshalOne("lifecycle integrity", v.Pending, v.Verified, v.Failed)
+	return marshalOne("lifecycle integrity", v.Retained, v.Pending, v.Verified, v.Failed)
 }
 
 func (v *LifecycleIntegrity) UnmarshalJSON(data []byte) error {
@@ -142,6 +155,9 @@ func (v *LifecycleIntegrity) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch discriminator.Status {
+	case IntegrityRetained:
+		v.Retained = new(RetainedLifecycleIntegrity)
+		return decodeClosed(data, v.Retained)
 	case IntegrityPending:
 		v.Pending = new(PendingLifecycleIntegrity)
 		return decodeClosed(data, v.Pending)
@@ -157,7 +173,7 @@ func (v *LifecycleIntegrity) UnmarshalJSON(data []byte) error {
 }
 
 func (v Integrity) MarshalJSON() ([]byte, error) {
-	return marshalOne("integrity", v.Unanchored, v.Pending, v.Verified, v.Failed)
+	return marshalOne("integrity", v.Unanchored, v.Retained, v.Pending, v.Verified, v.Failed)
 }
 
 func (v *Integrity) UnmarshalJSON(data []byte) error {
@@ -172,6 +188,9 @@ func (v *Integrity) UnmarshalJSON(data []byte) error {
 	case IntegrityUnanchored:
 		v.Unanchored = new(UnanchoredIntegrity)
 		return decodeClosed(data, v.Unanchored)
+	case IntegrityRetained:
+		v.Retained = new(RetainedIntegrity)
+		return decodeClosed(data, v.Retained)
 	case IntegrityPending:
 		v.Pending = new(PendingIntegrity)
 		return decodeClosed(data, v.Pending)

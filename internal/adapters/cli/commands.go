@@ -1308,6 +1308,9 @@ func targetCommand() *urfavecli.Command {
 
 func targetLeaf(name, usage string, readOnly bool) *urfavecli.Command {
 	flags := []urfavecli.Flag{fileFlag(false), &urfavecli.StringFlag{Name: "question", Usage: "Question ID"}, &urfavecli.StringFlag{Name: "forecast", Usage: "Forecast ID"}, &urfavecli.BoolFlag{Name: "all", Usage: "Select every forecast"}, &urfavecli.StringFlag{Name: "scope", Value: "forecast", Usage: "Target scope: forecast or lifecycle"}, &urfavecli.StringFlag{Name: "head", Usage: "Lifecycle head event ID"}}
+	if name == "build" {
+		flags = append(flags, &urfavecli.StringFlag{Name: "checkpoint", Usage: "Explicit lifecycle checkpoint ID"}, &urfavecli.StringFlag{Name: "recorded-at", Usage: "Explicit lifecycle checkpoint RFC 3339 recording time"})
+	}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger target %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
 	command.Before = requireTargetSelection
 	return command
@@ -1320,12 +1323,13 @@ func targetBuildAction(ctx context.Context, command *urfavecli.Command) error {
 	all := command.Bool("all")
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	scope, head := service.TargetScope(command.String("scope")), ledger.Slug(command.String("head"))
+	checkpoint, recordedAt := ledger.Slug(command.String("checkpoint")), ledger.Timestamp(command.String("recorded-at"))
 	var result service.TargetOperationResult
 	var err error
 	if runtime.DryRun {
-		result, err = service.PlanTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head)
+		result, err = service.PlanTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head, checkpoint, recordedAt)
 	} else {
-		result, err = service.CommitTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head)
+		result, err = service.CommitTargetBuildScoped(operationContext, command.String("file"), scope, all, questionID, forecastID, head, checkpoint, recordedAt)
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
@@ -1400,7 +1404,7 @@ func timestampLeaf(name, usage string, readOnly, stampOptions bool) *urfavecli.C
 		flags = append(flags,
 			&urfavecli.StringFlag{Name: "tsa-provider", Usage: "Built-in timestamp provider: auto or freetsa (default: auto)"},
 			&urfavecli.StringFlag{Name: "tsa-url", Usage: "Custom public HTTPS RFC 3161 timestamp authority URL; requires --ca-bundle"},
-			&urfavecli.StringFlag{Name: "ca-bundle", TakesFile: true, Usage: "Custom retained ledger-relative PEM CA bundle; requires --tsa-url"},
+			&urfavecli.StringFlag{Name: "ca-bundle", TakesFile: true, Usage: "Custom retained PEM CA bundle under trust/; requires --tsa-url"},
 		)
 	}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger timestamp %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
@@ -1716,7 +1720,7 @@ func formatForecastView(mode presentation.Mode, view service.ForecastView) strin
 func formatVerificationReport(mode presentation.Mode, report service.VerificationReport) string {
 	var output strings.Builder
 	if mode == presentation.ModePlain {
-		fmt.Fprintf(&output, "overall\t%s\ndocument\t%s", report.Overall, report.Document.State)
+		fmt.Fprintf(&output, "overall\t%s\ndocument\t%s\nreconciliation\t%s\t%s\t%s", report.Overall, report.Document.State, report.Reconciliation.State, strings.Join(report.Reconciliation.ReasonCodes, ","), compactPublicJSON(report.Reconciliation.Evidence))
 		for _, forecast := range report.Forecasts {
 			for _, layer := range forecast.Layers {
 				fmt.Fprintf(&output, "\n%s\t%s\t%s\t%s\t%s\t%s", forecast.QuestionID, forecast.ForecastID, layer.Name, layer.State, strings.Join(layer.ReasonCodes, ","), compactPublicJSON(layer.Evidence))
@@ -1724,7 +1728,10 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 		}
 		return output.String()
 	}
-	fmt.Fprintf(&output, "Overall: %s\nDocument: %s", report.Overall, report.Document.State)
+	fmt.Fprintf(&output, "Overall: %s\nDocument: %s\nReconciliation: %s", report.Overall, report.Document.State, report.Reconciliation.State)
+	if len(report.Reconciliation.ReasonCodes) > 0 {
+		fmt.Fprintf(&output, " (%s)", strings.Join(report.Reconciliation.ReasonCodes, ", "))
+	}
 	for _, forecast := range report.Forecasts {
 		fmt.Fprintf(&output, "\nForecast: %s / %s", forecast.QuestionID, forecast.ForecastID)
 		for _, layer := range forecast.Layers {

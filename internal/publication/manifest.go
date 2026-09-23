@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"sort"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/canonical"
@@ -13,20 +12,16 @@ import (
 )
 
 const (
-	ManifestProfile  = "forecast-ledger-publication/v2"
-	RoleLedger       = "ledger"
-	RoleTarget       = "forecast_target"
-	RoleRequest      = "timestamp_request"
-	RoleResponse     = "timestamp_response"
-	RoleCABundle     = "timestamp_ca_bundle"
-	MaxManifestBytes = 8 << 20
+	ManifestProfile   = "forecast-ledger-publication/v3"
+	RoleLedger        = "ledger"
+	RoleEvidenceIndex = "evidence_index"
+	RoleTarget        = RoleForecastTarget
+	RoleLifecycle     = RoleLifecycleTarget
+	RoleRequest       = RoleRFC3161Request
+	RoleResponse      = RoleRFC3161Response
+	RoleCABundle      = RoleX509CABundle
+	MaxManifestBytes  = 8 << 20
 )
-
-type SchemaPin struct {
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	SHA256  string `json:"sha256"`
-}
 
 type Digest struct {
 	Algorithm string `json:"algorithm"`
@@ -41,10 +36,11 @@ type Entry struct {
 }
 
 type Manifest struct {
-	Profile      string    `json:"profile"`
-	LedgerSchema SchemaPin `json:"ledger_schema"`
-	LedgerPath   string    `json:"ledger_path"`
-	Entries      []Entry   `json:"entries"`
+	Profile           string           `json:"profile"`
+	Contract          ContractIdentity `json:"contract"`
+	LedgerPath        string           `json:"ledger_path"`
+	EvidenceIndexPath string           `json:"evidence_index_path"`
+	Entries           []Entry          `json:"entries"`
 }
 
 func Encode(manifest Manifest) ([]byte, error) {
@@ -63,12 +59,20 @@ func Encode(manifest Manifest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(result, '\n'), nil
+	return result, nil
 }
 
 func Decode(data []byte) (Manifest, error) {
 	if len(data) == 0 || len(data) > MaxManifestBytes {
 		return Manifest{}, errors.New("publication manifest is empty or too large")
+	}
+	parsed, err := document.ParseJSON(bytes.NewReader(data), document.Limits{MaxBytes: MaxManifestBytes, MaxDepth: 16, MaxNodes: MaxEvidenceEntries * 8, MaxScalarBytes: MaxEvidencePathBytes})
+	if err != nil {
+		return Manifest{}, err
+	}
+	canonicalBytes, err := canonical.Marshal(parsed.Root.Any())
+	if err != nil || !bytes.Equal(canonicalBytes, data) {
+		return Manifest{}, errors.New("publication manifest is not exact RFC 8785 JSON")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -76,25 +80,18 @@ func Decode(data []byte) (Manifest, error) {
 	if err := decoder.Decode(&manifest); err != nil {
 		return Manifest{}, err
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return Manifest{}, errors.New("publication manifest contains more than one JSON value")
-	}
 	if err := Validate(manifest); err != nil {
 		return Manifest{}, err
-	}
-	canonicalBytes, err := Encode(manifest)
-	if err != nil || !bytes.Equal(canonicalBytes, data) {
-		return Manifest{}, errors.New("publication manifest is not canonical")
 	}
 	return manifest, nil
 }
 
 func Validate(manifest Manifest) error {
-	if manifest.Profile != ManifestProfile || manifest.LedgerPath == "" || len(manifest.Entries) == 0 {
+	if manifest.Profile != ManifestProfile || manifest.Contract != CurrentContractIdentity() || manifest.LedgerPath == "" || manifest.EvidenceIndexPath != EvidenceIndexPath || len(manifest.Entries) < 2 {
 		return errors.New("publication manifest profile or ledger path is invalid")
 	}
 	paths := make([]string, len(manifest.Entries))
-	ledgerCount := 0
+	ledgerCount, indexCount := 0, 0
 	previous := ""
 	for index, entry := range manifest.Entries {
 		if err := storage.ValidateRelativePath(entry.Path); err != nil {
@@ -114,7 +111,12 @@ func Validate(manifest Manifest) error {
 			if entry.Path != manifest.LedgerPath {
 				return errors.New("ledger entry path does not match ledger_path")
 			}
-		case RoleTarget:
+		case RoleEvidenceIndex:
+			indexCount++
+			if entry.Path != manifest.EvidenceIndexPath {
+				return errors.New("evidence index entry path does not match evidence_index_path")
+			}
+		case RoleTarget, RoleLifecycle:
 			if len(entry.Path) < len("proofs/targets/") || entry.Path[:len("proofs/targets/")] != "proofs/targets/" {
 				return errors.New("forecast target has an invalid package path")
 			}
@@ -128,8 +130,8 @@ func Validate(manifest Manifest) error {
 			return errors.New("publication manifest entry role is not supported")
 		}
 	}
-	if ledgerCount != 1 {
-		return errors.New("publication manifest must contain exactly one ledger entry")
+	if ledgerCount != 1 || indexCount != 1 {
+		return errors.New("publication manifest must contain exactly one ledger and one evidence index")
 	}
 	if err := storage.DetectPortablePathCollisions(paths); err != nil {
 		return err

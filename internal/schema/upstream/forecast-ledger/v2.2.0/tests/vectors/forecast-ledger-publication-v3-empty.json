@@ -1,0 +1,48 @@
+{
+  "schema": "forecast-ledger-publication-test-vector/v3",
+  "name": "empty-evidence",
+  "evidence_index": {
+    "schema": "forecast-evidence-index/v1",
+    "ledger_id": "empty-example-ledger",
+    "contract": {
+      "schema_id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json",
+      "schema_version": "2.2.0",
+      "schema_sha256": "6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e"
+    },
+    "entries": []
+  },
+  "manifest": {
+    "profile": "forecast-ledger-publication/v3",
+    "contract": {
+      "schema_id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json",
+      "schema_version": "2.2.0",
+      "schema_sha256": "6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e"
+    },
+    "ledger_path": "ledger.json",
+    "evidence_index_path": "proofs/evidence-index.json",
+    "entries": [
+      {
+        "role": "ledger",
+        "path": "ledger.json",
+        "size": 1024,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      {
+        "role": "evidence_index",
+        "path": "proofs/evidence-index.json",
+        "size": 321,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "ae3f1aad91cb0588c062ebcd65f810ec068343c01207496d9d531674964f5485"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "canonical_json": "{\"contract\":{\"schema_id\":\"https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json\",\"schema_sha256\":\"6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e\",\"schema_version\":\"2.2.0\"},\"entries\":[{\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"path\":\"ledger.json\",\"role\":\"ledger\",\"size\":1024},{\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"ae3f1aad91cb0588c062ebcd65f810ec068343c01207496d9d531674964f5485\"},\"path\":\"proofs/evidence-index.json\",\"role\":\"evidence_index\",\"size\":321}],\"evidence_index_path\":\"proofs/evidence-index.json\",\"ledger_path\":\"ledger.json\",\"profile\":\"forecast-ledger-publication/v3\"}",
+    "sha256": "cfa8c2610315570765baef5c11deef5132349ae3d23f342649fb9391ef556466"
+  }
+}

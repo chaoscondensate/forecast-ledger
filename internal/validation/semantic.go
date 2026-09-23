@@ -177,7 +177,7 @@ func (v *semanticValidator) validateQuestion(index int, question *ledger.Questio
 		}
 		v.validateLifecycleEvents(forecast, fp+"/lifecycle_events")
 		v.validateActivityCheckpoints(question, forecast, fp+"/activity_checkpoints")
-		v.validateIntegrity(forecast.Integrity, fp+"/integrity")
+		v.validateIntegrity(question, forecast, forecast.Integrity, fp+"/integrity")
 		v.validateReveal(question.ID, forecast, fp)
 	}
 	v.validateResolution(question, revisions, pointer)
@@ -594,6 +594,8 @@ func (v *semanticValidator) validateActivityCheckpoints(question *ledger.Questio
 func (v *semanticValidator) validateLifecycleIntegrity(question *ledger.Question, forecast *ledger.Forecast, value ledger.LifecycleIntegrity, headEventID ledger.Slug, pointer string) {
 	var target *ledger.LifecycleTarget
 	switch {
+	case value.Retained != nil:
+		target = &value.Retained.Target
 	case value.Pending != nil:
 		target = &value.Pending.Target
 	case value.Verified != nil:
@@ -611,7 +613,7 @@ func (v *semanticValidator) validateLifecycleIntegrity(question *ledger.Question
 		v.add("semantic.activity_target_canonicalization", pointer+"/target/canonicalization", "must be "+targetbytes.Canonicalization)
 	}
 	if _, expectedDigest, err := targetbytes.Lifecycle(*question, *forecast, headEventID); err == nil && (target.Digest.Algorithm != "sha-256" || string(target.Digest.Value) != expectedDigest) {
-		v.add("semantic.activity_target_digest", pointer+"/target/digest/value", "does not match the canonical forecast-lifecycle/v1 target")
+		v.add("semantic.activity_target_digest", pointer+"/target/digest/value", "does not match the canonical "+targetbytes.LifecycleSchema+" target")
 	}
 	v.validateArtifact(target.ArtifactPath, target.Digest, pointer+"/target")
 }
@@ -625,13 +627,31 @@ func (v *semanticValidator) validateProvenance(value *ledger.Provenance, pointer
 	}
 }
 
-func (v *semanticValidator) validateIntegrity(value ledger.Integrity, pointer string) {
+func (v *semanticValidator) validateIntegrity(question *ledger.Question, forecast *ledger.Forecast, value ledger.Integrity, pointer string) {
+	var target *ledger.ForecastTarget
 	switch {
+	case value.Retained != nil:
+		target = &value.Retained.Target
 	case value.Pending != nil:
-		v.validateArtifact(value.Pending.Target.ArtifactPath, value.Pending.Target.Digest, pointer+"/target")
+		target = &value.Pending.Target
 	case value.Verified != nil:
-		v.validateArtifact(value.Verified.Target.ArtifactPath, value.Verified.Target.Digest, pointer+"/target")
+		target = &value.Verified.Target
+	case value.Failed != nil:
+		target = value.Failed.Target
 	}
+	if target == nil {
+		return
+	}
+	if target.Scope != targetbytes.ForecastEnvelopeSchema {
+		v.add("semantic.forecast_target_scope", pointer+"/target/scope", "must be "+targetbytes.ForecastEnvelopeSchema)
+	}
+	if target.Canonicalization != targetbytes.Canonicalization {
+		v.add("semantic.forecast_target_canonicalization", pointer+"/target/canonicalization", "must be "+targetbytes.Canonicalization)
+	}
+	if _, expectedDigest, err := targetbytes.Forecast(*question, *forecast); err == nil && (target.Digest.Algorithm != "sha-256" || string(target.Digest.Value) != expectedDigest) {
+		v.add("semantic.forecast_target_digest", pointer+"/target/digest/value", "does not match the canonical "+targetbytes.ForecastEnvelopeSchema+" target")
+	}
+	v.validateArtifact(target.ArtifactPath, target.Digest, pointer+"/target")
 }
 
 func (v *semanticValidator) validateReveal(questionID ledger.Slug, forecast *ledger.Forecast, pointer string) {

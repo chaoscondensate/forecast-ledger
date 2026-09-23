@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-evidence-index.schema.json",
+  "title": "Forecast Ledger evidence index",
+  "description": "The closed forecast-evidence-index/v1 sidecar. Entries are strictly sorted by path and the file is stored as exact RFC 8785 bytes without trailing data.",
+  "type": "object",
+  "required": ["schema", "ledger_id", "contract", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "forecast-evidence-index/v1" },
+    "ledger_id": { "$ref": "#/$defs/slug" },
+    "contract": { "$ref": "#/$defs/contractIdentity" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "hex32": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "proofPath": {
+      "allOf": [
+        { "$ref": "#/$defs/relativePath" },
+        { "pattern": "^proofs/(?!evidence-index\\.json$).+" }
+      ]
+    },
+    "trustPath": {
+      "allOf": [
+        { "$ref": "#/$defs/relativePath" },
+        { "pattern": "^trust/.+" }
+      ]
+    },
+    "digest": {
+      "type": "object",
+      "required": ["algorithm", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha-256" },
+        "value": { "$ref": "#/$defs/hex32" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["role", "path", "size", "digest"],
+      "properties": {
+        "role": { "type": "string" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "size": { "type": "integer", "minimum": 0 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "contractIdentity": {
+      "type": "object",
+      "required": ["schema_id", "schema_version", "schema_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_id": {
+          "const": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json"
+        },
+        "schema_version": { "const": "2.2.0" },
+        "schema_sha256": { "$ref": "#/$defs/hex32" }
+      }
+    },
+    "forecastTargetBinding": {
+      "type": "object",
+      "required": ["question_id", "forecast_id", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": { "$ref": "#/$defs/slug" },
+        "forecast_id": { "$ref": "#/$defs/slug" },
+        "scope": { "const": "forecast-envelope/v3" }
+      }
+    },
+    "lifecycleTargetBinding": {
+      "type": "object",
+      "required": ["question_id", "forecast_id", "checkpoint_id", "head_event_id", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": { "$ref": "#/$defs/slug" },
+        "forecast_id": { "$ref": "#/$defs/slug" },
+        "checkpoint_id": { "$ref": "#/$defs/slug" },
+        "head_event_id": { "$ref": "#/$defs/slug" },
+        "scope": { "const": "forecast-lifecycle/v2" }
+      }
+    },
+    "forecastTargetEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "required": ["binding"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "forecast_target" },
+            "path": { "$ref": "#/$defs/proofPath" },
+            "size": { "type": "integer", "minimum": 0 },
+            "digest": { "$ref": "#/$defs/digest" },
+            "binding": { "$ref": "#/$defs/forecastTargetBinding" }
+          }
+        }
+      ]
+    },
+    "lifecycleTargetEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "required": ["binding"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "lifecycle_target" },
+            "path": { "$ref": "#/$defs/proofPath" },
+            "size": { "type": "integer", "minimum": 0 },
+            "digest": { "$ref": "#/$defs/digest" },
+            "binding": { "$ref": "#/$defs/lifecycleTargetBinding" }
+          }
+        }
+      ]
+    },
+    "targetReference": {
+      "type": "object",
+      "required": ["target_path"],
+      "additionalProperties": false,
+      "properties": { "target_path": { "$ref": "#/$defs/proofPath" } }
+    },
+    "requestBinding": {
+      "type": "object",
+      "required": ["hash_algorithm", "message_imprint_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "hash_algorithm": { "const": "sha256" },
+        "message_imprint_sha256": { "$ref": "#/$defs/hex32" }
+      }
+    },
+    "requestEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "required": ["references", "binding"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "rfc3161_request" },
+            "path": { "$ref": "#/$defs/proofPath" },
+            "size": { "type": "integer", "minimum": 0 },
+            "digest": { "$ref": "#/$defs/digest" },
+            "references": { "$ref": "#/$defs/targetReference" },
+            "binding": { "$ref": "#/$defs/requestBinding" }
+          }
+        }
+      ]
+    },
+    "responseReferences": {
+      "type": "object",
+      "required": ["target_path", "request_path"],
+      "additionalProperties": false,
+      "properties": {
+        "target_path": { "$ref": "#/$defs/proofPath" },
+        "request_path": { "$ref": "#/$defs/proofPath" },
+        "trust_path": { "$ref": "#/$defs/trustPath" }
+      }
+    },
+    "responseBinding": {
+      "type": "object",
+      "required": ["tsa_url"],
+      "additionalProperties": false,
+      "properties": { "tsa_url": { "type": "string", "format": "uri" } }
+    },
+    "responseEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "required": ["references", "binding"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "rfc3161_response" },
+            "path": { "$ref": "#/$defs/proofPath" },
+            "size": { "type": "integer", "minimum": 0 },
+            "digest": { "$ref": "#/$defs/digest" },
+            "references": { "$ref": "#/$defs/responseReferences" },
+            "binding": { "$ref": "#/$defs/responseBinding" }
+          }
+        }
+      ]
+    },
+    "trustEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/artifact" },
+        {
+          "required": ["format"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "x509_ca_bundle" },
+            "path": { "$ref": "#/$defs/trustPath" },
+            "size": { "type": "integer", "minimum": 0 },
+            "digest": { "$ref": "#/$defs/digest" },
+            "format": { "const": "pem-certificate-bundle" }
+          }
+        }
+      ]
+    },
+    "entry": {
+      "oneOf": [
+        { "$ref": "#/$defs/forecastTargetEntry" },
+        { "$ref": "#/$defs/lifecycleTargetEntry" },
+        { "$ref": "#/$defs/requestEntry" },
+        { "$ref": "#/$defs/responseEntry" },
+        { "$ref": "#/$defs/trustEntry" }
+      ]
+    }
+  }
+}

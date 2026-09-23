@@ -1,0 +1,92 @@
+{
+  "schema": "forecast-envelope-test-vector/v3",
+  "projection": "public",
+  "question_id": "q-envelope-public",
+  "question_revision": {
+    "id": "qr-envelope-public-1",
+    "effective_at": "2026-09-01T09:00:00Z",
+    "recorded_at": "2026-09-01T09:00:01Z",
+    "title": "Will the example event occur?",
+    "resolution_criteria": "Resolve YES if the example event is confirmed before 2027.",
+    "expected_resolution_at": "2027-01-01T00:00:00Z",
+    "outcome_space": {
+      "kind": "binary"
+    },
+    "domain": {
+      "kind": "binary"
+    }
+  },
+  "forecast": {
+    "id": "f-envelope-public-001",
+    "question_revision_id": "qr-envelope-public-1",
+    "forecasted_at": "2026-09-02T10:00:00Z",
+    "recorded_at": "2026-09-02T10:00:05Z",
+    "visibility": "public",
+    "representations": [
+      {
+        "kind": "probability",
+        "outcome": true,
+        "probability": "0.62"
+      }
+    ],
+    "rationale": "The base rate favors the event.",
+    "key_factors": [
+      "base rate",
+      "leading indicator"
+    ],
+    "comment": "Initial forecast.",
+    "public_note": "Visible operational context.",
+    "supersedes_forecast_id": "f-envelope-public-000",
+    "provenance": {
+      "platform": "example-platform",
+      "remote_object_id": "forecast-42",
+      "retrieved_at": "2026-09-02T10:00:04Z",
+      "importer": {
+        "name": "example-importer",
+        "version": "1.0.0"
+      }
+    },
+    "lifecycle_events": [
+      {
+        "id": "event-public-withdrawn",
+        "type": "withdrawn",
+        "effective_at": "2026-09-03T10:00:00Z",
+        "recorded_at": "2026-09-03T10:00:05Z",
+        "reason": "Temporarily withdrawn."
+      },
+      {
+        "id": "event-public-reaffirmed",
+        "type": "reaffirmed",
+        "effective_at": "2026-09-04T10:00:00Z",
+        "recorded_at": "2026-09-04T10:00:05Z",
+        "reason": "Reaffirmed without changing the belief."
+      }
+    ],
+    "integrity": {
+      "status": "unanchored"
+    }
+  },
+  "expected_included_forecast_fields": [
+    "id",
+    "question_revision_id",
+    "forecasted_at",
+    "recorded_at",
+    "visibility",
+    "representations",
+    "rationale",
+    "key_factors",
+    "comment",
+    "public_note",
+    "supersedes_forecast_id",
+    "provenance"
+  ],
+  "expected_excluded_forecast_fields": [
+    "lifecycle_events",
+    "activity_checkpoints",
+    "integrity"
+  ],
+  "expected": {
+    "canonical_envelope": "{\"forecast\":{\"comment\":\"Initial forecast.\",\"forecasted_at\":\"2026-09-02T10:00:00Z\",\"id\":\"f-envelope-public-001\",\"key_factors\":[\"base rate\",\"leading indicator\"],\"provenance\":{\"importer\":{\"name\":\"example-importer\",\"version\":\"1.0.0\"},\"platform\":\"example-platform\",\"remote_object_id\":\"forecast-42\",\"retrieved_at\":\"2026-09-02T10:00:04Z\"},\"public_note\":\"Visible operational context.\",\"question_revision_id\":\"qr-envelope-public-1\",\"rationale\":\"The base rate favors the event.\",\"recorded_at\":\"2026-09-02T10:00:05Z\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.62\"}],\"supersedes_forecast_id\":\"f-envelope-public-000\",\"visibility\":\"public\"},\"question\":{\"id\":\"q-envelope-public\",\"revision\":{\"domain\":{\"kind\":\"binary\"},\"effective_at\":\"2026-09-01T09:00:00Z\",\"expected_resolution_at\":\"2027-01-01T00:00:00Z\",\"id\":\"qr-envelope-public-1\",\"outcome_space\":{\"kind\":\"binary\"},\"recorded_at\":\"2026-09-01T09:00:01Z\",\"resolution_criteria\":\"Resolve YES if the example event is confirmed before 2027.\",\"title\":\"Will the example event occur?\"}},\"schema\":\"forecast-envelope/v3\"}",
+    "sha256": "98b158a939cd3620b258c48bc96c0b889fd9bfb5670c0645a8a2a23e59668023"
+  }
+}

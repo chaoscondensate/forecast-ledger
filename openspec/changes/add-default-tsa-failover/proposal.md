@@ -85,3 +85,6 @@ hiding the provider trust decision or weakening fully local verification.
 - The default online operation contacts the current FreeTSA origin. Local
   validation, timestamp status/verify, publication verification, offline mode,
   and dry-run remain network-free.
+> Provider selection remains applicable only where it agrees with
+> `reset-cryptographic-profiles-and-evidence-store`; its old target/profile
+> references are superseded.

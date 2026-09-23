@@ -155,6 +155,7 @@ type EffectAction string
 const (
 	EffectLedger            EffectKind = "ledger"
 	EffectTarget            EffectKind = "target"
+	EffectEvidenceIndex     EffectKind = "evidence_index"
 	EffectTimestampRequest  EffectKind = "timestamp_request"
 	EffectTimestampResponse EffectKind = "timestamp_response"
 	EffectTimestampTrust    EffectKind = "timestamp_trust"

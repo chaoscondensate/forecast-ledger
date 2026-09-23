@@ -39,7 +39,7 @@ only ledger bytes and cannot resolve sibling target or timestamp paths.
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
 | `forecast withdraw|expire|reaffirm` | `--file --question --forecast --event --effective-at` | Append a forecast activity event. |
-| `target build|check` | `--file` plus `--all` or question+forecast; lifecycle adds `--scope lifecycle --head` | Create or compare forecast or exact-head lifecycle target bytes. |
+| `target build|check` | `--file` plus `--all` or question+forecast; lifecycle build adds `--scope lifecycle --head --checkpoint --recorded-at` | Retain or compare forecast or exact-head lifecycle target bytes and index metadata. |
 | `timestamp stamp` | `--file --question --forecast`; lifecycle adds `--scope lifecycle --head`; optional provider fields or `--offline` | Request and locally verify RFC 3161 evidence; omission selects `auto` (currently FreeTSA). |
 | `timestamp status|verify` | `--file --question --forecast`; lifecycle adds `--scope lifecycle --head` | Inspect or locally verify retained forecast or lifecycle evidence. |
 | `verify` | `--file`; optional question+forecast | Run layered evidence checks. |
@@ -129,7 +129,7 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-The supported schema is exact. A ledger other than v2.1.0, including v2.0.1,
+The supported schema is exact. A ledger other than v2.2.0, including v2.1.0,
 produces an explicit warning on stderr, returns
 `unsupported_schema_version`/exit 3, and stops before locks, files, keys,
 artifacts, entropy, or network side effects. The runtime has no converter or

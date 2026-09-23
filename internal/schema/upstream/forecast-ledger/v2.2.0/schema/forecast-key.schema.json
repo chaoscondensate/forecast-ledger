@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-key.schema.json",
+  "title": "Forecast Ledger protected key file",
+  "description": "The closed forecast-key/v3 protected key-file value. Storage bytes are its RFC 8785 serialization followed by exactly one LF.",
+  "type": "object",
+  "required": [
+    "schema",
+    "question_id",
+    "question_revision_id",
+    "forecast_id",
+    "commitment_sha256",
+    "key_hex"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "forecast-key/v3" },
+    "question_id": { "$ref": "#/$defs/slug" },
+    "question_revision_id": { "$ref": "#/$defs/slug" },
+    "forecast_id": { "$ref": "#/$defs/slug" },
+    "commitment_sha256": { "$ref": "#/$defs/hex32" },
+    "key_hex": { "$ref": "#/$defs/hex32", "writeOnly": true }
+  },
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "hex32": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

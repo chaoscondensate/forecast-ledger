@@ -22,6 +22,7 @@ func TestPublishedV2FixturesRoundTripThroughTypedModel(t *testing.T) {
 		"examples/valid/team-ledger.yaml",
 		"tests/conformance/valid/lifecycle-checkpoints.json",
 		"tests/conformance/valid/relationships-and-datetime.json",
+		"tests/conformance/valid/retained-forecast.json",
 		"tests/conformance/valid/revealed-representation-only.json",
 	}
 	for _, name := range tests {
@@ -33,7 +34,7 @@ func TestPublishedV2FixturesRoundTripThroughTypedModel(t *testing.T) {
 			if err := json.Unmarshal(source, &model); err != nil {
 				t.Fatalf("decode typed ledger: %v", err)
 			}
-			if model.SchemaVersion != "2.1.0" {
+			if model.SchemaVersion != "2.2.0" {
 				t.Fatalf("schema version = %q", model.SchemaVersion)
 			}
 			encoded, err := json.Marshal(model)
@@ -110,11 +111,11 @@ func TestOtherClosedUnionBranches(t *testing.T) {
 		{"unresolved", `{"status":"void","reason":"bad source","recorded_at":"2026-01-01T00:00:01Z"}`, new(Resolution)},
 		{"not applicable", `{"status":"not_applicable","relationship_id":"r","reason":"condition false","recorded_at":"2026-01-01T00:00:01Z"}`, new(Resolution)},
 		{"unanchored", `{"status":"unanchored"}`, new(Integrity)},
-		{"pending", `{"status":"pending","target":{"scope":"forecast-envelope/v2","canonicalization":"RFC8785","artifact_path":"target.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"timestamps":[{"type":"rfc3161","request_path":"request.tsq","response_path":"response.tsr","tsa_url":"https://example.org/tsa","hash_algorithm":"sha256","state":"pending"}]}`, new(Integrity)},
-		{"verified", `{"status":"verified","target":{"scope":"forecast-envelope/v2","canonicalization":"RFC8785","artifact_path":"target.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"timestamps":[{"type":"rfc3161","request_path":"request.tsq","response_path":"response.tsr","tsa_url":"https://example.org/tsa","hash_algorithm":"sha256","state":"verified","gen_time":"2026-01-01T00:00:00Z","policy_oid":"1.2.3","serial_number":"1","ca_bundle_path":"ca.pem"}],"verified_at":"2026-01-01T00:00:01Z"}`, new(Integrity)},
+		{"pending", `{"status":"pending","target":{"scope":"forecast-envelope/v3","canonicalization":"RFC8785","artifact_path":"target.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"timestamps":[{"type":"rfc3161","request_path":"request.tsq","response_path":"response.tsr","tsa_url":"https://example.org/tsa","hash_algorithm":"sha256","state":"pending"}]}`, new(Integrity)},
+		{"verified", `{"status":"verified","target":{"scope":"forecast-envelope/v3","canonicalization":"RFC8785","artifact_path":"target.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"timestamps":[{"type":"rfc3161","request_path":"request.tsq","response_path":"response.tsr","tsa_url":"https://example.org/tsa","hash_algorithm":"sha256","state":"verified","gen_time":"2026-01-01T00:00:00Z","policy_oid":"1.2.3","serial_number":"1","ca_bundle_path":"ca.pem"}],"verified_at":"2026-01-01T00:00:01Z"}`, new(Integrity)},
 		{"failed", `{"status":"failed","failure_reason":"bad token"}`, new(Integrity)},
-		{"sealed", `{"scheme":"forecast-seal/v2","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret"}`, new(Commitment)},
-		{"revealed", `{"scheme":"forecast-seal/v2","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret","revealed_at":"2026-01-01T00:00:00Z","revealed_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`, new(Commitment)},
+		{"sealed", `{"scheme":"forecast-seal/v3","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret"}`, new(Commitment)},
+		{"revealed", `{"scheme":"forecast-seal/v3","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret","revealed_at":"2026-01-01T00:00:00Z","revealed_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`, new(Commitment)},
 	}
 	for _, test := range tests {
 		if err := json.Unmarshal([]byte(test.input), test.target); err != nil {
@@ -132,9 +133,9 @@ func TestOptionalCollectionsPreserveAbsentEmptyAndPopulatedStates(t *testing.T) 
 	t.Parallel()
 
 	for _, input := range []string{
-		`{"schema_version":"2.1.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"questions":[]}`,
-		`{"schema_version":"2.1.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"groups":[],"relationships":[],"questions":[]}`,
-		`{"schema_version":"2.1.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"team","kind":"team","name":"Team","members":[{"id":"a","name":"A"},{"id":"b","name":"B"}]},"platforms":{},"groups":[{"id":"g","title":"Group"}],"questions":[]}`,
+		`{"schema_version":"2.2.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"questions":[]}`,
+		`{"schema_version":"2.2.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"me","kind":"individual","name":"Me"},"platforms":{},"groups":[],"relationships":[],"questions":[]}`,
+		`{"schema_version":"2.2.0","ledger_id":"test","created_at":"2026-01-01T00:00:00Z","default_timezone":"UTC","forecaster":{"id":"team","kind":"team","name":"Team","members":[{"id":"a","name":"A"},{"id":"b","name":"B"}]},"platforms":{},"groups":[{"id":"g","title":"Group"}],"questions":[]}`,
 	} {
 		var model Ledger
 		if err := json.Unmarshal([]byte(input), &model); err != nil {
@@ -186,7 +187,8 @@ func TestClosedUnionsRejectUnknownMissingAndAmbiguousVariants(t *testing.T) {
 		{"values", ValuesPolicy[Decimal, Decimal]{Continuous: &ContinuousValues{}, Allowed: &AllowedValues[Decimal]{}}},
 		{"relationship", Relationship{GroupMembership: &GroupMembership{}, Conditional: &ConditionalRelationship{}}},
 		{"resolution", Resolution{Resolved: &ResolvedResolution{}, Unresolved: &UnresolvedResolution{}}},
-		{"integrity", Integrity{Unanchored: &UnanchoredIntegrity{}, Failed: &FailedIntegrity{}}},
+		{"integrity", Integrity{Unanchored: &UnanchoredIntegrity{}, Retained: &RetainedIntegrity{}}},
+		{"lifecycle integrity", LifecycleIntegrity{Retained: &RetainedLifecycleIntegrity{}, Failed: &FailedLifecycleIntegrity{}}},
 		{"commitment", Commitment{Sealed: &SealedCommitment{}, Revealed: &RevealedCommitment{}}},
 		{"scalar", ScalarValue{Boolean: new(bool), String: new(string)}},
 	}
@@ -205,7 +207,9 @@ func TestClosedUnionsRejectUnknownMissingAndAmbiguousVariants(t *testing.T) {
 		{"relationship", `{"id":"r","kind":"group_membership","group_id":"g","question_id":"q","extra":true}`, new(Relationship)},
 		{"resolution", `{"status":"void","reason":"reason","recorded_at":"2026-01-01T00:00:00Z","extra":true}`, new(Resolution)},
 		{"integrity", `{"status":"unanchored","extra":true}`, new(Integrity)},
-		{"commitment", `{"scheme":"forecast-seal/v2","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret","extra":true}`, new(Commitment)},
+		{"retained integrity", `{"status":"retained","target":{"scope":"forecast-envelope/v3","canonicalization":"RFC8785","artifact_path":"proofs/targets/f.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"extra":true}`, new(Integrity)},
+		{"retained lifecycle integrity", `{"status":"retained","target":{"scope":"forecast-lifecycle/v2","canonicalization":"RFC8785","artifact_path":"proofs/targets/f.lifecycle.e.json","digest":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"extra":true}`, new(LifecycleIntegrity)},
+		{"commitment", `{"scheme":"forecast-seal/v3","commitment_hash":{"algorithm":"sha-256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"encryption":{"algorithm":"chacha20-poly1305","nonce":"zMzMzMzMzMzMzMzM","ciphertext":"AAAAAAAAAAAAAAAAAAAAAAAA"},"key_hint":"secret","extra":true}`, new(Commitment)},
 	}
 	for _, test := range closedCases {
 		if err := json.Unmarshal([]byte(test.input), test.target); err == nil {
@@ -244,6 +248,42 @@ func TestClosedUnionsRejectUnknownMissingAndAmbiguousVariants(t *testing.T) {
 	}
 }
 
+func TestRetainedIntegrityUnionsDecodeCloneAndStayClosed(t *testing.T) {
+	t.Parallel()
+
+	var forecastLedger Ledger
+	if err := json.Unmarshal(fixtureAsJSON(t, "tests/conformance/valid/retained-forecast.json"), &forecastLedger); err != nil {
+		t.Fatal(err)
+	}
+	forecast := &forecastLedger.Questions[0].Forecasts[0]
+	if forecast.Integrity.Retained == nil || forecast.Integrity.Retained.Status != IntegrityRetained || forecast.Integrity.Retained.Target.Scope != "forecast-envelope/v3" {
+		t.Fatalf("retained forecast integrity = %#v", forecast.Integrity)
+	}
+	forecastClone, err := Clone(&forecastLedger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Equal(&forecastLedger, forecastClone) || forecastClone.Questions[0].Forecasts[0].Integrity.Retained == nil {
+		t.Fatal("forecast retained state did not survive clone")
+	}
+
+	var lifecycleLedger Ledger
+	if err := json.Unmarshal(fixtureAsJSON(t, "tests/conformance/valid/lifecycle-checkpoints.json"), &lifecycleLedger); err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := lifecycleLedger.Questions[0].Forecasts[0].ActivityCheckpoints
+	if checkpoints == nil || len(*checkpoints) == 0 || (*checkpoints)[0].Integrity.Retained == nil || (*checkpoints)[0].Integrity.Retained.Target.Scope != "forecast-lifecycle/v2" {
+		t.Fatalf("retained lifecycle integrity = %#v", checkpoints)
+	}
+	lifecycleClone, err := Clone(&lifecycleLedger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Equal(&lifecycleLedger, lifecycleClone) || (*lifecycleClone.Questions[0].Forecasts[0].ActivityCheckpoints)[0].Integrity.Retained == nil {
+		t.Fatal("lifecycle retained state did not survive clone")
+	}
+}
+
 func TestScalarValuePreservesBooleanAndExactString(t *testing.T) {
 	t.Parallel()
 
@@ -268,7 +308,7 @@ func TestScalarValuePreservesBooleanAndExactString(t *testing.T) {
 func TestRootObjectRejectsUnknownProperty(t *testing.T) {
 	t.Parallel()
 	var value Ledger
-	if err := json.Unmarshal([]byte(`{"schema_version":"2.1.0","unknown":true}`), &value); err == nil {
+	if err := json.Unmarshal([]byte(`{"schema_version":"2.2.0","unknown":true}`), &value); err == nil {
 		t.Fatal("ledger accepted an unknown property")
 	}
 }

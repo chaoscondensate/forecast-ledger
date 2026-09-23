@@ -6583,6 +6583,10 @@
           "all": {
             "type": "boolean"
           },
+          "checkpoint": {
+            "description": "Explicit lifecycle checkpoint ID",
+            "type": "string"
+          },
           "dry_run": {
             "description": "Validate and return a plan without persistent or network effects",
             "type": "boolean"
@@ -6604,6 +6608,10 @@
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "recorded_at": {
+            "description": "Explicit lifecycle checkpoint recording time",
             "type": "string"
           },
           "scope": {

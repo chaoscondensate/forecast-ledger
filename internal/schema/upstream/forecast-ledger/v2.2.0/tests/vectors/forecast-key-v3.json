@@ -1,0 +1,12 @@
+{
+  "schema": "forecast-key-test-vector/v3",
+  "question_id": "q-example-binary",
+  "question_revision_id": "qr-example-binary-1",
+  "forecast_id": "f-example-binary-001",
+  "commitment_sha256": "5161219b40111d63c1197fd08222059064f649bd5edec2943fd8697817662655",
+  "key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "expected": {
+    "canonical_file": "{\"commitment_sha256\":\"5161219b40111d63c1197fd08222059064f649bd5edec2943fd8697817662655\",\"forecast_id\":\"f-example-binary-001\",\"key_hex\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"question_id\":\"q-example-binary\",\"question_revision_id\":\"qr-example-binary-1\",\"schema\":\"forecast-key/v3\"}\n",
+    "file_sha256": "c43112c18d0e9ad9f55ea0d7bf9339050629c959a5ccc9481fef1244225982b7"
+  }
+}

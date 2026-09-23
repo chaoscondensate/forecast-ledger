@@ -47,6 +47,7 @@ type toolInput struct {
 	CABundle               string          `json:"ca_bundle,omitempty"`
 	Scope                  string          `json:"scope,omitempty"`
 	Head                   string          `json:"head,omitempty"`
+	Checkpoint             string          `json:"checkpoint,omitempty"`
 	All                    bool            `json:"all,omitempty"`
 	DryRun                 bool            `json:"dry_run,omitempty"`
 	Confirm                bool            `json:"confirm,omitempty"`
@@ -183,7 +184,16 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 	}
 	if fileMustExist && file != "" && def.Name != service.OperationPublicationVerify {
-		loaded, loadErr := service.LoadAndValidateLedger(ctx, file, nil)
+		var loaded *service.LoadedLedger
+		var loadErr error
+		switch def.Name {
+		case service.OperationTargetBuild, service.OperationTargetCheck,
+			service.OperationTimestampStamp, service.OperationTimestampStatus, service.OperationTimestampVerify,
+			service.OperationVerificationRun, service.OperationPublicationBuild:
+			loaded, loadErr = service.LoadAndValidateLedgerForEvidence(ctx, file)
+		default:
+			loaded, loadErr = service.LoadAndValidateLedger(ctx, file, nil)
+		}
 		if loadErr != nil {
 			return nil, loadErr
 		}
@@ -326,10 +336,10 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		return result, err
 	case service.OperationTargetBuild:
 		if input.DryRun {
-			result, err := service.PlanTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))
+			result, err := service.PlanTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head), ledger.Slug(input.Checkpoint), ledger.Timestamp(input.RecordedAt))
 			return result, err
 		}
-		result, err := service.CommitTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))
+		result, err := service.CommitTargetBuildScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head), ledger.Slug(input.Checkpoint), ledger.Timestamp(input.RecordedAt))
 		return result, err
 	case service.OperationTargetCheck:
 		result, err := service.InspectTargetsScoped(ctx, file, service.TargetScope(input.Scope), input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast), ledger.Slug(input.Head))

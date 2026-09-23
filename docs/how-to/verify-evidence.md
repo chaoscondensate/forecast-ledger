@@ -1,8 +1,8 @@
 # Verify ledger evidence
 
 <!-- doc-metadata
-coverage: v0.10.0
-reviewed: 2026-09-22
+coverage: v0.11.0
+reviewed: 2026-09-23
 owner: security
 generated: false
 security-critical: true
@@ -31,9 +31,10 @@ and again after redirects. A rejected or unavailable source is `not_checked`;
 it is not evidence that the recorded outcome is false.
 
 Narrow the report with `--question`; `--forecast` also requires its question.
-The ordered layers are document validity, content binding, activity, existence
-timing, reveal authentication, and outcome evidence. Human, plain, and JSON
-output report each layer separately.
+The report first reconciles ledger declarations, the canonical evidence index,
+and managed files, then reports content binding, activity, existence timing,
+reveal authentication, and outcome evidence. Human, plain, and JSON output
+report these observations separately.
 
 Existence timing rebuilds the exact target and locally verifies every retained
 RFC 3161 request, response, and CA bundle. One complete valid entry passes. It
@@ -43,7 +44,7 @@ at least one verified `gen_time` must be earlier than `outcome_known_at`.
 `verified_at`, filesystem time, Git time, and package time are not substitutes.
 
 Withdraw, expire, and reaffirm events affect the forecast's derived active
-state, not its immutable `forecast-envelope/v2` target. Existing target and
+state, not its immutable `forecast-envelope/v3` target. Existing target and
 timestamp verification can therefore still pass after lifecycle activity; the
 report presents current activity separately and does not call an inactive
 forecast active merely because its evidence passes.
@@ -67,7 +68,13 @@ trust bytes. This detects deletion, alteration, and reordering within a covered
 prefix. It cannot prove completeness after every independent observation of a
 removed event has also been deleted.
 
-The aggregate precedence is fail, not checked, pending, no evidence, then pass.
+The aggregate precedence is fail, incomplete/not checked, pending, no evidence,
+then pass. An indexed missing file is incomplete; a digest, role, binding, or
+canonical-byte mismatch fails. A managed file absent from the index is
+`evidence.unindexed_artifact` and incomplete.
+An index entry with no matching ledger declaration is
+`evidence.index_entry_unreferenced`; a fully validated detached lifecycle
+target uses the stronger `activity.retained_evidence_unreferenced` failure.
 `pass` requires at least one applicable evidence layer. An empty ledger or a
 selection with only non-applicable layers returns `no_evidence` and exit 9.
 Source unavailability is not a cryptographic proof mismatch.

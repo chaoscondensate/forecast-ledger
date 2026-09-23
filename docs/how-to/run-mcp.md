@@ -1,7 +1,7 @@
 # Run the MCP server
 
 <!-- doc-metadata
-coverage: v0.10.0
+coverage: v0.11.0
 reviewed: 2026-09-22
 owner: interface
 generated: false
@@ -68,10 +68,12 @@ still needs a protected key reference and `confirm: true`.
 
 `timestamp_stamp` defaults to `auto`, currently the built-in FreeTSA HTTPS
 profile and embedded trust. `tsa_provider` may name `auto` or `freetsa`.
-Custom `tsa_url` and ledger-relative `ca_bundle` must be supplied together;
+Custom `tsa_url` and `ca_bundle` under the managed `trust/` subtree must be supplied together;
 custom URLs remain public HTTPS-only and redirects may not change origin. The
 server does not accept a proxy or a private, loopback, link-local, or otherwise
 non-public timestamp endpoint.
+Stamping consumes a target already retained by `target_build`; it never creates
+an implicit target or lifecycle checkpoint.
 Private seal input and keys are protected-file references under a secret root;
 they are never raw tool arguments or resource content.
 

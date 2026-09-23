@@ -50,7 +50,7 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	if forecast.Commitment.Sealed.KeyHint != "forecast-key:f-one" {
 		t.Fatalf("key hint = %q", forecast.Commitment.Sealed.KeyHint)
 	}
-	if _, err := forecastcrypto.DecodeKeyFile(built.KeyFile, "q-one", "qr-one", "f-one"); err != nil {
+	if _, err := forecastcrypto.DecodeKeyFile(built.KeyFile, "q-one", "qr-one", "f-one", forecast.Commitment.Sealed.CommitmentHash.Value); err != nil {
 		t.Fatal(err)
 	}
 }

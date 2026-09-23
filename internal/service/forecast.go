@@ -222,15 +222,15 @@ func ShowForecast(model *ledger.Ledger, questionID, forecastID ledger.Slug) (For
 		view.Rationale, view.KeyFactors, view.Comment = cloneString(selected.Rationale), cloneStrings(selected.KeyFactors), cloneString(selected.Comment)
 	}
 	view.Commitment = commitmentView(selected.Commitment)
-	if selected.Visibility == ledger.VisibilitySealed && view.Commitment != nil {
-		view.Commitment.Encryption.Ciphertext, view.Commitment.Encryption.Nonce = "", ""
-	}
 	return view, nil
 }
 
 func forecastIntegrityView(value ledger.Integrity) ForecastIntegrityView {
 	view := ForecastIntegrityView{Status: integrityStatus(value)}
 	switch {
+	case value.Retained != nil:
+		target := value.Retained.Target
+		view.Target = &target
 	case value.Pending != nil:
 		target := value.Pending.Target
 		view.Target = &target
@@ -345,6 +345,8 @@ func integrityStatus(value ledger.Integrity) ledger.IntegrityStatus {
 	switch {
 	case value.Unanchored != nil:
 		return value.Unanchored.Status
+	case value.Retained != nil:
+		return value.Retained.Status
 	case value.Pending != nil:
 		return value.Pending.Status
 	case value.Verified != nil:

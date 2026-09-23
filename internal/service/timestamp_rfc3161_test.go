@@ -21,10 +21,12 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
 )
 
+const testTimestampCAPath = "trust/tsa.pem"
+
 func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
 	ca := timestampFixture(t, "root.pem")
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), ca, 0o600); err != nil {
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), ca, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	response := timestampFixture(t, "response.tsr")
@@ -45,7 +47,7 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 		if err := os.WriteFile(absoluteRequest, request, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		result, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: "tsa.pem", Effects: effects, HTTPClient: httpClient})
+		result, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: testTimestampCAPath, Effects: effects, HTTPClient: httpClient})
 		if err != nil || result.State != TimestampVerified || len(result.Entries) != 1 || result.Entries[0].CheckState != LayerPass || result.RequestSummary.RequestCount != 1 {
 			t.Fatalf("stamp %d = %#v, %v", index, result, err)
 		}
@@ -54,7 +56,7 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 		t.Fatalf("TSA request count = %d", transport.requests)
 	}
 	retryEffects := Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 29, 12, 1, 0, 0, time.UTC)}, Random: failingRandom{}}
-	retry, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: "https://tsa-one.example.test/stamp", CABundlePath: "tsa.pem", Effects: retryEffects, HTTPClient: httpClient})
+	retry, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: "https://tsa-one.example.test/stamp", CABundlePath: testTimestampCAPath, Effects: retryEffects, HTTPClient: httpClient})
 	if err != nil || retry.State != TimestampVerified || transport.requests != 2 {
 		t.Fatalf("idempotent retry = %#v, %v; requests=%d", retry, err, transport.requests)
 	}
@@ -122,7 +124,7 @@ func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {
 
 	packageRoot := filepath.Join(directory, "package")
 	built, err := CommitPublicationBuild(t.Context(), ledgerPath, packageRoot, false)
-	if err != nil || built.FileCount != 8 {
+	if err != nil || built.FileCount != 9 {
 		t.Fatalf("package build = %#v, %v", built, err)
 	}
 	packageLedger := filepath.Join(packageRoot, "ledger", filepath.Base(ledgerPath))
@@ -140,7 +142,10 @@ func TestLifecycleTimestampPendingCommitAppendsOneExactHeadCheckpoint(t *testing
 		t.Fatal(err)
 	}
 	writeLedgerModel(t, ledgerPath, mutation.Ledger)
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+	if _, err := CommitTargetBuildScoped(t.Context(), ledgerPath, TargetScopeLifecycle, false, "q-one", "f-one", "event-withdrawn", "checkpoint-withdrawn", "2026-02-01T00:00:02Z"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	artifact, err := BuildLifecycleTarget(mutation.Ledger, "q-one", "f-one", "event-withdrawn")
@@ -164,7 +169,7 @@ func TestLifecycleTimestampPendingCommitAppendsOneExactHeadCheckpoint(t *testing
 		t.Fatal(err)
 	}
 	options := TimestampStampOptions{
-		Scope: TargetScopeLifecycle, HeadEventID: "event-withdrawn", TSAURL: tsaURL, CABundlePath: "tsa.pem",
+		Scope: TargetScopeLifecycle, HeadEventID: "event-withdrawn", TSAURL: tsaURL, CABundlePath: testTimestampCAPath,
 		Effects:    Effects{Clock: fixedTestClock{value: time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}},
 		HTTPClient: testTimestampHTTPClient(&countingRoundTripper{response: timestampFixture(t, "response.tsr")}),
 	}
@@ -248,18 +253,18 @@ func TestLifecycleTimestampCancellationCreatesNoEvidence(t *testing.T) {
 
 func TestRFC3161DryRunOfflineOutageAndPendingRecovery(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	spy := &countingRoundTripper{response: timestampFixture(t, "response.tsr")}
 	client := testTimestampHTTPClient(spy)
-	options := TimestampStampOptions{DryRun: true, TSAURL: "https://tsa.example.test/stamp", CABundlePath: "tsa.pem", Effects: Effects{Clock: fixedTestClock{}, Random: failingRandom{}}, HTTPClient: client}
+	options := TimestampStampOptions{DryRun: true, TSAURL: "https://tsa.example.test/stamp", CABundlePath: testTimestampCAPath, Effects: Effects{Clock: fixedTestClock{}, Random: failingRandom{}}, HTTPClient: client}
 	plan, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", options)
 	if err != nil || spy.requests != 0 || len(plan.Effects) == 0 {
 		t.Fatalf("dry run = %#v, %v; requests=%d", plan, err, spy.requests)
 	}
-	if _, err := os.Stat(filepath.Join(directory, "proofs")); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("dry run created proofs: %v", err)
+	if _, err := os.Stat(filepath.Join(directory, "proofs", "timestamps")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("dry run created timestamp evidence: %v", err)
 	}
 	options.DryRun, options.Offline = false, true
 	if _, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", options); app.ErrorCodeOf(err) != app.CodeNetworkDisabled || spy.requests != 0 {
@@ -288,7 +293,7 @@ func TestRFC3161DryRunOfflineOutageAndPendingRecovery(t *testing.T) {
 	}
 
 	spy.err = nil
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "wrong-root.pem"), 0o600); err != nil {
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "wrong-root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	options.Effects = Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}}
@@ -314,7 +319,7 @@ func TestRFC3161DryRunOfflineOutageAndPendingRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	report, err := VerifyLedgerEvidence(t.Context(), ledgerPath, VerificationOptions{QuestionID: "q-election-coalition", ForecastID: "f-election-coalition-001", Offline: true})
-	if err != nil || report.Overall != VerificationPending || report.Forecasts[0].Layers[2].State != LayerPending {
+	if err != nil || report.Overall != VerificationIncomplete || report.Reconciliation.State != LayerNotChecked || report.Forecasts[0].Layers[2].State != LayerPending {
 		t.Fatalf("missing retained response = %#v, %v", report, err)
 	}
 	if err := os.WriteFile(filepath.Join(directory, filepath.FromSlash(string(responsePath))), responseBytes, 0o644); err != nil {
@@ -390,7 +395,7 @@ func TestRFC3161AutomaticFailureIsNoOpAndSelectionInputsAreExclusive(t *testing.
 	if app.ErrorCodeOf(err) != app.CodeNetwork || result.State != TimestampUnanchored || result.RequestSummary.RequestCount != 1 || result.Attempts[0].ReasonCode != "timing.tsa_unavailable" {
 		t.Fatalf("automatic outage = %#v, %v", result, err)
 	}
-	for _, name := range []string{"proofs", "trust"} {
+	for _, name := range []string{"proofs/timestamps", "trust"} {
 		if _, statErr := os.Stat(filepath.Join(directory, name)); !errors.Is(statErr, fs.ErrNotExist) {
 			t.Fatalf("automatic outage created %s: %v", name, statErr)
 		}
@@ -400,7 +405,7 @@ func TestRFC3161AutomaticFailureIsNoOpAndSelectionInputsAreExclusive(t *testing.
 	if app.ErrorCodeOf(invalidErr) != app.CodeVerification || invalid.State != TimestampUnanchored || invalid.Attempts[0].ReasonCode != string(rfc3161.ReasonResponseMalformed) {
 		t.Fatalf("automatic invalid response = %#v, %v", invalid, invalidErr)
 	}
-	for _, name := range []string{"proofs", "trust"} {
+	for _, name := range []string{"proofs/timestamps", "trust"} {
 		if _, statErr := os.Stat(filepath.Join(directory, name)); !errors.Is(statErr, fs.ErrNotExist) {
 			t.Fatalf("invalid automatic response created %s: %v", name, statErr)
 		}
@@ -415,7 +420,7 @@ func TestRFC3161AutomaticFailureIsNoOpAndSelectionInputsAreExclusive(t *testing.
 
 func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
-	caPath := filepath.Join(directory, "tsa.pem")
+	caPath := timestampTestCAAbsolute(t, directory)
 	if err := os.WriteFile(caPath, timestampFixture(t, "root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +437,7 @@ func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	effects := Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}}
-	if _, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: "tsa.pem", Effects: effects, HTTPClient: testTimestampHTTPClient(&countingRoundTripper{response: timestampFixture(t, "response.tsr")})}); err != nil {
+	if _, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: testTimestampCAPath, Effects: effects, HTTPClient: testTimestampHTTPClient(&countingRoundTripper{response: timestampFixture(t, "response.tsr")})}); err != nil {
 		t.Fatal(err)
 	}
 	packageRoot := filepath.Join(directory, "package")
@@ -518,7 +523,7 @@ func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	packageCA := filepath.Join(packageRoot, "tsa.pem")
+	packageCA := filepath.Join(packageRoot, filepath.FromSlash(testTimestampCAPath))
 	if err := os.WriteFile(packageCA, timestampFixture(t, "wrong-root.pem"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -529,7 +534,7 @@ func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 
 func TestRFC3161StampRejectsInFlightLedgerChangeAndTargetCollision(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	tsaURL := "https://tsa.example.test/stamp"
@@ -557,7 +562,7 @@ func TestRFC3161StampRejectsInFlightLedgerChangeAndTargetCollision(t *testing.T)
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/timestamp-reply"}}, Body: io.NopCloser(bytes.NewReader(timestampFixture(t, "response.tsr"))), Request: request}, nil
 	})
 	effects := Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}}
-	_, err = CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: "tsa.pem", Effects: effects, HTTPClient: testTimestampHTTPClient(transport)})
+	_, err = CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: testTimestampCAPath, Effects: effects, HTTPClient: testTimestampHTTPClient(transport)})
 	if !mutated || app.ErrorCodeOf(err) != app.CodeConflict {
 		t.Fatalf("in-flight ledger change = mutated %t, err %v", mutated, err)
 	}
@@ -566,7 +571,7 @@ func TestRFC3161StampRejectsInFlightLedgerChangeAndTargetCollision(t *testing.T)
 	}
 
 	directory, ledgerPath = timestampLedgerFixture(t)
-	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), timestampFixture(t, "root.pem"), 0o600); err != nil {
+	if err := os.WriteFile(timestampTestCAAbsolute(t, directory), timestampFixture(t, "root.pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	targetPath := filepath.Join(directory, "proofs", "targets", "f-election-coalition-001.json")
@@ -577,7 +582,7 @@ func TestRFC3161StampRejectsInFlightLedgerChangeAndTargetCollision(t *testing.T)
 		t.Fatal(err)
 	}
 	spy := &countingRoundTripper{response: timestampFixture(t, "response.tsr")}
-	if _, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: "tsa.pem", Effects: effects, HTTPClient: testTimestampHTTPClient(spy)}); app.ErrorCodeOf(err) != app.CodeConflict || spy.requests != 0 {
+	if _, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: tsaURL, CABundlePath: testTimestampCAPath, Effects: effects, HTTPClient: testTimestampHTTPClient(spy)}); app.ErrorCodeOf(err) != app.CodeVerification || spy.requests != 0 {
 		t.Fatalf("target collision = %v; requests=%d", err, spy.requests)
 	}
 	retained, err := os.ReadFile(targetPath)
@@ -640,9 +645,9 @@ func TestPublicationMatrixSealedRevealedInactiveAndMultiRepresentation(t *testin
 			if err := os.WriteFile(targetPath, artifact.Bytes, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			result := buildAndVerifyPublication(t, ledgerPath)
-			if result.Overall != VerificationFail || result.FailureCode != app.CodeVerification {
-				t.Fatalf("%s package verification = %#v", name, result)
+			packageRoot := filepath.Join(directory, "package")
+			if _, err := CommitPublicationBuild(t.Context(), ledgerPath, packageRoot, false); app.ErrorCodeOf(err) != app.CodeInvalidData {
+				t.Fatalf("%s detached package build error = %v", name, err)
 			}
 		})
 	}
@@ -704,7 +709,19 @@ func timestampLedgerFixture(t *testing.T) (string, string) {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := CommitTargetBuild(t.Context(), path, false, "q-election-coalition", "f-election-coalition-001"); err != nil {
+		t.Fatal(err)
+	}
 	return directory, path
+}
+
+func timestampTestCAAbsolute(t *testing.T, directory string) string {
+	t.Helper()
+	path := filepath.Join(directory, filepath.FromSlash(testTimestampCAPath))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func writeLedgerModel(t *testing.T, path string, model *ledger.Ledger) {

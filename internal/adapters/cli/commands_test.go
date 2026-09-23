@@ -160,7 +160,7 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 		t.Fatalf("validate code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "status", "--file", path)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.1.0"`) {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"schema_version":"2.2.0"`) {
 		t.Fatalf("status code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.3.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
@@ -170,14 +170,14 @@ func TestValidateStatusAndVersionUseV2(t *testing.T) {
 	for _, args := range [][]string{{"forecast-ledger", "--json", "version"}, {"forecast-ledger", "version", "--json"}} {
 		code, stdout, stderr = runCLI(args...)
 		var got buildinfo.Info
-		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.1.0" {
+		if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &got) != nil || got.Schema.Version != "2.2.0" {
 			t.Fatalf("version %v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
 	}
 }
 
 func TestCLIValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
-	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0")
+	root := filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0")
 	for _, relative := range []string{
 		"examples/valid/empty-ledger.json",
 		"examples/valid/individual-ledger.json",
@@ -213,7 +213,7 @@ func TestTargetBuildCheckAndDryRun(t *testing.T) {
 	}
 	build := append([]string{"forecast-ledger", "--json", "target", "build"}, selector...)
 	code, stdout, stderr = runCLI(build...)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"sha256":"e232db4b3ef9609976f34a6abc70a56faf39e6811f6f5d2a17655afc039aa391"`) || !strings.Contains(stdout, `"size":1152`) {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"sha256":"0d87e2e54c4884298b224a20c5cba49fab3f6e7d36943e7dd193a17f0ab0814d"`) || !strings.Contains(stdout, `"size":1152`) {
 		t.Fatalf("target build code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	check := append([]string{"forecast-ledger", "--json", "target", "check"}, selector...)
@@ -223,8 +223,9 @@ func TestTargetBuildCheckAndDryRun(t *testing.T) {
 	}
 	lifecycleSelector := []string{"--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--scope", "lifecycle", "--head", "event-election-reaffirmed"}
 	lifecycleBuild := append([]string{"forecast-ledger", "--json", "target", "build"}, lifecycleSelector...)
+	lifecycleBuild = append(lifecycleBuild, "--checkpoint", "checkpoint-election-reaffirmed", "--recorded-at", "2026-09-05T00:00:00Z")
 	code, stdout, stderr = runCLI(lifecycleBuild...)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"scope":"forecast-lifecycle/v1"`) || !strings.Contains(stdout, `"head_event_id":"event-election-reaffirmed"`) || !strings.Contains(stdout, `f-election-coalition-002.lifecycle.event-election-reaffirmed.json`) {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"scope":"forecast-lifecycle/v2"`) || !strings.Contains(stdout, `"head_event_id":"event-election-reaffirmed"`) || !strings.Contains(stdout, `f-election-coalition-002.lifecycle.event-election-reaffirmed.json`) {
 		t.Fatalf("lifecycle target build code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	lifecycleCheck := append([]string{"forecast-ledger", "--json", "target", "check"}, lifecycleSelector...)
@@ -272,7 +273,7 @@ func writeActivityCoverageFixture(t *testing.T, directory string, coverage servi
 		checkpoints = checkpoints[:1]
 	} else {
 		checkpoint := &checkpoints[len(checkpoints)-1]
-		target := *checkpoint.Integrity.Failed.Target
+		target := checkpoint.Integrity.Retained.Target
 		genTime := ledger.Timestamp("2026-09-04T10:00:06Z")
 		policy, serial := "1.2.3", "1"
 		caPath := ledger.RelativePath("trust/example.pem")
@@ -290,7 +291,7 @@ func writeActivityCoverageFixture(t *testing.T, directory string, coverage servi
 	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v2.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +312,9 @@ func writeActivityCoverageFixture(t *testing.T, directory string, coverage servi
 	}
 	for _, checkpoint := range checkpoints {
 		var target ledger.LifecycleTarget
-		if checkpoint.Integrity.Failed != nil {
+		if checkpoint.Integrity.Retained != nil {
+			target = checkpoint.Integrity.Retained.Target
+		} else if checkpoint.Integrity.Failed != nil {
 			target = *checkpoint.Integrity.Failed.Target
 		} else {
 			target = checkpoint.Integrity.Verified.Target

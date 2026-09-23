@@ -1,7 +1,7 @@
 # How-to guides
 
 <!-- doc-metadata
-coverage: v0.10.0
+coverage: v0.11.0
 reviewed: 2026-09-22
 owner: documentation
 generated: false

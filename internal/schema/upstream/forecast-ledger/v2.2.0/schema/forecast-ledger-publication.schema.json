@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger-publication.schema.json",
+  "title": "Forecast Ledger publication manifest",
+  "description": "The closed forecast-ledger-publication/v3 package manifest. Paths are relative to the package root and entries are strictly sorted by path.",
+  "type": "object",
+  "required": ["profile", "contract", "ledger_path", "evidence_index_path", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "profile": { "const": "forecast-ledger-publication/v3" },
+    "contract": { "$ref": "#/$defs/contractIdentity" },
+    "ledger_path": { "$ref": "#/$defs/relativePath" },
+    "evidence_index_path": { "const": "proofs/evidence-index.json" },
+    "entries": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/entry" },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "ledger" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "evidence_index" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "hex32": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "digest": {
+      "type": "object",
+      "required": ["algorithm", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha-256" },
+        "value": { "$ref": "#/$defs/hex32" }
+      }
+    },
+    "contractIdentity": {
+      "type": "object",
+      "required": ["schema_id", "schema_version", "schema_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_id": {
+          "const": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json"
+        },
+        "schema_version": { "const": "2.2.0" },
+        "schema_sha256": { "$ref": "#/$defs/hex32" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["role", "path", "size", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "ledger",
+            "evidence_index",
+            "forecast_target",
+            "lifecycle_target",
+            "rfc3161_request",
+            "rfc3161_response",
+            "x509_ca_bundle"
+          ]
+        },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "size": { "type": "integer", "minimum": 0 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

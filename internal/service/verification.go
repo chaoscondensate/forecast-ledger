@@ -56,12 +56,13 @@ const (
 )
 
 type VerificationReport struct {
-	LedgerID    ledger.Slug            `json:"ledger_id"`
-	Overall     VerificationOverall    `json:"overall"`
-	Document    VerificationLayer      `json:"document"`
-	Forecasts   []ForecastVerification `json:"forecasts"`
-	Limitations []string               `json:"limitations"`
-	FailureCode app.ErrorCode          `json:"-"`
+	LedgerID       ledger.Slug            `json:"ledger_id"`
+	Overall        VerificationOverall    `json:"overall"`
+	Document       VerificationLayer      `json:"document"`
+	Reconciliation VerificationLayer      `json:"reconciliation"`
+	Forecasts      []ForecastVerification `json:"forecasts"`
+	Limitations    []string               `json:"limitations"`
+	FailureCode    app.ErrorCode          `json:"-"`
 }
 
 type VerificationOptions struct {
@@ -94,6 +95,11 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 		Forecasts:   []ForecastVerification{},
 		Limitations: append([]string(nil), verificationLimitations...),
 	}
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
+	if err != nil {
+		return report, err
+	}
+	report.Reconciliation = reconciliationLayer(reconciled)
 	selectedQuestions, err := selectVerificationQuestions(loaded.Model, options.QuestionID, options.ForecastID)
 	if err != nil {
 		return report, err
@@ -106,7 +112,7 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 			item := ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID}
 			content := verifyContentLayer(ctx, loaded, question, forecast)
 			item.Layers = append(item.Layers, content)
-			item.Layers = append(item.Layers, verifyActivityLayer(ctx, loaded, question, forecast))
+			item.Layers = append(item.Layers, verifyActivityLayer(ctx, loaded, question, forecast, reconciled))
 			item.Layers = append(item.Layers, verifyTimingLayer(ctx, loaded, question, forecast, content))
 			item.Layers = append(item.Layers, verifyRevealLayer(question, forecast, content))
 			item.Layers = append(item.Layers, verifyOutcomeLayer(ctx, question, options))
@@ -120,11 +126,15 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 	return report, nil
 }
 
-func verifyActivityLayer(ctx context.Context, loaded *LoadedLedger, question ledger.Question, forecast ledger.Forecast) VerificationLayer {
+func verifyActivityLayer(ctx context.Context, loaded *LoadedLedger, question ledger.Question, forecast ledger.Forecast, reconciled EvidenceReconciliation) VerificationLayer {
 	activity := deriveActivity(forecast)
 	evidence := activityEvidence(activity)
 	layer := VerificationLayer{Name: "activity", Evidence: evidence, Limitations: []string{"Current activity is derived from the retained event stream; absence of all independent observations cannot prove that an earlier event never existed."}}
 	if forecast.ActivityCheckpoints == nil || len(*forecast.ActivityCheckpoints) == 0 {
+		if detachedLifecycleEvidenceFor(reconciled, question.ID, forecast.ID) {
+			layer.State, layer.ReasonCodes = LayerFail, []string{"activity.retained_evidence_unreferenced"}
+			return layer
+		}
 		layer.State, layer.ReasonCodes = LayerNotApplicable, []string{"activity.unbound"}
 		return layer
 	}
@@ -331,7 +341,7 @@ func verifyRevealLayer(question ledger.Question, forecast ledger.Forecast, conte
 	if err != nil {
 		return failedLayer(layer.Name, "reveal.key_invalid", err)
 	}
-	keyFile, err := forecastcrypto.EncodeKeyFile(question.ID, forecast.QuestionRevisionID, forecast.ID, key)
+	keyFile, err := forecastcrypto.EncodeKeyFile(question.ID, forecast.QuestionRevisionID, forecast.ID, revealed.CommitmentHash.Value, key)
 	clear(key)
 	if err != nil {
 		return failedLayer(layer.Name, "reveal.key_invalid", err)
@@ -339,7 +349,11 @@ func verifyRevealLayer(question ledger.Question, forecast ledger.Forecast, conte
 	opened, err := forecastcrypto.Open(keyFile, question.ID, forecast.QuestionRevisionID, forecast.ID, ledger.SealedCommitment{Scheme: revealed.Scheme, CommitmentHash: revealed.CommitmentHash, Encryption: revealed.Encryption, KeyHint: revealed.KeyHint})
 	clear(keyFile)
 	if err != nil {
-		return failedLayer(layer.Name, "reveal.authentication_failed", err)
+		reason := string(forecastcrypto.FailureStageOf(err))
+		if reason == "" {
+			reason = "reveal.commitment_malformed"
+		}
+		return failedLayer(layer.Name, reason, nil)
 	}
 	if err := validateRevealedBundle(question, forecast, opened.Bundle); err != nil {
 		return failedLayer(layer.Name, "reveal.mirror_mismatch", err)
@@ -395,6 +409,17 @@ func verifyOutcomeLayer(ctx context.Context, question ledger.Question, options V
 
 func aggregateVerification(report VerificationReport) (VerificationOverall, app.ErrorCode) {
 	hasPending, hasNotChecked, sourceUnavailable, applicable := false, false, false, 0
+	if report.Reconciliation.State != "" && report.Reconciliation.State != LayerNotApplicable {
+		applicable++
+		switch report.Reconciliation.State {
+		case LayerFail:
+			return VerificationFail, app.CodeVerification
+		case LayerPending:
+			hasPending = true
+		case LayerNotChecked:
+			hasNotChecked = true
+		}
+	}
 	for _, forecast := range report.Forecasts {
 		for _, layer := range forecast.Layers {
 			if layer.State != LayerNotApplicable {
@@ -429,6 +454,45 @@ func aggregateVerification(report VerificationReport) (VerificationOverall, app.
 		return VerificationNoEvidence, app.CodeIncomplete
 	}
 	return VerificationPass, ""
+}
+
+func reconciliationLayer(result EvidenceReconciliation) VerificationLayer {
+	layer := VerificationLayer{Name: "evidence_reconciliation", Evidence: map[string]any{"index_present": result.IndexPresent, "declarations": result.Declarations, "indexed": result.Indexed, "files": result.Files}}
+	codes := make([]string, 0, len(result.Issues))
+	for _, issue := range result.Issues {
+		codes = append(codes, issue.Code)
+	}
+	switch result.State {
+	case ReconciliationPass:
+		layer.State, layer.ReasonCodes = LayerPass, []string{"evidence.reconciled"}
+	case ReconciliationNoEvidence:
+		layer.State, layer.ReasonCodes = LayerNotApplicable, []string{"evidence.no_evidence"}
+	case ReconciliationIncomplete:
+		layer.State, layer.ReasonCodes = LayerNotChecked, codes
+	case ReconciliationFail:
+		layer.State, layer.ReasonCodes = LayerFail, codes
+	default:
+		layer.State, layer.ReasonCodes = LayerFail, []string{"evidence.reconciliation_invalid"}
+	}
+	return layer
+}
+
+func detachedLifecycleEvidenceFor(result EvidenceReconciliation, questionID, forecastID ledger.Slug) bool {
+	if result.Index == nil {
+		return false
+	}
+	issues := make(map[string]struct{})
+	for _, issue := range result.Issues {
+		if issue.Code == "activity.retained_evidence_unreferenced" {
+			issues[issue.Path] = struct{}{}
+		}
+	}
+	for _, entry := range result.Index.Entries {
+		if _, ok := issues[entry.Path]; ok && entry.Lifecycle != nil && entry.Lifecycle.QuestionID == string(questionID) && entry.Lifecycle.ForecastID == string(forecastID) {
+			return true
+		}
+	}
+	return false
 }
 
 func failedLayer(name, reason string, err error) VerificationLayer {

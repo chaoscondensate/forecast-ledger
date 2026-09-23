@@ -76,9 +76,9 @@ func newCLIReplacementLedger(t *testing.T, extension string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ledger"+extension)
 	commands := [][]string{
-		{"forecast-ledger", "init", "--file", path, "--ledger-id", "replacement-matrix", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner"},
+		{"forecast-ledger", "init", "--file", path, "--ledger-id", "replacement-matrix", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--created-at", "2026-09-23T09:00:00Z"},
 		{"forecast-ledger", "platform", "add", "--file", path, "--platform", "local", "--name", "Local", "--kind", "self_hosted"},
-		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-one", "--revision-id", "qr-one", "--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2031-01-01T00:00:00Z", "--outcome-kind", "binary"},
+		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-one", "--revision-id", "qr-one", "--effective-at", "2026-09-23T09:01:00Z", "--revision-recorded-at", "2026-09-23T09:02:00Z", "--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2031-01-01T00:00:00Z", "--outcome-kind", "binary"},
 		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-one", "--forecast", "f-public", "--question-revision", "qr-one", "--forecasted-at", "2026-09-23T10:00:00Z", "--recorded-at", "2026-09-23T10:01:00Z", "--probability", "0.6", "--probability-outcome"},
 	}
 	for _, command := range commands {

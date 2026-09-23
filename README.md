@@ -119,18 +119,17 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v2.1.0 contract permits zero questions and questions
+The embedded Forecast Ledger v2.2.0 contract permits zero questions and questions
 with zero forecasts. All ordinary non-secret authoring is available only through
 flags or direct MCP properties. Protected private forecast bundles use the
 purpose-named `--secret-input` or `--initial-secret-input` channels and never
 enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
 for empty-first, combined, dry-run, team, and sealed-key workflows.
 
-The runtime accepts exactly v2.1.0. It rejects v2.0.1 before locks, keys,
-artifacts, entropy, or network activity and does not include a converter or
-compatibility reader. Interpret historical v2.0.1 evidence against the
-[exact upstream v2.0.1 source](https://github.com/chaoscondensate/schema/tree/55b1431d379128e1d75b9c30a3874398cea9ff0f),
-not with this runtime.
+The runtime accepts exactly v2.2.0. It rejects v2.1.0 and older material before
+locks, keys, artifacts, entropy, or network activity and has no converter or
+compatibility reader. Use the v0.10.0 binary and its pinned v2.1.0 source to
+inspect historical v2.1.0 evidence; do not feed it to this runtime.
 
 Root display and current forecaster metadata can later be changed with a closed
 patch, without rewriting question or forecast history:
@@ -226,6 +225,9 @@ forecast-ledger target check \
   --forecast f-launch-002
 ```
 
+Build atomically records retained integrity, the target file, and its canonical
+evidence-index entry.
+
 After appending an activity event, retain a separate target for its exact
 prefix by selecting the lifecycle scope and head:
 
@@ -235,7 +237,9 @@ forecast-ledger target build \
   --question q-launch \
   --forecast f-launch-002 \
   --scope lifecycle \
-  --head withdraw-001
+  --head withdraw-001 \
+  --checkpoint checkpoint-withdraw-001 \
+  --recorded-at 2026-09-01T10:15:00+01:00
 ```
 
 See [Build and check forecast targets](docs/how-to/build-targets.md) for the
@@ -257,8 +261,8 @@ forecast-ledger timestamp verify --file ledger.yaml --question q-launch --foreca
 ```
 
 The same three timestamp commands accept `--scope lifecycle --head <event-id>`.
-They retain independent evidence for that exact activity prefix and append or
-update its checkpoint without changing the forecast target.
+Stamp requires the matching retained checkpoint target and updates its indexed
+request, response, trust, and integrity state without changing target bytes.
 
 Omitting TSA options selects the current one-entry catalog: FreeTSA at its exact
 HTTPS endpoint. The embedded FreeTSA CA is copied to `trust/rfc3161/` beside the
@@ -293,11 +297,11 @@ forecast-ledger publish verify \
 ```
 
 Publication verification has no network option. It verifies the packaged
-request, response, target, and CA bytes locally. Publication follows evidence
-paths recorded in the selected ledger. A
-standalone target merely sitting beside the ledger is not packaged until the
-ledger references it. Manifest and file integrity remain visible even when the
-evidence aggregate is `no_evidence` or incomplete. See
+request, response, target, and CA bytes locally. Publication follows the
+reconciled evidence index. A standalone target merely sitting beside the ledger
+is an unindexed managed artifact, so package creation fails until the store is
+repaired; it is never silently adopted or omitted. Manifest and file integrity
+remain visible even when the evidence aggregate is `no_evidence` or incomplete. See
 [Build and verify publication packages](docs/how-to/publish-evidence.md).
 
 Run the local MCP stdio adapter with explicit named roots:
@@ -372,7 +376,7 @@ The current source supports:
 - source-preserving platform, group, relationship, question, and forecast authoring after JSON/YAML initialization;
 - immutable question revisions across binary, categorical, ordinal, numeric, date, and datetime domains;
 - probability, PMF, binned-PMF, quantile, CDF, point, and credible-interval forecast representations;
-- sealed forecasts using the published `forecast-seal/v2` profile;
+- sealed forecasts using the published `forecast-seal/v3` profile;
 - reveal verification without discarding the original commitment evidence;
 - canonical target generation and RFC 3161 request/response evidence;
 - layered local verification and portable evidence packages;

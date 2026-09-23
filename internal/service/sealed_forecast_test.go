@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,6 +48,20 @@ func TestForecastSealRevealAndKeyHintPreserveTargetBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sealedView, err := ShowForecast(built.Ledger, "q-one", "f-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sealedView.Commitment == nil || sealedView.Commitment.Encryption.Nonce == "" || sealedView.Commitment.Encryption.Ciphertext == "" {
+		t.Fatalf("sealed public commitment is incomplete: %#v", sealedView.Commitment)
+	}
+	sealedJSON, err := json.Marshal(sealedView)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(sealedJSON), strings.Repeat("42", 32)) || strings.Contains(string(sealedJSON), "private") {
+		t.Fatalf("sealed view leaked protected material: %s", sealedJSON)
+	}
 	before, err := BuildForecastTarget(built.Ledger, "q-one", "f-one")
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +73,20 @@ func TestForecastSealRevealAndKeyHintPreserveTargetBytes(t *testing.T) {
 	forecast := revealed.Ledger.Questions[0].Forecasts[0]
 	if forecast.Visibility != ledger.VisibilityRevealed || forecast.Representations == nil || forecast.Rationale == nil || forecast.Commitment.Revealed == nil {
 		t.Fatalf("revealed forecast = %#v", forecast)
+	}
+	revealedView, err := ShowForecast(revealed.Ledger, "q-one", "f-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revealedView.Commitment == nil || !revealedView.Commitment.RevealedKeyRedacted || revealedView.Commitment.Encryption != sealedView.Commitment.Encryption {
+		t.Fatalf("revealed public commitment = %#v", revealedView.Commitment)
+	}
+	revealedJSON, err := json.Marshal(revealedView)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(revealedJSON), strings.Repeat("42", 32)) || strings.Contains(string(revealedJSON), "revealed_key\"") {
+		t.Fatalf("revealed view leaked the raw key: %s", revealedJSON)
 	}
 	after, err := BuildForecastTarget(revealed.Ledger, "q-one", "f-one")
 	if err != nil || !bytes.Equal(before.Bytes, after.Bytes) {
@@ -130,7 +159,7 @@ func TestForecastRevealRejectsWrongRevisionBoundKeyWithoutMutation(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrong, err := forecastcrypto.EncodeKeyFile("q-one", "qr-wrong", "f-one", bytes.Repeat([]byte{0x24}, 32))
+	wrong, err := forecastcrypto.EncodeKeyFile("q-one", "qr-wrong", "f-one", built.Ledger.Questions[0].Forecasts[0].Commitment.Sealed.CommitmentHash.Value, bytes.Repeat([]byte{0x24}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}

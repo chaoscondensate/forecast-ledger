@@ -2,12 +2,49 @@ package publication
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
 
+func TestManifestPublishedVectors(t *testing.T) {
+	for _, name := range []string{"forecast-ledger-publication-v3.json", "forecast-ledger-publication-v3-empty.json"} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("..", "schema", "upstream", "forecast-ledger", "v2.2.0", "tests", "vectors", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var vector struct {
+				Manifest Manifest `json:"manifest"`
+				Expected struct {
+					Canonical string `json:"canonical_json"`
+					SHA256    string `json:"sha256"`
+				} `json:"expected"`
+			}
+			if err := json.Unmarshal(raw, &vector); err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := Encode(vector.Manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(encoded) != vector.Expected.Canonical {
+				t.Fatal("manifest canonical bytes differ from the published vector")
+			}
+			digest := sha256.Sum256(encoded)
+			if hex.EncodeToString(digest[:]) != vector.Expected.SHA256 {
+				t.Fatalf("manifest digest = %x", digest)
+			}
+		})
+	}
+}
+
 func TestManifestCanonicalRoundTripAndClosedRoles(t *testing.T) {
-	manifest := Manifest{Profile: ManifestProfile, LedgerSchema: SchemaPin{Version: "1.0.0", Commit: "commit", SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, LedgerPath: "ledger/example.yaml", Entries: []Entry{{Role: RoleLedger, Path: "ledger/example.yaml", Size: 10, Digest: Digest{Algorithm: "sha-256", Value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}}
+	manifest := testManifest("ledger/example.yaml")
 	encoded, err := Encode(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -23,13 +60,11 @@ func TestManifestCanonicalRoundTripAndClosedRoles(t *testing.T) {
 
 func TestManifestRejectsUnsafePathsRolesAndCollisions(t *testing.T) {
 	base := Manifest{
-		Profile:      ManifestProfile,
-		LedgerSchema: SchemaPin{Version: "1.0.0", Commit: "commit", SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-		LedgerPath:   "ledger/example.yaml",
+		Profile: ManifestProfile, Contract: CurrentContractIdentity(), LedgerPath: "ledger/example.yaml", EvidenceIndexPath: EvidenceIndexPath,
 		Entries: []Entry{{
 			Role: RoleLedger, Path: "ledger/example.yaml", Size: 10,
 			Digest: Digest{Algorithm: "sha-256", Value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
-		}},
+		}, {Role: RoleEvidenceIndex, Path: EvidenceIndexPath, Size: 20, Digest: Digest{Algorithm: "sha-256", Value: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}},
 	}
 	tests := map[string]func(*Manifest){
 		"traversal":     func(manifest *Manifest) { manifest.Entries[0].Path = "ledger/../example.yaml" },
@@ -68,7 +103,7 @@ func TestManifestRejectsUnsafePathsRolesAndCollisions(t *testing.T) {
 }
 
 func FuzzManifestDecode(f *testing.F) {
-	manifest := Manifest{Profile: ManifestProfile, LedgerSchema: SchemaPin{Version: "1.0.0", Commit: "commit", SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, LedgerPath: "ledger/example.json", Entries: []Entry{{Role: RoleLedger, Path: "ledger/example.json", Size: 1, Digest: Digest{Algorithm: "sha-256", Value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}}
+	manifest := testManifest("ledger/example.json")
 	seed, _ := Encode(manifest)
 	f.Add(seed)
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -77,4 +112,11 @@ func FuzzManifestDecode(f *testing.F) {
 		}
 		_, _ = Decode(data)
 	})
+}
+
+func testManifest(ledgerPath string) Manifest {
+	return Manifest{Profile: ManifestProfile, Contract: CurrentContractIdentity(), LedgerPath: ledgerPath, EvidenceIndexPath: EvidenceIndexPath, Entries: []Entry{
+		{Role: RoleLedger, Path: ledgerPath, Size: 10, Digest: Digest{Algorithm: "sha-256", Value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+		{Role: RoleEvidenceIndex, Path: EvidenceIndexPath, Size: 20, Digest: Digest{Algorithm: "sha-256", Value: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
+	}}
 }

@@ -1,0 +1,92 @@
+{
+  "schema": "forecast-evidence-index-test-vector/v1",
+  "allow_empty": false,
+  "index": {
+    "schema": "forecast-evidence-index/v1",
+    "ledger_id": "vector-ledger",
+    "contract": {
+      "schema_id": "https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json",
+      "schema_version": "2.2.0",
+      "schema_sha256": "6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e"
+    },
+    "entries": [
+      {
+        "role": "forecast_target",
+        "path": "proofs/targets/f-vector.json",
+        "size": 512,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "binding": {
+          "question_id": "q-vector",
+          "forecast_id": "f-vector",
+          "scope": "forecast-envelope/v3"
+        }
+      },
+      {
+        "role": "lifecycle_target",
+        "path": "proofs/targets/f-vector.lifecycle.event-withdrawn.json",
+        "size": 768,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "binding": {
+          "question_id": "q-vector",
+          "forecast_id": "f-vector",
+          "checkpoint_id": "checkpoint-withdrawn",
+          "head_event_id": "event-withdrawn",
+          "scope": "forecast-lifecycle/v2"
+        }
+      },
+      {
+        "role": "rfc3161_request",
+        "path": "proofs/timestamps/f-vector.tsq",
+        "size": 64,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "references": {
+          "target_path": "proofs/targets/f-vector.json"
+        },
+        "binding": {
+          "hash_algorithm": "sha256",
+          "message_imprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "role": "rfc3161_response",
+        "path": "proofs/timestamps/f-vector.tsr",
+        "size": 1024,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "references": {
+          "target_path": "proofs/targets/f-vector.json",
+          "request_path": "proofs/timestamps/f-vector.tsq",
+          "trust_path": "trust/tsa-ca.pem"
+        },
+        "binding": {
+          "tsa_url": "https://tsa.example.test/"
+        }
+      },
+      {
+        "role": "x509_ca_bundle",
+        "path": "trust/tsa-ca.pem",
+        "size": 2048,
+        "digest": {
+          "algorithm": "sha-256",
+          "value": "5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        "format": "pem-certificate-bundle"
+      }
+    ]
+  },
+  "expected": {
+    "canonical_json": "{\"contract\":{\"schema_id\":\"https://raw.githubusercontent.com/chaoscondensate/schema/v2.2.0/schema/forecast-ledger.schema.json\",\"schema_sha256\":\"6a048928f2573519fd25988ba23f0006b6f8d84eb2f7179d7ff8edd7affa4f9e\",\"schema_version\":\"2.2.0\"},\"entries\":[{\"binding\":{\"forecast_id\":\"f-vector\",\"question_id\":\"q-vector\",\"scope\":\"forecast-envelope/v3\"},\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"1111111111111111111111111111111111111111111111111111111111111111\"},\"path\":\"proofs/targets/f-vector.json\",\"role\":\"forecast_target\",\"size\":512},{\"binding\":{\"checkpoint_id\":\"checkpoint-withdrawn\",\"forecast_id\":\"f-vector\",\"head_event_id\":\"event-withdrawn\",\"question_id\":\"q-vector\",\"scope\":\"forecast-lifecycle/v2\"},\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"2222222222222222222222222222222222222222222222222222222222222222\"},\"path\":\"proofs/targets/f-vector.lifecycle.event-withdrawn.json\",\"role\":\"lifecycle_target\",\"size\":768},{\"binding\":{\"hash_algorithm\":\"sha256\",\"message_imprint_sha256\":\"1111111111111111111111111111111111111111111111111111111111111111\"},\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"path\":\"proofs/timestamps/f-vector.tsq\",\"references\":{\"target_path\":\"proofs/targets/f-vector.json\"},\"role\":\"rfc3161_request\",\"size\":64},{\"binding\":{\"tsa_url\":\"https://tsa.example.test/\"},\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"4444444444444444444444444444444444444444444444444444444444444444\"},\"path\":\"proofs/timestamps/f-vector.tsr\",\"references\":{\"request_path\":\"proofs/timestamps/f-vector.tsq\",\"target_path\":\"proofs/targets/f-vector.json\",\"trust_path\":\"trust/tsa-ca.pem\"},\"role\":\"rfc3161_response\",\"size\":1024},{\"digest\":{\"algorithm\":\"sha-256\",\"value\":\"5555555555555555555555555555555555555555555555555555555555555555\"},\"format\":\"pem-certificate-bundle\",\"path\":\"trust/tsa-ca.pem\",\"role\":\"x509_ca_bundle\",\"size\":2048}],\"ledger_id\":\"vector-ledger\",\"schema\":\"forecast-evidence-index/v1\"}",
+    "sha256": "c679002b7f366d002a988ccbc4b33125497b35e9a4cd81138b36087976627cd2"
+  }
+}

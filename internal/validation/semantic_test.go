@@ -171,7 +171,7 @@ func TestSemanticValidationChecksLifecycleChronologyAndCheckpointPrefixes(t *tes
 	target := func(path ledger.RelativePath) ledger.LifecycleIntegrity {
 		return ledger.LifecycleIntegrity{Pending: &ledger.PendingLifecycleIntegrity{
 			Status:     ledger.IntegrityPending,
-			Target:     ledger.LifecycleTarget{Scope: "forecast-lifecycle/v1", Canonicalization: "RFC8785", ArtifactPath: path, Digest: digest},
+			Target:     ledger.LifecycleTarget{Scope: "forecast-lifecycle/v2", Canonicalization: "RFC8785", ArtifactPath: path, Digest: digest},
 			Timestamps: []ledger.RFC3161Timestamp{},
 		}}
 	}
@@ -237,7 +237,7 @@ func TestSemanticValidationChecksConfinedSnapshotAndTargetDigests(t *testing.T) 
 	model.Platforms["local"] = ledger.Platform{Name: "Local", Kind: ledger.PlatformInternal}
 	model.Questions[0].Forecasts[0].Integrity = ledger.Integrity{Pending: &ledger.PendingIntegrity{
 		Status:     ledger.IntegrityPending,
-		Target:     ledger.ForecastTarget{Scope: "forecast-envelope/v2", Canonicalization: "RFC8785", ArtifactPath: "targets/one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: digestValue}},
+		Target:     ledger.ForecastTarget{Scope: "forecast-envelope/v3", Canonicalization: "RFC8785", ArtifactPath: "targets/one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: digestValue}},
 		Timestamps: []ledger.RFC3161Timestamp{{Type: "rfc3161", State: ledger.RFC3161Pending}},
 	}}
 	artifacts := fstest.MapFS{
@@ -340,7 +340,7 @@ func verifiedIntegrityAt(value ledger.Timestamp) ledger.Integrity {
 	ca := ledger.RelativePath("ca.pem")
 	return ledger.Integrity{Verified: &ledger.VerifiedIntegrity{
 		Status:     ledger.IntegrityVerified,
-		Target:     ledger.ForecastTarget{Scope: "forecast-envelope/v2", Canonicalization: "RFC8785", ArtifactPath: "target.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("0", 64))}},
+		Target:     ledger.ForecastTarget{Scope: "forecast-envelope/v3", Canonicalization: "RFC8785", ArtifactPath: "target.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("0", 64))}},
 		Timestamps: []ledger.RFC3161Timestamp{{Type: "rfc3161", State: ledger.RFC3161Verified, GenTime: &value, PolicyOID: &policy, SerialNumber: &serial, CABundlePath: &ca}},
 		VerifiedAt: value,
 	}}

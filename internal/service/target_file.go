@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/publication"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
@@ -66,16 +68,26 @@ type TargetOperationResult struct {
 }
 
 func PlanTargetBuild(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
-	return PlanTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+	return PlanTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "", "", "")
 }
 
-func PlanTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+func PlanTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID, checkpointID ledger.Slug, recordedAt ledger.Timestamp) (TargetOperationResult, error) {
 	loaded, artifacts, err := loadSelectedTargets(ctx, path, scope, all, questionID, forecastID, headEventID)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
 	if len(artifacts) == 0 {
 		return TargetOperationResult{LedgerID: loaded.Model.LedgerID, Targets: []TargetResult{}, Effects: []SideEffect{}, Recovery: Recovery{State: RecoveryNone}}, nil
+	}
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
+	if err != nil {
+		return TargetOperationResult{}, err
+	}
+	if err := reconciliationError(reconciled); err != nil {
+		return TargetOperationResult{}, err
+	}
+	if _, err := buildTargetRetentionPlan(loaded, artifacts, scope, checkpointID, recordedAt, reconciled.Index); err != nil {
+		return TargetOperationResult{}, err
 	}
 	root := filepath.Dir(loaded.Path)
 	if _, _, err := inspectTargetDirectories(root); err != nil {
@@ -94,14 +106,22 @@ func PlanTargetBuildScoped(ctx context.Context, path string, scope TargetScope, 
 		}
 		result.Effects = append(result.Effects, SideEffect{Kind: EffectTarget, Action: EffectCreate, Status: status, Path: string(artifact.RelativePath), Owned: state != storage.DeterministicUnchanged, Rollback: RollbackCreatedPublic})
 	}
+	indexAction, indexOwned := EffectReplace, false
+	if !reconciled.IndexPresent {
+		indexAction, indexOwned = EffectCreate, true
+	}
+	result.Effects = append(result.Effects,
+		SideEffect{Kind: EffectEvidenceIndex, Action: indexAction, Status: EffectDeferred, Path: publication.EvidenceIndexPath, Owned: indexOwned, Rollback: RollbackCreatedPublic},
+		SideEffect{Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)},
+	)
 	return result, nil
 }
 
 func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
-	return CommitTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "")
+	return CommitTargetBuildScoped(ctx, path, TargetScopeForecast, all, questionID, forecastID, "", "", "")
 }
 
-func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID ledger.Slug) (TargetOperationResult, error) {
+func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope, all bool, questionID, forecastID, headEventID, checkpointID ledger.Slug, recordedAt ledger.Timestamp) (TargetOperationResult, error) {
 	if err := validateTargetSelection(scope, all, questionID, forecastID, headEventID); err != nil {
 		return TargetOperationResult{}, err
 	}
@@ -119,7 +139,7 @@ func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope
 		return TargetOperationResult{}, err
 	}
 	defer lock.Release()
-	planned, err := PlanTargetBuildScoped(ctx, resolvedLedger, scope, all, questionID, forecastID, headEventID)
+	planned, err := PlanTargetBuildScoped(ctx, resolvedLedger, scope, all, questionID, forecastID, headEventID, checkpointID, recordedAt)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
@@ -131,13 +151,24 @@ func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope
 		return TargetOperationResult{}, err
 	}
 	root := filepath.Dir(loaded.Path)
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
+	if err != nil {
+		return TargetOperationResult{}, err
+	}
+	if err := reconciliationError(reconciled); err != nil {
+		return TargetOperationResult{}, err
+	}
+	retention, err := buildTargetRetentionPlan(loaded, artifacts, scope, checkpointID, recordedAt, reconciled.Index)
+	if err != nil {
+		return TargetOperationResult{}, err
+	}
 	createProofs, createTargets, err := inspectTargetDirectories(root)
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
 	proofsPath := filepath.Join(root, "proofs")
 	targetsPath := filepath.Join(proofsPath, "targets")
-	entries := make([]storage.ResourceEntry, 0, len(artifacts)+2)
+	entries := make([]storage.ResourceEntry, 0, len(artifacts)+4)
 	if createProofs {
 		entries = append(entries, storage.ResourceEntry{Kind: storage.ResourceTarget, Type: storage.ResourceDirectory, Path: proofsPath, Owned: true, Rollback: storage.ResourceRollbackRemoveOwned, State: storage.ResourcePlanned})
 	}
@@ -153,6 +184,16 @@ func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope
 		}
 		entries = append(entries, storage.ResourceEntry{Kind: storage.ResourceTarget, Type: storage.ResourceFile, Path: path, Owned: owned, Rollback: rollback, State: storage.ResourcePlanned})
 	}
+	indexPath := filepath.Join(root, filepath.FromSlash(publication.EvidenceIndexPath))
+	indexOwned := !reconciled.IndexPresent
+	indexRollback := storage.ResourceRollbackNone
+	if indexOwned {
+		indexRollback = storage.ResourceRollbackRemoveOwned
+	}
+	entries = append(entries,
+		storage.ResourceEntry{Kind: storage.ResourceEvidenceIndex, Type: storage.ResourceFile, Path: indexPath, Owned: indexOwned, Rollback: indexRollback, State: storage.ResourcePlanned, BeforeSHA256: storage.ResourceDigest(reconciled.Store.IndexBytes)},
+		storage.ResourceEntry{Kind: storage.ResourceLedger, Type: storage.ResourceFile, Path: loaded.Path, Owned: false, Rollback: storage.ResourceRollbackNone, State: storage.ResourcePlanned, BeforeSHA256: storage.ResourceDigest(loaded.Document.Raw)},
+	)
 	journal := filepath.Join(root, "."+filepath.Base(loaded.Path)+".target-build-resources.json")
 	plan, err := storage.NewResourcePlan(journal, string(OperationTargetBuild), entries)
 	if err != nil {
@@ -161,7 +202,16 @@ func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope
 	if err := plan.Begin(); err != nil {
 		return TargetOperationResult{}, err
 	}
+	indexReplaced, ledgerReplaced := false, false
+	originalIndex := bytes.Clone(reconciled.Store.IndexBytes)
+	originalLedger := bytes.Clone(loaded.Document.Raw)
 	fail := func(cause error) (TargetOperationResult, error) {
+		if ledgerReplaced {
+			_, _ = storage.ReplaceDeterministicFile(loaded.Path, originalLedger, 0o600, document.DefaultLimits.MaxBytes)
+		}
+		if indexReplaced && originalIndex != nil {
+			_, _ = storage.ReplaceDeterministicFile(indexPath, originalIndex, 0o600, publication.MaxEvidenceIndexBytes)
+		}
 		recovery, recoveryErr := storage.RecoverResourcePlan(context.Background(), journal)
 		if recoveryErr != nil {
 			planned.Recovery = Recovery{State: RecoveryRequired, Message: "Target creation did not finish and automatic cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
@@ -209,6 +259,49 @@ func CommitTargetBuildScoped(ctx context.Context, path string, scope TargetScope
 		}
 		result.Effects = append(result.Effects, SideEffect{Kind: EffectTarget, Action: EffectCreate, Status: status, Path: string(artifact.RelativePath), Owned: written.State == storage.DeterministicCreated, Rollback: RollbackCreatedPublic})
 	}
+	var indexWrite storage.DeterministicResult
+	if reconciled.IndexPresent {
+		indexWrite, err = storage.ReplaceDeterministicFile(indexPath, retention.IndexBytes, 0o600, publication.MaxEvidenceIndexBytes)
+		indexReplaced = indexWrite.State == storage.DeterministicReplaced
+		if err == nil && indexReplaced {
+			err = plan.MarkReplaced(indexPath, indexWrite.SHA256)
+		}
+	} else {
+		indexWrite, err = storage.EnsureDeterministicFile(indexPath, retention.IndexBytes, 0o600, publication.MaxEvidenceIndexBytes)
+		if err == nil && indexWrite.State == storage.DeterministicCreated {
+			err = plan.MarkCreated(indexPath, indexWrite.SHA256)
+		}
+	}
+	if err != nil {
+		return fail(err)
+	}
+	ledgerInfo, err := os.Stat(loaded.Path)
+	if err != nil {
+		return fail(err)
+	}
+	ledgerWrite, err := storage.ReplaceDeterministicFile(loaded.Path, retention.LedgerBytes, ledgerInfo.Mode().Perm(), document.DefaultLimits.MaxBytes)
+	ledgerReplaced = ledgerWrite.State == storage.DeterministicReplaced
+	if err == nil && ledgerReplaced {
+		err = plan.MarkReplaced(loaded.Path, ledgerWrite.SHA256)
+	}
+	if err != nil {
+		return fail(err)
+	}
+	indexStatus, ledgerStatus := EffectCompleted, EffectCompleted
+	if indexWrite.State == storage.DeterministicUnchanged {
+		indexStatus = EffectUnchanged
+	}
+	if ledgerWrite.State == storage.DeterministicUnchanged {
+		ledgerStatus = EffectUnchanged
+	}
+	indexAction := EffectReplace
+	if indexOwned {
+		indexAction = EffectCreate
+	}
+	result.Effects = append(result.Effects,
+		SideEffect{Kind: EffectEvidenceIndex, Action: indexAction, Status: indexStatus, Path: publication.EvidenceIndexPath, Owned: indexOwned, Rollback: RollbackCreatedPublic},
+		SideEffect{Kind: EffectLedger, Action: EffectReplace, Status: ledgerStatus, Path: filepath.Base(loaded.Path)},
+	)
 	for _, entry := range entries {
 		if err := plan.MarkCommitted(entry.Path); err != nil {
 			result.Recovery = Recovery{State: RecoveryRequired, Message: "Targets were created, but target resource journal cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
@@ -459,6 +552,8 @@ func recordedForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.
 			continue
 		}
 		switch {
+		case forecast.Integrity.Retained != nil:
+			return &forecast.Integrity.Retained.Target
 		case forecast.Integrity.Pending != nil:
 			return &forecast.Integrity.Pending.Target
 		case forecast.Integrity.Verified != nil:
@@ -495,6 +590,8 @@ func recordedTargetMetadata(model *ledger.Ledger, artifact TargetArtifact) *reco
 		}
 		var target *ledger.LifecycleTarget
 		switch {
+		case checkpoint.Integrity.Retained != nil:
+			target = &checkpoint.Integrity.Retained.Target
 		case checkpoint.Integrity.Pending != nil:
 			target = &checkpoint.Integrity.Pending.Target
 		case checkpoint.Integrity.Verified != nil:

@@ -17,14 +17,15 @@ repository, or a hosted publisher.
 forecast-ledger publish build --file ledger.yaml --output evidence-package
 ```
 
-The destination must not exist. Build validates the ledger, rebuilds referenced
-targets, validates timestamp artifact structure, and copies only:
+The destination must not exist. Build requires the local declarations, exact
+canonical evidence index, and every managed file to reconcile. It copies only:
 
 - the ledger at `ledger/<original-name>`;
-- each referenced `forecast_target`, including every declared lifecycle target;
-- each referenced `timestamp_request` (`.tsq`);
-- each referenced `timestamp_response` (`.tsr`); and
-- each referenced `timestamp_ca_bundle` (PEM).
+- `proofs/evidence-index.json`;
+- each indexed `forecast_target` or `lifecycle_target`;
+- each indexed `rfc3161_request` (`.tsq`);
+- each indexed `rfc3161_response` (`.tsr`); and
+- each indexed `x509_ca_bundle` (PEM).
 
 A shared CA path is copied once only when its bytes and role agree. Missing,
 escaping, symlinked, conflicting, or tampered artifacts fail the build. Secret
@@ -36,6 +37,7 @@ A timestamped package keeps proofs and trust beside `ledger/`, not inside it:
 ```text
 evidence-package/
   ledger/ledger.yaml
+  proofs/evidence-index.json
   proofs/targets/<forecast>.json
   proofs/targets/<forecast>.lifecycle.<head>.json
   proofs/timestamps/<forecast>/.../request.tsq
@@ -44,8 +46,11 @@ evidence-package/
   manifest.json
 ```
 
-The canonical `forecast-ledger-publication/v2` manifest pins schema v2.1.0 and
-records each allowlisted path, role, size, and SHA-256 digest.
+The canonical `forecast-ledger-publication/v3` manifest binds the exact v2.2.0
+contract and records the ledger, evidence index, and every indexed artifact by
+role, portable path, size, and SHA-256 digest. A package with no evidence still
+contains a canonical empty index; package build does not create one beside the
+source ledger.
 
 Verify on another machine with no network option:
 
@@ -73,8 +78,9 @@ The MCP adapter resolves the packaged ledger and its sibling `proofs/` and
 `trust/` trees against the same package root. It does not reinterpret artifact
 paths relative to the `ledger/` directory.
 
-Verification first checks the manifest and every listed file, rejects extra
-files, then runs the same forecast target, activity checkpoint, RFC 3161,
+Verification first checks the manifest, index, and every listed file, rejects
+v2 manifests, extra or omitted files, role changes, and rebound artifacts, then
+runs the same forecast target, activity checkpoint, RFC 3161,
 reveal, chronology, and outcome metadata checks against packaged bytes. It
 does not contact a TSA, blockchain, Git host, system trust store, or outcome
 URL. Manifest observations remain available even when the evidence aggregate

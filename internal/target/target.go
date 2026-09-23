@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	ForecastEnvelopeSchema = "forecast-envelope/v2"
-	LifecycleSchema        = "forecast-lifecycle/v1"
+	ForecastEnvelopeSchema = "forecast-envelope/v3"
+	LifecycleSchema        = "forecast-lifecycle/v2"
 	Canonicalization       = "RFC8785"
 )
 
@@ -59,7 +59,7 @@ type lifecycleEnvelope struct {
 	HeadEventID            ledger.Slug             `json:"head_event_id"`
 }
 
-// Forecast builds canonical forecast-envelope/v2 bytes and their SHA-256.
+// Forecast builds canonical forecast-envelope/v3 bytes and their SHA-256.
 func Forecast(question ledger.Question, forecast ledger.Forecast) ([]byte, string, error) {
 	var revision *ledger.QuestionRevision
 	for index := range question.Revisions {
@@ -103,7 +103,7 @@ func Forecast(question ledger.Question, forecast ledger.Forecast) ([]byte, strin
 	return canonicalBytes(value)
 }
 
-// Lifecycle builds canonical forecast-lifecycle/v1 bytes through one head.
+// Lifecycle builds canonical forecast-lifecycle/v2 bytes through one head.
 func Lifecycle(question ledger.Question, forecast ledger.Forecast, headEventID ledger.Slug) ([]byte, string, error) {
 	if forecast.LifecycleEvents == nil {
 		return nil, "", fmt.Errorf("forecast has no lifecycle events")

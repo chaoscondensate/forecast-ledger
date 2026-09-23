@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -104,7 +105,7 @@ func sortedMapKeys(value any) []string {
 func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	path := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), path)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"), path)
 	err := storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
 		Validate: func(parsed *document.Document) error {
 			return service.ValidateLedgerDocument(parsed, os.DirFS(ledgerRoot))
@@ -147,7 +148,7 @@ func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
 func TestMCPMissingRevealKeyNamesKeyFile(t *testing.T) {
 	ledgerRoot, secretRoot := t.TempDir(), t.TempDir()
 	path := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), path)
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"), path)
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -438,7 +439,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -536,8 +537,10 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("MCP target build result=%s err=%v", toolText(targetBuild), err)
 	}
 	lifecycleArgs := map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-002", "scope": "lifecycle", "head": "event-election-reaffirmed"}
-	lifecycleBuild, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: lifecycleArgs})
-	if err != nil || lifecycleBuild.IsError || !strings.Contains(toolText(lifecycleBuild), `"scope":"forecast-lifecycle/v1"`) || !strings.Contains(toolText(lifecycleBuild), `"head_event_id":"event-election-reaffirmed"`) {
+	lifecycleBuildArgs := maps.Clone(lifecycleArgs)
+	lifecycleBuildArgs["checkpoint"], lifecycleBuildArgs["recorded_at"] = "checkpoint-election-reaffirmed", "2026-09-05T00:00:00Z"
+	lifecycleBuild, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: lifecycleBuildArgs})
+	if err != nil || lifecycleBuild.IsError || !strings.Contains(toolText(lifecycleBuild), `"scope":"forecast-lifecycle/v2"`) || !strings.Contains(toolText(lifecycleBuild), `"head_event_id":"event-election-reaffirmed"`) {
 		t.Fatalf("MCP lifecycle target build result=%s err=%v", toolText(lifecycleBuild), err)
 	}
 	lifecycleCheck, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_check", Arguments: lifecycleArgs})
@@ -553,6 +556,10 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("MCP lifecycle timestamp verify result=%s err=%v", toolText(lifecycleVerify), err)
 	}
 	targetPath := filepath.Join(ledgerRoot, "proofs", "targets", "f-election-coalition-001.json")
+	originalTarget, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(targetPath, []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -563,8 +570,11 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err := os.Remove(targetPath); err != nil {
 		t.Fatal(err)
 	}
-	if targetBuild, err = callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}}); err != nil || targetBuild.IsError {
-		t.Fatalf("MCP target rebuild result=%s err=%v", toolText(targetBuild), err)
+	if targetBuild, err = callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}}); err != nil || !targetBuild.IsError || !strings.Contains(toolText(targetBuild), "evidence.indexed_artifact_missing") {
+		t.Fatalf("MCP missing target mutation result=%s err=%v", toolText(targetBuild), err)
+	}
+	if err := os.WriteFile(targetPath, originalTarget, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	publicationPlan, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "publication_build", Arguments: map[string]any{"file": "main:ledger.json", "output": "packages:dry-run", "dry_run": true}})
 	if err != nil || publicationPlan.IsError || !strings.Contains(toolText(publicationPlan), `"code":"publication.build.planned"`) || strings.Contains(toolText(publicationPlan), `"code":"publication.built"`) {
@@ -574,7 +584,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("MCP publication dry-run created output: %v", statErr)
 	}
 	forecastShow, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
-	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
+	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"retained"`) {
 		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
 	}
 	autoPlan, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_stamp", Arguments: map[string]any{
@@ -586,10 +596,13 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(ledgerRoot, "trust")); !os.IsNotExist(statErr) {
 		t.Fatalf("MCP automatic dry-run created trust: %v", statErr)
 	}
-	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
+	if err := os.MkdirAll(filepath.Join(ledgerRoot, "trust"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "trust", "tsa.pem"))
 	tsaFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_stamp", Arguments: map[string]any{
 		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
-		"tsa_url": "https://127.0.0.1", "ca_bundle": "tsa.pem",
+		"tsa_url": "https://127.0.0.1", "ca_bundle": "trust/tsa.pem",
 	}})
 	if err != nil || !tsaFailure.IsError || !strings.Contains(toolText(tsaFailure), `"code":"timestamp.not_checked"`) || !strings.Contains(toolText(tsaFailure), `"timing.tsa_unavailable"`) || !strings.Contains(toolText(tsaFailure), `"request_count":1`) {
 		t.Fatalf("MCP safe TSA failure result=%s err=%v", toolText(tsaFailure), err)
@@ -618,7 +631,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "name": "Independent", "kind": "internal",
 	}})
@@ -663,11 +676,11 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 
 func TestEveryMCPExistingLedgerToolRejectsUnsupportedVersionAtAdmission(t *testing.T) {
 	ledgerRoot, outputRoot, secretRoot := t.TempDir(), t.TempDir(), t.TempDir()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "2.1.0"`), []byte(`"schema_version": "2.0.1"`), 1)
+	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "2.2.0"`), []byte(`"schema_version": "2.1.0"`), 1)
 	if err := os.WriteFile(filepath.Join(ledgerRoot, "ledger.json"), oldLedger, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -706,8 +719,14 @@ func TestEveryMCPExistingLedgerToolRejectsUnsupportedVersionAtAdmission(t *testi
 func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
 	ledgerRoot, outputRoot := t.TempDir(), t.TempDir()
 	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", "examples", "valid", "individual-ledger.json"), ledgerPath)
-	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", "examples", "valid", "individual-ledger.json"), ledgerPath)
+	if _, err := service.CommitTargetBuild(t.Context(), ledgerPath, false, "q-election-coalition", "f-election-coalition-001"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(ledgerRoot, "trust"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "trust", "tsa.pem"))
 	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
 	if err != nil {
 		t.Fatal(err)
@@ -724,7 +743,7 @@ func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
 	client := &rfc3161.HTTPClient{Resolver: mcpPublicResolver{}, Client: &http.Client{Transport: mcpRoundTripper(func(request *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/timestamp-reply"}}, Body: io.NopCloser(bytes.NewReader(response)), Request: request}, nil
 	})}}
-	if _, err := service.CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{TSAURL: "https://tsa.example.test", CABundlePath: "tsa.pem", Effects: service.ProductionEffects(), HTTPClient: client}); err != nil {
+	if _, err := service.CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{TSAURL: "https://tsa.example.test", CABundlePath: "trust/tsa.pem", Effects: service.ProductionEffects(), HTTPClient: client}); err != nil {
 		t.Fatal(err)
 	}
 	packageRoot := filepath.Join(outputRoot, "evidence")
@@ -930,6 +949,77 @@ func TestMCPActivityCoveragePresentation(t *testing.T) {
 	}
 }
 
+func TestMCPForecastInspectionAndResourceKeepPublicCommitmentAndRedactKey(t *testing.T) {
+	raw, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/revealed-representation-only.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var revealed ledger.Ledger
+	if err := json.Unmarshal(raw, &revealed); err != nil {
+		t.Fatal(err)
+	}
+	sealed := revealed
+	sealed.Questions = append([]ledger.Question(nil), revealed.Questions...)
+	sealed.Questions[0].Forecasts = append([]ledger.Forecast(nil), revealed.Questions[0].Forecasts...)
+	forecast := &sealed.Questions[0].Forecasts[0]
+	commitment := forecast.Commitment.Revealed
+	forecast.Visibility = ledger.VisibilitySealed
+	forecast.Representations = nil
+	forecast.Commitment = &ledger.Commitment{Sealed: &ledger.SealedCommitment{
+		Scheme: commitment.Scheme, CommitmentHash: commitment.CommitmentHash,
+		Encryption: commitment.Encryption, KeyHint: commitment.KeyHint,
+	}}
+	root := t.TempDir()
+	write := func(name string, model ledger.Ledger) {
+		t.Helper()
+		encoded, marshalErr := json.Marshal(model)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if writeErr := os.WriteFile(filepath.Join(root, name), encoded, 0o600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}
+	write("sealed.json", sealed)
+	write("revealed.json", revealed)
+	server, err := New(Config{LedgerRoots: []string{"main=" + root}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	const nonce = "MzMzMzMzMzMzMzMz"
+	const ciphertextPrefix = "9Go4775177r8oTwO"
+	const rawKey = "2222222222222222222222222222222222222222222222222222222222222222"
+	for _, testCase := range []struct {
+		name     string
+		revealed bool
+	}{
+		{name: "sealed.json"},
+		{name: "revealed.json", revealed: true},
+	} {
+		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{
+			"file": "main:" + testCase.name, "question": "q-seal-presence", "forecast": "f-seal-presence-1",
+		}})
+		if callErr != nil || result.IsError {
+			t.Fatalf("forecast_show %s result=%s err=%v", testCase.name, toolText(result), callErr)
+		}
+		toolJSON := toolText(result)
+		resource, resourceErr := client.ReadResource(t.Context(), &sdk.ReadResourceParams{URI: "forecast-ledger://v1/forecast/main/" + testCase.name + "?question=q-seal-presence&forecast=f-seal-presence-1"})
+		if resourceErr != nil || len(resource.Contents) != 1 {
+			t.Fatalf("forecast resource %s = %#v, %v", testCase.name, resource, resourceErr)
+		}
+		for surface, value := range map[string]string{"tool": toolJSON, "resource": resource.Contents[0].Text} {
+			if !strings.Contains(value, nonce) || !strings.Contains(value, ciphertextPrefix) || strings.Contains(value, rawKey) {
+				t.Fatalf("%s %s public/redacted commitment = %s", testCase.name, surface, value)
+			}
+			if testCase.revealed && !strings.Contains(value, `"revealed_key_redacted":true`) {
+				t.Fatalf("%s %s omitted key redaction marker: %s", testCase.name, surface, value)
+			}
+		}
+	}
+}
+
 func writeMCPActivityCoverageFixture(t *testing.T, directory, name string, coverage service.ActivityCoverage) {
 	t.Helper()
 	raw, err := fs.ReadFile(contractschema.Conformance(), "tests/conformance/valid/lifecycle-checkpoints.json")
@@ -946,7 +1036,7 @@ func writeMCPActivityCoverageFixture(t *testing.T, directory, name string, cover
 		checkpoints = checkpoints[:1]
 	} else {
 		checkpoint := &checkpoints[len(checkpoints)-1]
-		target := *checkpoint.Integrity.Failed.Target
+		target := checkpoint.Integrity.Retained.Target
 		genTime := ledger.Timestamp("2026-09-04T10:00:06Z")
 		policy, serial := "1.2.3", "1"
 		caPath := ledger.RelativePath("trust/example.pem")
@@ -963,7 +1053,7 @@ func writeMCPActivityCoverageFixture(t *testing.T, directory, name string, cover
 	if err := os.WriteFile(filepath.Join(directory, name), append(encoded, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v1.json")
+	vectorRaw, err := fs.ReadFile(contractschema.Conformance(), "tests/vectors/forecast-lifecycle-v2.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -984,7 +1074,9 @@ func writeMCPActivityCoverageFixture(t *testing.T, directory, name string, cover
 	}
 	for _, checkpoint := range checkpoints {
 		var target ledger.LifecycleTarget
-		if checkpoint.Integrity.Failed != nil {
+		if checkpoint.Integrity.Retained != nil {
+			target = checkpoint.Integrity.Retained.Target
+		} else if checkpoint.Integrity.Failed != nil {
 			target = *checkpoint.Integrity.Failed.Target
 		} else {
 			target = checkpoint.Integrity.Verified.Target
@@ -1016,7 +1108,7 @@ func TestMCPValidatesEveryPublishedV2LedgerFixture(t *testing.T) {
 		"tests/conformance/valid/revealed-representation-only.json",
 	} {
 		name := fmt.Sprintf("fixture-%d%s", index, filepath.Ext(relative))
-		copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.1.0", filepath.FromSlash(relative)), filepath.Join(ledgerRoot, name))
+		copyFixture(t, filepath.Join("..", "..", "schema", "upstream", "forecast-ledger", "v2.2.0", filepath.FromSlash(relative)), filepath.Join(ledgerRoot, name))
 		result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:" + name}})
 		if err != nil || result.IsError || !strings.Contains(toolText(result), `"code":"ledger.valid"`) {
 			t.Fatalf("fixture %s: result=%s err=%v", relative, toolText(result), err)

@@ -58,14 +58,11 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 	if err := plan.MarkCreated(key, ResourceDigest(files[key])); err != nil {
 		t.Fatal(err)
 	}
-	if err := plan.MarkReplaced(ledger, ResourceDigest(files[ledger])); err != nil {
-		t.Fatal(err)
-	}
 	report, err := RecoverResourcePlan(context.Background(), journal)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Removed) != 4 || len(report.Retained) != 2 {
+	if len(report.Removed) != 4 || len(report.Retained) != 1 {
 		t.Fatalf("recovery report = %#v", report)
 	}
 	for _, retained := range []string{key, ledger, unowned} {
@@ -77,6 +74,85 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 		if _, err := os.Stat(removed); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("owned rollback resource %s remains: %v", removed, err)
 		}
+	}
+}
+
+func TestResourceRecoveryPreservesPartialReplacementAndJournal(t *testing.T) {
+	directory := t.TempDir()
+	indexPath := filepath.Join(directory, "evidence-index.json")
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	artifactPath := filepath.Join(directory, "target.json")
+	journalPath := filepath.Join(directory, ".resources.json")
+	indexBefore, indexAfter := []byte("index before\n"), []byte("index after\n")
+	ledgerBefore := []byte("ledger before\n")
+	artifact := []byte("target\n")
+	for path, data := range map[string][]byte{indexPath: indexBefore, ledgerPath: ledgerBefore, artifactPath: artifact} {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan, err := NewResourcePlan(journalPath, "target.build", []ResourceEntry{
+		{Kind: ResourceTarget, Type: ResourceFile, Path: artifactPath, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
+		{Kind: ResourceEvidenceIndex, Type: ResourceFile, Path: indexPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: ResourceDigest(indexBefore)},
+		{Kind: ResourceLedger, Type: ResourceFile, Path: ledgerPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: ResourceDigest(ledgerBefore)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Begin(); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.MarkCreated(artifactPath, ResourceDigest(artifact)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(indexPath, indexAfter, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.MarkReplaced(indexPath, ResourceDigest(indexAfter)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecoverResourcePlan(context.Background(), journalPath); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("partial replacement recovery error = %v", err)
+	}
+	for _, path := range []string{journalPath, indexPath, ledgerPath, artifactPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("partial replacement did not preserve %s: %v", path, err)
+		}
+	}
+}
+
+func TestResourceRecoveryCompletesFullyCommittedJournal(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "target.json")
+	journalPath := filepath.Join(directory, ".resources.json")
+	data := []byte("target\n")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewResourcePlan(journalPath, "target.build", []ResourceEntry{{
+		Kind: ResourceTarget, Type: ResourceFile, Path: path, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Begin(); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.MarkCreated(path, ResourceDigest(data)); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.MarkCommitted(path); err != nil {
+		t.Fatal(err)
+	}
+	report, err := RecoverResourcePlan(t.Context(), journalPath)
+	if err != nil || len(report.Retained) != 1 || report.Retained[0] != path {
+		t.Fatalf("committed recovery = %#v, %v", report, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("committed resource was removed: %v", err)
+	}
+	if _, err := os.Stat(journalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("committed journal remains: %v", err)
 	}
 }
 
@@ -175,4 +251,74 @@ func TestResourceCrashRecoveryAndRetryNeverChangesUnownedFiles(t *testing.T) {
 	if got, err := os.ReadFile(ledgerPath); err != nil || string(got) != string(ledgerBytes) {
 		t.Fatalf("retry changed original ledger: data=%q err=%v", got, err)
 	}
+}
+
+func TestResourcePlanRequiresIndexBeforeLedgerWithBeforeIdentities(t *testing.T) {
+	directory := t.TempDir()
+	indexPath := filepath.Join(directory, "evidence-index.json")
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	journalPath := filepath.Join(directory, ".resources.json")
+	emptyDigest := ResourceDigest(nil)
+
+	_, err := NewResourcePlan(journalPath, "target.build", []ResourceEntry{
+		{Kind: ResourceLedger, Type: ResourceFile, Path: ledgerPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: emptyDigest},
+		{Kind: ResourceEvidenceIndex, Type: ResourceFile, Path: indexPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: emptyDigest},
+	})
+	if app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("reversed replacement order error = %v", err)
+	}
+
+	_, err = NewResourcePlan(journalPath, "target.build", []ResourceEntry{
+		{Kind: ResourceEvidenceIndex, Type: ResourceFile, Path: indexPath, Rollback: ResourceRollbackNone, State: ResourcePlanned},
+		{Kind: ResourceLedger, Type: ResourceFile, Path: ledgerPath, Rollback: ResourceRollbackNone, State: ResourcePlanned},
+	})
+	if app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("missing before identities error = %v", err)
+	}
+}
+
+func TestResourcePlanBeginRejectsChangedBeforeIdentity(t *testing.T) {
+	directory := t.TempDir()
+	indexPath := filepath.Join(directory, "evidence-index.json")
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	journalPath := filepath.Join(directory, ".resources.json")
+	indexBytes := []byte("index before\n")
+	ledgerBytes := []byte("ledger before\n")
+	if err := os.WriteFile(indexPath, indexBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ledgerPath, ledgerBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewResourcePlan(journalPath, "target.build", []ResourceEntry{
+		{Kind: ResourceEvidenceIndex, Type: ResourceFile, Path: indexPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: ResourceDigest(indexBytes)},
+		{Kind: ResourceLedger, Type: ResourceFile, Path: ledgerPath, Rollback: ResourceRollbackNone, State: ResourcePlanned, BeforeSHA256: ResourceDigest(ledgerBytes)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(indexPath, []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Begin(); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("changed before identity error = %v", err)
+	}
+	if _, err := os.Stat(journalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("journal exists after rejected begin: %v", err)
+	}
+}
+
+func FuzzResourceJournalDecode(f *testing.F) {
+	f.Add([]byte(`{"schema":"forecast-resource-journal/v1","operation":"target.build","created_at":"2026-09-23T00:00:00Z","resources":[]}` + "\n"))
+	f.Add([]byte("not-json"))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<20 {
+			data = data[:1<<20]
+		}
+		path := filepath.Join(t.TempDir(), ".resources.json")
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = readResourceJournal(path)
+	})
 }

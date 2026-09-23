@@ -26,9 +26,54 @@ func TestRemovedLegacyPathsStayAbsent(t *testing.T) {
 		"internal/schema/upstream/forecast-ledger/v2.1.0/tests/vectors/legacy-v2.0.0-sha256.json",
 		"internal/schema/upstream/forecast-ledger/v2.1.0/tests/vectors/legacy-v2.0.1-sha256.json",
 		"internal/schema/upstream/forecast-ledger/v2.1.0/tools/verify_legacy.py",
+		"internal/schema/upstream/forecast-ledger/v2.1.0",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); !os.IsNotExist(err) {
 			t.Errorf("removed legacy path exists: %s (err=%v)", relative, err)
+		}
+	}
+}
+
+func TestSupersededV21ProfilesStayOutOfRuntime(t *testing.T) {
+	root := repositoryRoot(t)
+	forbidden := []string{
+		"forecast-key/v2",
+		"forecast-seal/v2",
+		"forecast-envelope/v2",
+		"forecast-lifecycle/v1",
+		"forecast-ledger-publication/v2",
+	}
+	for _, directory := range []string{"cmd", "internal"} {
+		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				if strings.Contains(filepath.ToSlash(path), "/internal/schema/upstream/") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			for _, token := range forbidden {
+				if strings.Contains(string(data), token) {
+					t.Errorf("runtime surface %s contains superseded profile %q", relative, token)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
 }

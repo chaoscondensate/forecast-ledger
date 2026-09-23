@@ -1,0 +1,42 @@
+{
+  "schema": "forecast-seal-test-vector/v3",
+  "question_id": "q-example-binary",
+  "question_revision_id": "qr-example-binary-1",
+  "forecast_id": "f-example-binary-001",
+  "bundle": {
+    "representations": [
+      {
+        "kind": "probability",
+        "outcome": true,
+        "probability": "0.65"
+      }
+    ],
+    "rationale": "The base rate and two independent indicators point in the same direction.",
+    "key_factors": [
+      "base rate",
+      "leading indicator"
+    ],
+    "comment": "Reveal after the outcome is public."
+  },
+  "material": {
+    "salt_hex": "aaaaaaaaaaaaaaaaaaaa1faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "nonce_hex": "cccccccccccccccccccccccc"
+  },
+  "expected": {
+    "canonical_plaintext": "{\"bundle\":{\"comment\":\"Reveal after the outcome is public.\",\"key_factors\":[\"base rate\",\"leading indicator\"],\"rationale\":\"The base rate and two independent indicators point in the same direction.\",\"representations\":[{\"kind\":\"probability\",\"outcome\":true,\"probability\":\"0.65\"}]},\"forecast_id\":\"f-example-binary-001\",\"question_id\":\"q-example-binary\",\"question_revision_id\":\"qr-example-binary-1\",\"salt\":\"aaaaaaaaaaaaaaaaaaaa1faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"schema\":\"forecast-seal/v3\"}",
+    "commitment": {
+      "scheme": "forecast-seal/v3",
+      "commitment_hash": {
+        "algorithm": "sha-256",
+        "value": "5161219b40111d63c1197fd08222059064f649bd5edec2943fd8697817662655"
+      },
+      "encryption": {
+        "algorithm": "chacha20-poly1305",
+        "nonce": "zMzMzMzMzMzMzMzM",
+        "ciphertext": "roAhwEbtR6TtFzwLUjJXMyYv6rBzfcYAsE89+I+YOQB5NW6J4EWHUMoFsXQccMg27QeiH46VLspsBTdThXXe+hGiXMjx//W+7zZGlrxlgmvD4cjwWBe+Kxn/dJez1CpsdlGCFNYFv/kkZ2gQ0yEtHPpmb+Y0EDN6CEWX2JL7NNEPdpLYX+NIGCgZ6ewTx1NQEc536KjZIx3Th+ldYLXcax/3N+kALW+m5XGDc5N2YpcB7QSWybTCb5brBvNN+rF6l3MzE9RjQL+IA6oA0OMGPd+ml53NT34EovmYbdytHpyyh3YKw37sGwi6dbtcGe5efn/8/ERUfh032Q+hyK+gUSFxQb+FXcu8LEYvho4MAe9KYoeq6i4QEMYNYQvUDTtOfpYcW1j6D8frKtENYkMDIqi2vEAuYOhwlF4bGwHtG37u8cBHCJnzgpJ83i/UerjlJayu98fVxr3v3LisHg7WWl4FHDibuR6E3Z+iJRwKznxJ2KUVLD/GL+8LmckFhG2wKoQRl4HAFraX3qG0WS/GLK4An9L4jngK8W5kjZ8rpeLVRXW2GizcNGPfhkR4wutY5iCNRniFMAfzl6wfjRsaiC63f47myuH7gBvzT27fu1S88+zFQxiLOa6dSAU+V5L1meOKLg90uaoCm43jNDfRNNFhzvXiyoJs1eVWGA=="
+      },
+      "key_hint": "secret-manager://forecast-ledger/f-example-binary-001"
+    }
+  }
+}

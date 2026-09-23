@@ -13,9 +13,7 @@ import (
 	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	"github.com/chaoscondensate/forecast-ledger/internal/publication"
-	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/chaoscondensate/forecast-ledger/internal/storage"
-	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
 )
 
 type PublicationFile struct {
@@ -59,11 +57,18 @@ func PlanPublicationBuild(ctx context.Context, ledgerPath, output string) (Publi
 	if err != nil {
 		return PublicationBuildResult{}, err
 	}
-	loaded, err := LoadAndValidateLedger(ctx, ledgerPath, nil)
+	loaded, err := loadAndValidateLedgerForEvidence(ctx, ledgerPath)
 	if err != nil {
 		return PublicationBuildResult{}, err
 	}
-	result, err := collectPublication(loaded, resolvedOutput)
+	reconciled, err := ReconcileEvidenceStore(ctx, loaded)
+	if err != nil {
+		return PublicationBuildResult{}, err
+	}
+	if err := reconciliationError(reconciled); err != nil {
+		return PublicationBuildResult{}, err
+	}
+	result, err := collectPublication(loaded, resolvedOutput, reconciled)
 	if err != nil {
 		return PublicationBuildResult{}, err
 	}
@@ -117,12 +122,38 @@ func CommitPublicationBuild(ctx context.Context, ledgerPath, output string, dryR
 	return result, nil
 }
 
-func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildResult, error) {
-	root := filepath.Dir(loaded.Path)
+func collectPublication(loaded *LoadedLedger, output string, reconciled EvidenceReconciliation) (PublicationBuildResult, error) {
 	ledgerRelative := filepath.ToSlash(filepath.Join("ledger", filepath.Base(loaded.Path)))
 	ledgerBytes := append([]byte(nil), loaded.Document.Raw...)
 	files := map[string]PublicationFile{ledgerRelative: publicationFile(publication.RoleLedger, ledgerRelative, ledgerBytes)}
+	indexBytes := reconciled.Store.IndexBytes
+	index := reconciled.Index
+	if reconciled.State == ReconciliationNoEvidence {
+		empty := publication.EvidenceIndex{Schema: publication.EvidenceIndexProfile, LedgerID: string(loaded.Model.LedgerID), Contract: publication.CurrentContractIdentity(), Entries: []publication.EvidenceEntry{}}
+		var err error
+		indexBytes, err = publication.EncodeEvidenceIndex(empty, true)
+		if err != nil {
+			return PublicationBuildResult{}, app.NewError(app.CodeInternal, "empty package evidence index cannot be encoded", err)
+		}
+		index = &empty
+	}
+	if index == nil || indexBytes == nil {
+		return PublicationBuildResult{}, app.NewError(app.CodeVerification, "publication requires a reconciled evidence index", nil)
+	}
+	files[publication.EvidenceIndexPath] = publicationFile(publication.RoleEvidenceIndex, publication.EvidenceIndexPath, indexBytes)
+	for _, entry := range index.Entries {
+		artifact, ok := reconciled.Store.Artifacts[entry.Path]
+		if !ok {
+			return PublicationBuildResult{}, app.NewError(app.CodeVerification, "indexed publication artifact is missing", nil)
+		}
+		if err := addPublicationFile(files, publicationFile(entry.Role, entry.Path, artifact.Bytes)); err != nil {
+			return PublicationBuildResult{}, err
+		}
+	}
 	evidenceState := "complete"
+	if reconciled.State == ReconciliationNoEvidence {
+		evidenceState = "none"
+	}
 	for _, question := range loaded.Model.Questions {
 		for _, forecast := range question.Forecasts {
 			if forecast.Commitment != nil {
@@ -136,71 +167,13 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 					return PublicationBuildResult{}, app.WithDetails(app.NewError(app.CodeConflict, "forecast key hint is not package-safe; run forecast key-hint update", err), map[string]any{"forecast_id": forecast.ID})
 				}
 			}
-			var target *ledger.ForecastTarget
-			var timestamps []ledger.RFC3161Timestamp
-			switch {
-			case forecast.Integrity.Pending != nil:
-				target, timestamps, evidenceState = &forecast.Integrity.Pending.Target, forecast.Integrity.Pending.Timestamps, "pending"
-			case forecast.Integrity.Verified != nil:
-				target, timestamps = &forecast.Integrity.Verified.Target, forecast.Integrity.Verified.Timestamps
-			case forecast.Integrity.Failed != nil:
-				target = forecast.Integrity.Failed.Target
-				if forecast.Integrity.Failed.Timestamps != nil {
-					timestamps = *forecast.Integrity.Failed.Timestamps
-				}
-			}
-			lifecyclePending, lifecycleErr := collectLifecyclePublicationFiles(files, root, loaded.Model, question, forecast)
-			if lifecycleErr != nil {
-				return PublicationBuildResult{}, lifecycleErr
-			}
-			if lifecyclePending {
+			if forecast.Integrity.Pending != nil {
 				evidenceState = "pending"
 			}
-			if target == nil {
-				continue
-			}
-			artifact, err := BuildForecastTarget(loaded.Model, question.ID, forecast.ID)
-			if err != nil || *target != TargetMetadataFor(artifact) {
-				return PublicationBuildResult{}, app.NewError(app.CodeVerification, "recorded target metadata does not match the selected forecast", err)
-			}
-			actual, err := readConfinedArtifact(root, string(target.ArtifactPath), maxTargetBytes)
-			if err != nil || !bytes.Equal(actual, artifact.Bytes) {
-				return PublicationBuildResult{}, app.NewError(app.CodeVerification, "forecast target cannot be packaged because its bytes do not match", err)
-			}
-			if err := addPublicationFile(files, publicationFile(publication.RoleTarget, string(target.ArtifactPath), actual)); err != nil {
-				return PublicationBuildResult{}, err
-			}
-			for _, timestamp := range timestamps {
-				requestBytes, err := readConfinedArtifact(root, string(timestamp.RequestPath), maxTimestampRequestBytes)
-				if err != nil {
-					return PublicationBuildResult{}, err
-				}
-				if _, err := rfc3161.ParseRequest(requestBytes, artifact.Bytes, rfc3161.DefaultLimits()); err != nil {
-					return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 request cannot be packaged because its target binding is invalid", nil)
-				}
-				responseBytes, err := readConfinedArtifact(root, string(timestamp.ResponsePath), maxTimestampResponseBytes)
-				if err != nil {
-					return PublicationBuildResult{}, err
-				}
-				if err := rfc3161.ParseResponse(responseBytes, rfc3161.DefaultLimits()); err != nil {
-					return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 response cannot be packaged because it is malformed", nil)
-				}
-				if err := addPublicationFile(files, publicationFile(publication.RoleRequest, string(timestamp.RequestPath), requestBytes)); err != nil {
-					return PublicationBuildResult{}, err
-				}
-				if err := addPublicationFile(files, publicationFile(publication.RoleResponse, string(timestamp.ResponsePath), responseBytes)); err != nil {
-					return PublicationBuildResult{}, err
-				}
-				if timestamp.CABundlePath != nil {
-					caBytes, err := readConfinedArtifact(root, string(*timestamp.CABundlePath), maxTimestampCABundleBytes)
-					if err != nil {
-						return PublicationBuildResult{}, err
-					}
-					if err := rfc3161.ValidateCABundle(caBytes, rfc3161.DefaultLimits()); err != nil {
-						return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 CA bundle cannot be packaged because it is invalid", nil)
-					}
-					if err := addPublicationFile(files, publicationFile(publication.RoleCABundle, string(*timestamp.CABundlePath), caBytes)); err != nil {
-						return PublicationBuildResult{}, err
+			if forecast.ActivityCheckpoints != nil {
+				for _, checkpoint := range *forecast.ActivityCheckpoints {
+					if checkpoint.Integrity.Pending != nil {
+						evidenceState = "pending"
 					}
 				}
 			}
@@ -221,7 +194,7 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 	}
 	sort.Strings(paths)
 	result := PublicationBuildResult{LedgerID: loaded.Model.LedgerID, Output: filepath.Base(output), LedgerPath: ledgerRelative, ManifestPath: "manifest.json", EvidenceState: evidenceState}
-	manifest := publication.Manifest{Profile: publication.ManifestProfile, LedgerSchema: publication.SchemaPin{Version: ledgerschema.Version, Commit: ledgerschema.Commit, SHA256: ledgerschema.SchemaSHA256}, LedgerPath: ledgerRelative}
+	manifest := publication.Manifest{Profile: publication.ManifestProfile, Contract: publication.CurrentContractIdentity(), LedgerPath: ledgerRelative, EvidenceIndexPath: publication.EvidenceIndexPath}
 	for _, path := range paths {
 		file := files[path]
 		result.Files = append(result.Files, file)
@@ -238,77 +211,6 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 	result.FileCount = len(result.Files) + 1
 	result.TotalBytes += int64(len(manifestBytes))
 	return result, nil
-}
-
-func collectLifecyclePublicationFiles(files map[string]PublicationFile, root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast) (bool, error) {
-	if forecast.ActivityCheckpoints == nil {
-		return false, nil
-	}
-	pending := false
-	for _, checkpoint := range *forecast.ActivityCheckpoints {
-		var target *ledger.LifecycleTarget
-		var timestamps []ledger.RFC3161Timestamp
-		switch {
-		case checkpoint.Integrity.Pending != nil:
-			target, timestamps, pending = &checkpoint.Integrity.Pending.Target, checkpoint.Integrity.Pending.Timestamps, true
-		case checkpoint.Integrity.Verified != nil:
-			target, timestamps = &checkpoint.Integrity.Verified.Target, checkpoint.Integrity.Verified.Timestamps
-		case checkpoint.Integrity.Failed != nil:
-			target = checkpoint.Integrity.Failed.Target
-			if checkpoint.Integrity.Failed.Timestamps != nil {
-				timestamps = *checkpoint.Integrity.Failed.Timestamps
-			}
-		}
-		if target == nil {
-			continue
-		}
-		artifact, err := BuildLifecycleTarget(model, question.ID, forecast.ID, checkpoint.HeadEventID)
-		if err != nil || target.Scope != artifact.Scope || target.Canonicalization != TargetCanonicalization || target.Digest != (ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(artifact.SHA256)}) {
-			return pending, app.NewError(app.CodeVerification, "recorded lifecycle target metadata does not match its checkpoint", err)
-		}
-		actual, err := readConfinedArtifact(root, string(target.ArtifactPath), maxTargetBytes)
-		if err != nil || !bytes.Equal(actual, artifact.Bytes) {
-			return pending, app.NewError(app.CodeVerification, "lifecycle target cannot be packaged because its bytes do not match", err)
-		}
-		if err := addPublicationFile(files, publicationFile(publication.RoleTarget, string(target.ArtifactPath), actual)); err != nil {
-			return pending, err
-		}
-		for _, timestamp := range timestamps {
-			requestBytes, err := readConfinedArtifact(root, string(timestamp.RequestPath), maxTimestampRequestBytes)
-			if err != nil {
-				return pending, err
-			}
-			if _, err := rfc3161.ParseRequest(requestBytes, artifact.Bytes, rfc3161.DefaultLimits()); err != nil {
-				return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 request has an invalid target binding", nil)
-			}
-			responseBytes, err := readConfinedArtifact(root, string(timestamp.ResponsePath), maxTimestampResponseBytes)
-			if err != nil {
-				return pending, err
-			}
-			if err := rfc3161.ParseResponse(responseBytes, rfc3161.DefaultLimits()); err != nil {
-				return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 response is malformed", nil)
-			}
-			if err := addPublicationFile(files, publicationFile(publication.RoleRequest, string(timestamp.RequestPath), requestBytes)); err != nil {
-				return pending, err
-			}
-			if err := addPublicationFile(files, publicationFile(publication.RoleResponse, string(timestamp.ResponsePath), responseBytes)); err != nil {
-				return pending, err
-			}
-			if timestamp.CABundlePath != nil {
-				caBytes, err := readConfinedArtifact(root, string(*timestamp.CABundlePath), maxTimestampCABundleBytes)
-				if err != nil {
-					return pending, err
-				}
-				if err := rfc3161.ValidateCABundle(caBytes, rfc3161.DefaultLimits()); err != nil {
-					return pending, app.NewError(app.CodeVerification, "lifecycle RFC 3161 CA bundle is invalid", nil)
-				}
-				if err := addPublicationFile(files, publicationFile(publication.RoleCABundle, string(*timestamp.CABundlePath), caBytes)); err != nil {
-					return pending, err
-				}
-			}
-		}
-	}
-	return pending, nil
 }
 
 func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath string) (PublicationVerifyResult, error) {
@@ -333,8 +235,8 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	if err != nil {
 		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "publication manifest is invalid", err)
 	}
-	if manifest.LedgerSchema.Version != ledgerschema.Version || manifest.LedgerSchema.Commit != ledgerschema.Commit || manifest.LedgerSchema.SHA256 != ledgerschema.SchemaSHA256 {
-		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "publication manifest schema pin does not match this binary", nil)
+	if manifest.Contract != publication.CurrentContractIdentity() {
+		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "publication manifest contract identity does not match this binary", nil)
 	}
 	expectedLedger, err := resolver.ResolveLabeled(manifest.LedgerPath, true, "packaged ledger")
 	if err != nil || expectedLedger != resolvedLedger {
@@ -342,6 +244,7 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	}
 	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Evidence: []ForecastVerification{}, Limitations: append([]string(nil), verificationLimitations...)}
 	listed := map[string]struct{}{"manifest.json": {}}
+	var packagedIndex []byte
 	for _, entry := range manifest.Entries {
 		absolute, err := resolver.ResolveLabeled(entry.Path, true, "package entry")
 		if err != nil {
@@ -356,6 +259,9 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 			return result, app.NewError(app.CodeVerification, "a listed package entry has different bytes", nil)
 		}
 		listed[entry.Path] = struct{}{}
+		if entry.Role == publication.RoleEvidenceIndex {
+			packagedIndex = append([]byte(nil), data...)
+		}
 		result.Files = append(result.Files, file)
 		result.TotalBytes += file.Size
 	}
@@ -378,11 +284,33 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	}); err != nil {
 		return result, err
 	}
+	index, err := publication.DecodeEvidenceIndex(packagedIndex, true)
+	if err != nil {
+		return result, app.NewError(app.CodeVerification, "packaged evidence index is invalid", err)
+	}
+	manifestEvidence := make(map[string]publication.Entry)
+	for _, entry := range manifest.Entries {
+		if entry.Role != publication.RoleLedger && entry.Role != publication.RoleEvidenceIndex {
+			manifestEvidence[entry.Path] = entry
+		}
+	}
+	if len(manifestEvidence) != len(index.Entries) {
+		return result, app.NewError(app.CodeVerification, "publication manifest and evidence index contain different artifacts", nil)
+	}
+	for _, indexed := range index.Entries {
+		entry, ok := manifestEvidence[indexed.Path]
+		if !ok || entry.Role != indexed.Role || entry.Size != indexed.Size || entry.Digest != indexed.Digest {
+			return result, app.NewError(app.CodeVerification, "publication manifest changes an evidence index entry", nil)
+		}
+	}
 	loaded, err := LoadAndValidateLedgerWithArtifactRoot(ctx, resolvedLedger, root)
 	if err != nil {
 		return result, err
 	}
 	result.LedgerID = loaded.Model.LedgerID
+	if index.LedgerID != string(loaded.Model.LedgerID) {
+		return result, app.NewError(app.CodeVerification, "packaged evidence index belongs to a different ledger", nil)
+	}
 	for _, question := range loaded.Model.Questions {
 		for _, forecast := range question.Forecasts {
 			content := verifyPackageContent(root, loaded.Model, question, forecast)
